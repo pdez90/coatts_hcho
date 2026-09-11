@@ -50,7 +50,14 @@ cmr_window <- function(d) {
 }
 
 out_path <- A$manifest
-done <- if (file.exists(out_path)) read_tbl(out_path) |> mutate(sample_date = as.Date(sample_date)) else NULL
+# Cached rows are read as text and re-typed: fread turns ISO timestamps such as
+# cmr_queried_utc into datetimes, which would not bind with newly queried rows.
+done <- if (file.exists(out_path)) {
+  read_tbl(out_path, colClasses = "character") |>
+    transmute(sample_date = as.Date(sample_date), granule,
+              begin_utc = ymd_hms(begin_utc), end_utc = ymd_hms(end_utc),
+              opendap_url, cmr_queried_utc)
+} else NULL
 todo <- setdiff(as.character(dates), as.character(unique(done$sample_date))) |> as.Date()
 log_msg(length(dates), " sample days; ", length(todo), " still to query in CMR")
 
@@ -62,8 +69,8 @@ new <- map(seq_along(todo), function(k) {
 
 if (is.null(done) && (is.null(new) || !nrow(new))) stop("CMR returned no TEMPO granules.")
 manifest <- bind_rows(
-  if (!is.null(done)) mutate(done, across(c(begin_utc, end_utc), ~ as.POSIXct(.x, tz = "UTC"))),
-  new
+  done,
+  if (!is.null(new)) mutate(new, cmr_queried_utc = as.character(cmr_queried_utc))
 ) |>
   distinct(granule, sample_date, .keep_all = TRUE) |>
   mutate(mid_utc = begin_utc + (end_utc - begin_utc) / 2,
