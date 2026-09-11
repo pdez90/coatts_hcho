@@ -29,7 +29,16 @@ files <- tibble(file = fname, url = href) |>
          year = as.integer(str_extract(file, "20\\d{2}"))) |>
   filter(!is.na(site)) |>
   distinct(file, .keep_all = TRUE) |>
-  mutate(program = if_else(site %in% CFG$coatts_sites, "COATTS", "Ozone precursor"))
+  mutate(program = if_else(site %in% CFG$coatts_sites, "COATTS", "COOPs (ozone precursor)"))
+
+# COOPs carbonyls are 3-h samples (CDPHE, Sept 2026). The 2024 wide packets carry
+# no duration field, so they would otherwise be read as 24-h days; they are used
+# by the 3-h arm (step 06) instead.
+coops_wide <- files$site %in% CFG$ozone_precursor_sites & !str_detect(files$file, "AQDxLite")
+if (any(coops_wide)) {
+  log_msg("Skipping COOPs wide packets (3-h samples, not 24-h): ", paste(files$file[coops_wide], collapse = ", "))
+  files <- files[!coops_wide, ]
+}
 
 if (!nrow(files)) stop("No annual data packets found - page layout may have changed.")
 log_msg("Found ", nrow(files), " annual packets: ", paste(files$file, collapse = ", "))
@@ -102,7 +111,8 @@ parse_aqdx <- function(path) {
   }
   hc <- hc_all |>
     filter(is.na(duration) | abs(duration - 86400) < 1) |>
-    drop_qc_rows(qc = qc_code, flags = qualifier_codes, file = basename(path)) |>
+    drop_qc_rows(qc = qc_code, flags = qualifier_codes, file = basename(path),
+                 null_codes = null_qualifiers_of(path)) |>
     mutate(sample_date = sample_date_of(dt),
            unit = unit_name,
            value = case_when(unit %in% c("ppbv", "ppb") ~ value / 0.8148,  # fallback, 25C/1atm
@@ -130,7 +140,8 @@ parse_wide <- function(path) {
          flags = if (!is.na(fcol)) d[[fcol]] else NA_character_,
          lat = NA_real_, lon = NA_real_, device_id = NA_character_,
          dl = NA_real_, qc_code = NA_integer_) |>
-    drop_qc_rows(qc = qc_code, flags = flags, file = basename(path))
+    drop_qc_rows(qc = qc_code, flags = flags, file = basename(path),
+                 null_codes = null_qualifiers_of(path))
 }
 
 # ---- 4. parse all packets --------------------------------------------------

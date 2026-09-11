@@ -40,18 +40,32 @@ CFG <- list(
   # TRUE  = download again and report files whose checksum changed.
   coatts_refresh = FALSE,
 
-  # CDPHE lists QC samples (qc_code 8, flag AY = "Q C Control Points (zero/span)",
-  # i.e. blanks at ~0.05 ug/m3) in the same sheet and on the same dates as
-  # ambient samples. Only ambient rows are kept.
+  # Sample screening (CDPHE guidance, email of Sept 2026):
+  #  * qc_code follows AQDx v2. The 2025 sheets list QC samples (qc_code 8, e.g.
+  #    flag AY "Q C Control Points (zero/span)") beside ambient samples (qc_code 0);
+  #    only ambient rows are kept.
+  #  * Rows carrying any AQS "Null Data Qualifier" are invalid or QC/QA and are
+  #    excluded. The list is read from each packet's "Qualifier Flags" sheet
+  #    (Qualifier Type = "Null Data Qualifier"); the fallback below is used only
+  #    if a packet has no such sheet (list copied from the 2025 packets).
+  #  * Quality Assurance / Informational qualifiers (LJ, TT, QX, LB, FB, SQ, IT, ...)
+  #    are kept and listed in `flags`; add codes to coatts_exclude_flags for a
+  #    stricter screen (e.g. "FB" field blank above limit, "QX" fails QC criteria).
   coatts_keep_qc_codes = 0L,
-  coatts_exclude_flags = c("AY"),   # add e.g. "QX", "LB", "TT" for a stricter screen
+  exclude_null_qualifiers = TRUE,
+  aqs_null_qualifiers_fallback = c("AA", "AG", "AH", "AJ", "AL", "AN", "AO", "AQ", "AT",
+                                   "AV", "AX", "AY", "AZ", "BA", "BD", "BH", "BK", "BL",
+                                   "BM", "BR", "EC", "MB", "SC", "SV", "TS", "XX"),
+  coatts_exclude_flags = character(),
   min_days_per_site_month = 3L,     # for the within-month (deseasonalised) analysis
 
   # CDPHE Air Toxics & Ozone Precursor Data Repository
   coatts_repo_url = "https://www.colorado.gov/airquality/air_toxics_repo.aspx",
-  # COATTS sites. Ozone-precursor sites (CHCO Littleton, PVCO Platteville) also
-  # report carbonyls, but their 2025 packets hold no 24-h formaldehyde, so they
-  # are off by default. Turning this on re-extracts TEMPO for the new sites.
+  # COATTS sites. The ozone-precursor sites belong to CDPHE's COOPs network
+  # (discontinued end of June 2026; historical data stay available). Their
+  # carbonyls are 3-h samples (CDPHE confirmed for CHCO and PVCO in 2024 and
+  # 2025), handled by the 3-h arm below; step 01 never reads their 2024 wide
+  # packets as 24-h data, and their 2025 AQDx rows fail its 24-h duration test.
   coatts_sites = c("ADCO", "LSCO", "GPCO", "JFCO", "COCO", "CNCO", "POCO"),
   ozone_precursor_sites = c("PVCO", "BFCO", "CHCO", "MPCO"),
   include_ozone_precursor_sites = FALSE,
@@ -60,14 +74,20 @@ CFG <- list(
   run_three_hour_arm = TRUE,
   threeh_sites = c("CHCO", "PVCO"),       # Littleton (Chatfield), Platteville
   threeh_duration_s = 10800,
-  # CDPHE stamps these samples 09:00 MST. Whether that is the start (09-12) or
-  # the end (06-09) is unconfirmed, so both are analysed; "start" is primary.
+  # CDPHE stamps these samples 09:00. Whether that is the start (09-12) or the
+  # end (06-09), and whether the clock is MST year-round, is not yet confirmed,
+  # so both conventions are analysed; "start" is primary.
   threeh_stamp_conventions = c("start", "end"),
   threeh_primary_convention = "start",
   threeh_query_local_hours = c(5, 13),     # TEMPO scans listed for this MST span
-  # 2024 wide packets for these sites have 09:00 stamps but no duration field;
-  # set TRUE once CDPHE confirms they are the same 3-h samples.
-  threeh_include_2024 = FALSE,
+  # 2024 wide packets for these sites have 09:00 stamps but no duration field.
+  # CDPHE confirmed (Sept 2026) that they are the same 3-h samples.
+  threeh_include_2024 = TRUE,
+  # Two 2025 samples (CHCO and PVCO, 2025-06-12) are stamped 23:59 instead of
+  # 09:00: qc_code 0, no qualifiers, on the regular 1-in-6-day schedule. Until
+  # CDPHE confirms their timing they are kept in threeh_hcho.csv (flagged
+  # stamp_time_unusual) but left out of the TEMPO matching in step 07.
+  threeh_exclude_unusual_stamps = TRUE,
 
   # ---- smoke flags: NOAA Hazard Mapping System smoke polygons ----
   run_smoke_flags = TRUE,
@@ -242,14 +262,50 @@ sample_date_of <- function(dt) as.Date(dt)
 
 has_flag <- function(flags, code) str_detect(coalesce(flags, ""), paste0("(^|[ ,;])", code, "($|[ ,;])"))
 
-# Remove QC samples (blanks, zero/span points) that share dates with ambient samples
-drop_qc_rows <- function(d, qc, flags, file) {
+# AQS Null Data Qualifiers listed in a packet's "Qualifier Flags" sheet
+# (columns "Qualifier Flags", "Description", "Qualifier Type" under a title row)
+null_qualifiers_of <- function(path) {
+  sh <- readxl::excel_sheets(path)
+  s  <- sh[str_detect(sh, regex("^\\s*qualifier flags\\s*$", ignore_case = TRUE))]
+  fallback <- function(why) {
+    log_msg("  ", basename(path), ": ", why, " - using aqs_null_qualifiers_fallback")
+    CFG$aqs_null_qualifiers_fallback
+  }
+  if (!length(s)) return(fallback("no Qualifier Flags sheet"))
+  q <- readxl::read_excel(path, sheet = s[1], col_names = FALSE, col_types = "text",
+                          .name_repair = ~ paste0("c", seq_along(.x)))
+  is_hdr <- apply(q, 1, function(r) any(str_detect(coalesce(r, ""), regex("^\\s*qualifier type\\s*$", ignore_case = TRUE))))
+  hdr <- which(is_hdr)[1]
+  if (is.na(hdr)) return(fallback("Qualifier Flags sheet has no 'Qualifier Type' header"))
+  h <- str_trim(coalesce(as.character(unlist(q[hdr, ])), ""))
+  code_col <- which(str_detect(h, regex("^qualifier flag", ignore_case = TRUE)))[1]
+  type_col <- which(str_detect(h, regex("^qualifier type$", ignore_case = TRUE)))[1]
+  if (is.na(code_col) || is.na(type_col)) return(fallback("unexpected Qualifier Flags columns"))
+  body  <- q[-seq_len(hdr), , drop = FALSE]
+  codes <- str_trim(body[[code_col]][str_detect(coalesce(body[[type_col]], ""), regex("null", ignore_case = TRUE))])
+  codes <- unique(codes[!is.na(codes) & nzchar(codes)])
+  if (!length(codes)) return(fallback("no Null Data Qualifiers listed"))
+  codes
+}
+
+# Keep ambient samples only: qc_code in coatts_keep_qc_codes (or missing, as in
+# the 2024 wide sheets, which hold field samples only) and no excluded qualifier
+# (AQS Null Data Qualifiers from the packet, plus coatts_exclude_flags).
+drop_qc_rows <- function(d, qc, flags, file, null_codes = character()) {
   qc_int <- suppressWarnings(as.integer(pull(d, {{ qc }})))
   fl <- pull(d, {{ flags }})
-  bad_flag <- Reduce(`|`, lapply(CFG$coatts_exclude_flags, function(f) has_flag(fl, f)), FALSE)
-  keep <- (is.na(qc_int) | qc_int %in% CFG$coatts_keep_qc_codes) & !bad_flag
-  if (any(!keep)) log_msg("  ", file, ": dropped ", sum(!keep), " QC/blank rows (qc_code or flags ",
-                          paste(CFG$coatts_exclude_flags, collapse = ","), ")")
+  excl <- unique(c(if (CFG$exclude_null_qualifiers) null_codes, CFG$coatts_exclude_flags))
+  hit  <- matrix(FALSE, nrow = length(fl), ncol = length(excl))
+  for (k in seq_along(excl)) hit[, k] <- has_flag(fl, excl[k])
+  bad_flag <- rowSums(hit) > 0
+  bad_qc   <- !(is.na(qc_int) | qc_int %in% CFG$coatts_keep_qc_codes)
+  keep <- !bad_qc & !bad_flag
+  if (any(!keep)) {
+    found <- excl[colSums(hit[!bad_qc, , drop = FALSE]) > 0]
+    log_msg("  ", file, ": dropped ", sum(!keep), " rows (", sum(bad_qc), " QC samples by qc_code; ",
+            sum(bad_flag & !bad_qc), " ambient rows with excluded qualifiers",
+            if (length(found)) paste0(" ", paste(found, collapse = ",")), ")")
+  }
   d[keep, , drop = FALSE]
 }
 

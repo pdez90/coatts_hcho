@@ -12,3 +12,6 @@ _to_delete_/
 # renv library (commit renv.lock and renv/activate.R)
 renv/library/
 renv/staging/
+
+# unpublished manuscript drafts (remove this line to version them)
+manuscript/

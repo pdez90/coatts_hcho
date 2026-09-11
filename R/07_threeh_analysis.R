@@ -20,6 +20,12 @@ samples <- read_tbl(A3$samples, colClasses = list(character = "stamp_local")) |>
          stamp_local = parse_date_time(stamp_local, orders = c("Ymd HM", "Ymd HMS"), tz = "UTC"),
          season = factor(season, levels = c("DJF", "MAM", "JJA", "SON"))) |>
   filter(!is.na(hcho_ugm3))
+if (CFG$threeh_exclude_unusual_stamps && "stamp_time_unusual" %in% names(samples)) {
+  odd <- as.logical(samples$stamp_time_unusual) %in% TRUE
+  if (any(odd)) log_msg("Leaving out ", sum(odd), " samples with an unusual stamp time (threeh_exclude_unusual_stamps): ",
+                        paste(samples$site[odd], format(samples$stamp_local[odd], "%Y-%m-%d %H:%M"), collapse = "; "))
+  samples <- samples[!odd, , drop = FALSE]
+}
 manifest <- read_tbl(A3$manifest) |>
   mutate(mid_utc = as.POSIXct(mid_utc, tz = "UTC")) |>
   distinct(granule, mid_utc)

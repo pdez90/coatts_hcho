@@ -1,10 +1,12 @@
 # =============================================================================
 # 06_threeh_samples.R - 3-hour formaldehyde samples at ozone-precursor sites
 #
-# CDPHE's 2025 packets for Littleton (CHCO) and Platteville (PVCO) hold
-# formaldehyde as 3-h samples (duration 10,800 s) stamped 09:00 MST. This step
-# downloads those packets, keeps ambient 3-h formaldehyde (QC rows removed as in
-# step 01) and writes one row per site x sample stamp. The TEMPO scans are then
+# Littleton (CHCO) and Platteville (PVCO) belong to CDPHE's COOPs network. Their
+# formaldehyde samples are 3-h (duration 10,800 s in the 2025 AQDx packets;
+# CDPHE confirmed the 2024 wide packets hold the same 3-h samples), stamped 09:00.
+# This step downloads those packets, keeps ambient 3-h formaldehyde (QC samples
+# and rows with AQS Null Data Qualifiers removed, as in step 01) and writes one
+# row per site x sample stamp. The TEMPO scans are then
 # listed and extracted by steps 02 and 03 with options(hcho.arm = "threeh"),
 # and matched in step 07.
 # Output: data/processed/threeh_hcho.csv
@@ -68,7 +70,8 @@ parse_threeh_aqdx <- function(path) {
   }
   if (!nrow(hc)) return(NULL)
   hc |>
-    drop_qc_rows(qc = qc_code, flags = qualifier_codes, file = basename(path)) |>
+    drop_qc_rows(qc = qc_code, flags = qualifier_codes, file = basename(path),
+                 null_codes = null_qualifiers_of(path)) |>
     transmute(stamp_local, lat, lon, value, duration_s = duration,
               qc_code = suppressWarnings(as.integer(qc_code)), flags = qualifier_codes)
 }
@@ -85,10 +88,11 @@ parse_threeh_wide <- function(path) {
   tibble(stamp_local = excel_or_text_datetime(d[[tcol]]),
          lat = NA_real_, lon = NA_real_,
          value = suppressWarnings(as.numeric(d[[vcol]])),
-         duration_s = NA_real_,             # not given in the 2024 layout; assumed 3-h
-         qc_code = NA_integer_,
+         duration_s = NA_real_,             # not in the 2024 layout; 3-h per CDPHE
+         qc_code = NA_integer_,             # field-sample sheet (QC samples are on a separate sheet)
          flags = if (!is.na(fcol)) d[[fcol]] else NA_character_) |>
-    drop_qc_rows(qc = qc_code, flags = flags, file = basename(path))
+    drop_qc_rows(qc = qc_code, flags = flags, file = basename(path),
+                 null_codes = null_qualifiers_of(path))
 }
 
 parsed <- pmap(select(files, file, site, layout, path), function(file, site, layout, path) {
@@ -121,7 +125,7 @@ threeh <- parsed |>
             .groups = "drop") |>
   left_join(coords, by = "site") |>
   mutate(site_name = unname(site_names[site]),
-         program = "Ozone precursor (3-h)",
+         program = "COOPs (3-h)",
          sample_date = as.Date(stamp_local),
          stamp_time_unusual = format(stamp_local, "%H:%M") != modal_time,
          stamp_local = format(stamp_local, "%Y-%m-%d %H:%M"),
@@ -134,7 +138,9 @@ threeh <- parsed |>
 if (any(is.na(threeh$lat))) warning("Missing coordinates for: ", paste(unique(threeh$site[is.na(threeh$lat)]), collapse = ", "))
 if (any(threeh$stamp_time_unusual)) {
   log_msg("NOTE: ", sum(threeh$stamp_time_unusual), " samples stamped at a time other than ", modal_time,
-          " (kept, flagged stamp_time_unusual)")
+          " (kept here, flagged stamp_time_unusual; ",
+          if (CFG$threeh_exclude_unusual_stamps) "left out of" else "included in", " the TEMPO matching): ",
+          paste(threeh$site[threeh$stamp_time_unusual], threeh$stamp_local[threeh$stamp_time_unusual], collapse = "; "))
 }
 
 data.table::fwrite(threeh, A_threeh <- arm_paths("threeh")$samples)

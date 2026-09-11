@@ -69,22 +69,27 @@ step 2, set `max_granules = 5` in `R/00_config.R`, run step 3 and open
 
 ### 3-hour arm (Littleton CHCO, Platteville PVCO)
 
-CDPHE's 2025 packets for these two ozone-precursor sites hold formaldehyde as
-3-hour samples stamped 09:00 MST. `run_all.R` runs this arm after the 24-h arm
+These two sites belong to CDPHE's COOPs (ozone precursor) network, which was
+discontinued at the end of June 2026; the historical data remain available.
+Their formaldehyde samples are 3-hour samples stamped 09:00 — explicit
+(duration 10,800 s) in the 2025 AQDx packets, and confirmed by CDPHE for the
+2024 wide packets, which have no duration field. `run_all.R` runs this arm after the 24-h arm
 (`run_three_hour_arm = TRUE`):
 
 | Step | Script | What it does | Main output |
 |---|---|---|---|
-| 6 | `R/06_threeh_samples.R` | Downloads the site packets, keeps ambient 3-h formaldehyde (QC rows removed), one row per sample | `data/processed/threeh_hcho.csv`, `output/tables/threeh_inventory.csv` |
+| 6 | `R/06_threeh_samples.R` | Downloads the 2024 and 2025 site packets, keeps ambient 3-h formaldehyde (QC samples and null-qualified rows removed), one row per sample | `data/processed/threeh_hcho.csv`, `output/tables/threeh_inventory.csv` |
 | 2, 3 | same scripts, arm `threeh` | TEMPO scans 05–13 MST on sample days; cells around the two sites (separate caches) | `threeh_tempo_manifest.csv`, `threeh_tempo_site_cells.csv.gz` |
 | 7 | `R/07_threeh_analysis.R` | Averages screened scans whose midpoint falls inside each sampling window; correlations, within-month anomalies, month-effects regression, sensitivity | `output/tables/threeh_*.csv`, `fig7_threeh_scatter.png`, `fig8_threeh_sensitivity.png` |
 
 Whether the 09:00 stamp is the start (09–12 MST) or end (06–09 MST) of the
-sample is not yet confirmed, so every result is given for both conventions
+sample, and whether it is MST year-round, is not yet confirmed, so every result is given for both conventions
 (`threeh_stamp_conventions`); "start" is treated as primary. Scans are assigned
 by their granule midpoint, which can be ~30 min off the time TEMPO actually
-viewed Colorado. The 2024 packets for these sites (09:00 stamps, no duration
-field) are excluded until CDPHE confirms their duration (`threeh_include_2024`).
+viewed Colorado. `threeh_include_2024 = TRUE` (default) uses the 2024 packets.
+Two 2025 samples (CHCO and PVCO, 2025-06-12) are stamped 23:59 rather than 09:00;
+they stay in `threeh_hcho.csv` with `stamp_time_unusual = TRUE` but are left out
+of the matching until CDPHE confirms their timing (`threeh_exclude_unusual_stamps`).
 To run one step of this arm by hand: `options(hcho.arm = "threeh"); source("R/03_tempo_extract.R")`.
 
 ### Smoke flags (NOAA Hazard Mapping System)
@@ -115,9 +120,11 @@ All choices live in `CFG` in `R/00_config.R`:
 - `date_range` — fixed analysis period (default 2024-01-01 to 2025-12-31)
 - `coatts_refresh` — `FALSE` reuses downloaded packets; `TRUE` re-downloads and
   warns if CDPHE revised a file (checksums in `download_manifest.csv`)
-- `include_ozone_precursor_sites` — also use 2024 carbonyls from Littleton (CHCO) and
-  Platteville (PVCO). Off by default: their 2025 packets hold no 24-h formaldehyde.
-  Turning it on makes step 3 re-extract every granule (~25 min) for the added sites.
+- `include_ozone_precursor_sites` — add the COOPs sites to the 24-h arm. Off by
+  default and normally pointless: their carbonyls are 3-h samples (used by the 3-h
+  arm), 2024 wide COOPs packets are always skipped in step 1, and 2025 COOPs rows
+  fail the 24-h duration test.
+- `exclude_null_qualifiers`, `coatts_exclude_flags` — sample screening (see caveats)
 - `qc_max_quality_flag`, `qc_max_cloud_fraction`, `qc_max_sza`, `qc_max_snow_ice`,
   `qc_min_cell_fraction` — screening for the primary analysis
 - `midday_local_hours` — the alternative "midday" daily window
@@ -164,11 +171,18 @@ Data provenance:
   polygons (step 8); HMS marks smoke in the column, which may be aloft.
 - **Non-detects** are left as missing (formaldehyde had none in 2024–2025);
   values below the MDL are kept as reported and flagged `below_mdl`.
-- **CDPHE QC rows.** The 2025 AQDx sheets list QC samples (qc_code 8, flag `AY`,
-  "Q C Control Points (zero/span)", ~0.05 µg/m³) on the same dates as ambient
-  samples. They are removed (`coatts_keep_qc_codes`, `coatts_exclude_flags`);
-  other qualifiers (e.g. `LJ` estimate, `TT` transport temperature, `QX`) are kept
-  and listed in `flags` — add them to `coatts_exclude_flags` for a stricter screen.
+- **Sample screening (per CDPHE).** `qc_code` follows AQDx v2: the 2025 AQDx
+  sheets list QC samples (qc_code 8, e.g. flag `AY` "Q C Control Points
+  (zero/span)", ~0.05 µg/m³) on the same dates as ambient samples (qc_code 0);
+  only qc_code 0 is kept (`coatts_keep_qc_codes`). Rows with any AQS **Null Data
+  Qualifier** are invalid or QC/QA and are dropped; the list is read from each
+  packet's "Qualifier Flags" sheet (`exclude_null_qualifiers`, with
+  `aqs_null_qualifiers_fallback` if a packet lacks the sheet). In the 2024–2025
+  packets this removes only QC samples and one ADCO 2024 row without a value
+  (`AV`, power failure), so results are unchanged. Quality Assurance and
+  Informational qualifiers (e.g. `LJ` estimate, `TT` transport temperature, `QX`,
+  `FB` field blank above limit, `IT` wildfire) are kept and listed in `flags` —
+  add them to `coatts_exclude_flags` for a stricter screen.
 - **Seasonality.** Surface and column formaldehyde both peak in summer, so
   whole-year correlations partly reflect the shared seasonal cycle.
   `stats_within_month_anomalies.csv` / `fig6` remove site-month means; the
