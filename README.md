@@ -91,9 +91,9 @@ To run one step of this arm by hand: `options(hcho.arm = "threeh"); source("R/03
 
 | Step | Script | What it does | Main output |
 |---|---|---|---|
-| 8 | `R/08_smoke_hms.R` | Downloads the daily HMS smoke polygon shapefiles for every sample day, finds polygons covering each site, and flags a sample when a covering polygon's Start–End time overlaps its sampling window (00–24 MST for 24-h; the 3-h window for each stamp convention). Density: none / light / medium-heavy. A day without an HMS file gets `hms_available = FALSE` and missing flags, not "no smoke". | `data/processed/smoke_flags.csv`, `output/tables/smoke_inventory.csv` |
+| 8 | `R/08_smoke_hms.R` | Downloads the daily HMS smoke polygon shapefiles for every sample day, finds polygons covering each site, and flags a sample when a covering polygon's Start–End time overlaps its sampling window (00–24 MST for 24-h; the 3-h window for each stamp convention), widened by `hms_time_pad_hours` (3 h) on each side because HMS times are the analysts' imagery periods, which cluster around 11–15 and 18–24 UTC and leave a 09–12 MST gap. `smoke_any_day` ignores times altogether. Density: none / light / medium-heavy. A day without an HMS file gets `hms_available = FALSE` and missing flags, not "no smoke". | `data/processed/smoke_flags.csv`, `output/tables/smoke_inventory.csv` |
 
-Step 5 then adds `smoke_coverage.csv` (TEMPO data loss by smoke class),
+Step 5 then adds `smoke_coverage.csv` (TEMPO data loss by smoke class), `smoke_by_season.csv`,
 `stats_by_smoke.csv`, `stats_within_month_anomalies_smoke_sensitivity.csv` and
 `fig9_smoke_stratified.png`; step 7 adds `threeh_stats_by_smoke.csv`. Step 8
 needs the `sf` package (installed automatically if missing). HMS polygons mark

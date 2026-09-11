@@ -7,6 +7,9 @@
 # when a covering polygon's Start-End overlaps the sampling window:
 #   24-h arm : 00-24 MST on the sample date (HMS files for that UTC day and the next)
 #   3-h arm  : the 3-h window, for each stamp convention
+# Windows are widened by hms_time_pad_hours on each side, because HMS times are
+# analyst imagery periods with gaps (see R/00_config.R). smoke_any_day ignores
+# polygon times altogether (any polygon over the site on the window's HMS days).
 # A day whose HMS file is unavailable gets hms_available = FALSE and NA flags -
 # a missing file is not treated as "no smoke".
 # Outputs: data/processed/smoke_flags.csv, output/tables/smoke_inventory.csv
@@ -44,10 +47,13 @@ if (isTRUE(CFG$run_three_hour_arm) && file.exists(th_path)) {
   }) |> list_rbind()
   windows <- bind_rows(windows, w3)
 }
-log_msg(nrow(windows), " sampling windows (", paste(unique(windows$arm), collapse = ", "), ")")
+pad <- CFG$hms_time_pad_hours * 3600
+windows <- mutate(windows, pad_start_utc = win_start_utc - pad, pad_end_utc = win_end_utc + pad)
+log_msg(nrow(windows), " sampling windows (", paste(unique(windows$arm), collapse = ", "),
+        "); time padding +/-", CFG$hms_time_pad_hours, " h")
 
 # HMS days needed: UTC dates touched by each window
-hms_days <- sort(unique(c(as.Date(windows$win_start_utc), as.Date(windows$win_end_utc - 1))))
+hms_days <- sort(unique(c(as.Date(windows$pad_start_utc), as.Date(windows$pad_end_utc - 1))))
 log_msg(length(hms_days), " HMS days needed")
 
 # ---- 2. download -------------------------------------------------------------------
@@ -125,15 +131,17 @@ log_msg(nrow(site_polys), " HMS polygon-site intersections")
 # ---- 4. flags per sampling window -------------------------------------------------------
 ok_days <- status$date[status$status == "ok"]
 flags <- windows |>
-  mutate(day1 = as.Date(win_start_utc), day2 = as.Date(win_end_utc - 1),
+  mutate(day1 = as.Date(pad_start_utc), day2 = as.Date(pad_end_utc - 1),
          hms_available = day1 %in% ok_days & day2 %in% ok_days,
          wid = row_number())
-overlaps <- flags |>
-  select(wid, site, day1, day2, win_start_utc, win_end_utc) |>
+same_days <- flags |>
+  select(wid, site, day1, day2, pad_start_utc, pad_end_utc) |>
   inner_join(site_polys, by = "site", relationship = "many-to-many") |>
-  filter(hms_date >= day1, hms_date <= day2) |>
+  filter(hms_date >= day1, hms_date <= day2)
+day_level <- same_days |> distinct(wid) |> mutate(any_day = TRUE)
+overlaps <- same_days |>
   # polygons without parseable times count for the whole HMS day
-  filter(is.na(start_utc) | is.na(end_utc) | (start_utc < win_end_utc & end_utc > win_start_utc)) |>
+  filter(is.na(start_utc) | is.na(end_utc) | (start_utc < pad_end_utc & end_utc > pad_start_utc)) |>
   group_by(wid) |>
   summarise(n_smoke_polygons = n(),
             smoke_max_density = if (all(is.na(density))) 1L else max(density, na.rm = TRUE),
@@ -141,22 +149,25 @@ overlaps <- flags |>
 
 smoke <- flags |>
   left_join(overlaps, by = "wid") |>
+  left_join(day_level, by = "wid") |>
   mutate(n_smoke_polygons = ifelse(hms_available, coalesce(n_smoke_polygons, 0L), NA_integer_),
          smoke_max_density = ifelse(hms_available, coalesce(smoke_max_density, 0L), NA_integer_),
          smoke_any = smoke_max_density > 0,
+         smoke_any_day = ifelse(hms_available, coalesce(any_day, FALSE), NA),
          smoke_class = factor(case_when(is.na(smoke_max_density) ~ NA_character_,
                                         smoke_max_density == 0 ~ "none",
                                         smoke_max_density == 1 ~ "light",
                                         TRUE ~ "medium/heavy"),
                               levels = c("none", "light", "medium/heavy"))) |>
   select(arm, convention, site, sample_date, stamp_local, win_start_utc, win_end_utc,
-         hms_available, n_smoke_polygons, smoke_max_density, smoke_any, smoke_class)
+         hms_available, n_smoke_polygons, smoke_max_density, smoke_any, smoke_class, smoke_any_day)
 
 data.table::fwrite(smoke, file.path(P$processed, "smoke_flags.csv"))
 inv <- smoke |>
   group_by(arm, convention, site) |>
   summarise(samples = n(), hms_available = sum(hms_available),
             smoke_any = sum(smoke_any, na.rm = TRUE),
+            smoke_any_day = sum(smoke_any_day, na.rm = TRUE),
             medium_heavy = sum(smoke_class == "medium/heavy", na.rm = TRUE), .groups = "drop")
 data.table::fwrite(inv, file.path(P$tables, "smoke_inventory.csv"))
 print(inv, n = Inf)

@@ -72,6 +72,11 @@ CFG <- list(
   # ---- smoke flags: NOAA Hazard Mapping System smoke polygons ----
   run_smoke_flags = TRUE,
   hms_base_url = "https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Smoke_Polygons/Shapefile",
+  # HMS polygon Start-End times are the imagery periods analysts used, which
+  # cluster around ~11-15 UTC and ~18-24 UTC. A strict overlap test therefore
+  # misses mid-morning MST windows (09-12 MST = 16-19 UTC) even on smoky days.
+  # Windows are widened by this many hours on each side before the test.
+  hms_time_pad_hours = 3,
 
   # TEMPO formaldehyde Level 3, version 4 (0.02 deg, hourly scans)
   tempo_collection = "C3685897141-LARC_CLOUD",   # TEMPO_HCHO_L3 V04

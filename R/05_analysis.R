@@ -112,6 +112,19 @@ if (has_smoke) {
   data.table::fwrite(smoke_cov, file.path(P$tables, "smoke_coverage.csv"))
   print(smoke_cov)
 
+  # Smoke days are mostly summer, when skies are clearer and the boundary layer is
+  # deeper, so compare smoke classes within season as well
+  smoke_season <- primary_s |>
+    filter(!is.na(smoke_class)) |>
+    group_by(season, smoke_class) |>
+    summarise(coatts_days = n(), usable_pct = round(100 * mean(usable), 1),
+              median_surface_ugm3 = median(hcho_ugm3, na.rm = TRUE),
+              median_tempo_1e15 = median(tempo_vc_1e15[usable], na.rm = TRUE),
+              median_h_eff_km = median(h_eff_km[usable], na.rm = TRUE),
+              .groups = "drop")
+  data.table::fwrite(smoke_season, file.path(P$tables, "smoke_by_season.csv"))
+  print(smoke_season, n = Inf)
+
   smoke_stats <- bind_rows(
     use_s |> group_by(smoke_class) |> group_modify(~ relstats(.x)) |> ungroup() |>
       mutate(subset = "by smoke class"),
