@@ -89,6 +89,9 @@ CFG <- list(
   # stamp_time_unusual) but left out of the TEMPO matching in step 07.
   threeh_exclude_unusual_stamps = TRUE,
 
+  # ---- diagnostics (step 09): tests of explanations, uses existing outputs ----
+  run_diagnostics = TRUE,
+
   # ---- smoke flags: NOAA Hazard Mapping System smoke polygons ----
   run_smoke_flags = TRUE,
   hms_base_url = "https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Smoke_Polygons/Shapefile",

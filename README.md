@@ -104,9 +104,24 @@ Step 5 then adds `smoke_coverage.csv` (TEMPO data loss by smoke class), `smoke_b
 needs the `sf` package (installed automatically if missing). HMS polygons mark
 smoke anywhere in the column, not necessarily at the surface.
 
+### Diagnostics (tests of explanations)
+
+Step 9 (`R/09_diagnostics.R`) reuses the outputs above (no downloads) to test
+explanations for the main results. Run it alone with `source("R/09_diagnostics.R")`.
+
+| Test | Question | Output |
+|---|---|---|
+| 1 | 3-h arm: do same-sample TEMPO columns in the two candidate windows (06–09, 09–12 MST) vary together? Are early scans screened out (solar zenith angle, cloud, snow, quality flag) or noisier at one site? | `diag1_threeh_window_columns.csv`, `diag1_threeh_window_screening.csv`, `figS3_threeh_window_columns.png` |
+| 2 | 3-h arm: start vs end convention on the same samples (Williams' test for dependent correlations, paired bootstrap CI); seasonal mix of usable samples | `diag2_threeh_paired_conventions.csv`, `diag2_threeh_usable_by_season.csv` |
+| 3 | 24-h arm: share of day-to-day column variance that is retrieval noise, and the correlation ceiling it implies, by site and block size. Noise is estimated from reported uncertainties (cells in a block fully correlated or independent) and from differences between successive valid scans (an upper bound on noise, since it includes real hourly change) | `diag3_noise_ceiling.csv`, `figS4_noise_ceiling.png` |
+| 4 | Terrain heterogeneity inside each averaging block (spread of TEMPO surface pressure) next to site agreement; within-month anomaly correlations by site and season | `diag4_terrain_and_agreement.csv`, `diag4_anomaly_r_by_site_season.csv` |
+| 5 | Smoke days: cloud fraction, scan survival and coverage by smoke class within season (HMS maps smoke only in clear imagery) | `diag5_smoke_clouds_by_season.csv`, `diag5_smoke_cloud_tests.csv` |
+
+Key lines are also written to `output/tables/diag_summary.txt`.
+
 `run_all.R` order: 01 → 02 → 03 → 04 (24-h data) → 06 → 02 → 03 (3-h data) →
-08 (smoke) → 05 → 07 (analyses). Turn arms off with `run_three_hour_arm` and
-`run_smoke_flags` in `R/00_config.R`.
+08 (smoke) → 05 → 07 (analyses) → 09 (diagnostics). Turn parts off with
+`run_three_hour_arm`, `run_smoke_flags` and `run_diagnostics` in `R/00_config.R`.
 
 Every step caches what it has done. If step 3 is interrupted (it makes roughly
 one request per TEMPO scan, on the order of 2,000), run it again and it
