@@ -68,10 +68,9 @@ new <- map(seq_along(todo), function(k) {
 }) |> list_rbind()
 
 if (is.null(done) && (is.null(new) || !nrow(new))) stop("CMR returned no TEMPO granules.")
-manifest <- bind_rows(
-  done,
-  if (!is.null(new)) mutate(new, cmr_queried_utc = as.character(cmr_queried_utc))
-) |>
+# `new` is an empty table when no day in `todo` has granules; cmr_window() already
+# returns cmr_queried_utc as text, matching `done`.
+manifest <- bind_rows(done, new) |>
   distinct(granule, sample_date, .keep_all = TRUE) |>
   mutate(mid_utc = begin_utc + (end_utc - begin_utc) / 2,
          day0 = as.POSIXct(paste(sample_date, "00:00:00"), tz = "UTC"),
