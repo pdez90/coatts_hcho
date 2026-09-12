@@ -256,11 +256,12 @@ if (nrow(lag_curve)) {
     geom_vline(xintercept = 0, linetype = 2, colour = "grey60") +
     geom_line(linewidth = 0.7) + geom_point(size = 2.6) +
     geom_text(aes(label = n), vjust = -1.1, size = 3, show.legend = FALSE) +
+    scale_y_continuous(expand = expansion(mult = c(0.08, 0.16))) +   # room for the point labels
     scale_x_continuous(breaks = lag_levels,
                        labels = vapply(lag_levels, function(l) sub(":.*", "", lag_clock(l)), character(1))) +
     labs(x = paste0("Lag of the TEMPO window from the sampling window (0 = ", lag_clock(0), ")"),
          y = "Pearson r with 3-h surface HCHO", colour = NULL, shape = NULL,
-         title = "Agreement rises after the sample ends, as the boundary layer mixes",
+         title = "Agreement peaks three hours after the sample ends, as the boundary layer mixes",
          subtitle = "Point labels are the number of matched samples") +
     theme(legend.position = "bottom")
   ggsave(file.path(P$figures, "fig10_threeh_lag_curve.png"), p10, width = 7, height = 4.6, dpi = 300)
