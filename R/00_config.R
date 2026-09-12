@@ -74,12 +74,16 @@ CFG <- list(
   run_three_hour_arm = TRUE,
   threeh_sites = c("CHCO", "PVCO"),       # Littleton (Chatfield), Platteville
   threeh_duration_s = 10800,
-  # CDPHE stamps these samples 09:00. Whether that is the start (09-12) or the
-  # end (06-09), and whether the clock is MST year-round, is not yet confirmed,
-  # so both conventions are analysed; "start" is primary.
-  threeh_stamp_conventions = c("start", "end"),
-  threeh_primary_convention = "start",
-  threeh_query_local_hours = c(5, 13),     # TEMPO scans listed for this MST span
+  # CDPHE stamps these samples 09:00. EPA's AQS holds the same samples with a
+  # start time of 06:00 MST and a duration of 3 hours (step 10), so the packet
+  # stamp is the END of sampling and the window is [stamp - 3 h, stamp).
+  threeh_stamp_is = "end",
+  # TEMPO scans are also averaged over windows shifted by these lags (hours)
+  # from the sampling window, to see how agreement depends on the delay between
+  # sampling and the satellite view (0 = the sampling window itself).
+  threeh_lags_h = c(-3, 0, 3, 6, 9),
+  threeh_primary_lag_h = 0,
+  threeh_query_local_hours = c(3, 19),     # TEMPO scans listed for this MST span
   # 2024 wide packets for these sites have 09:00 stamps but no duration field.
   # CDPHE confirmed (Sept 2026) that they are the same 3-h samples.
   threeh_include_2024 = TRUE,
@@ -102,8 +106,19 @@ CFG <- list(
   aqs_durations = c("24 h", "8 h", "3 h", "1 h"),
   aqs_min_samples = 20L,                     # per site over aqs_years, to be a candidate
   aqs_conus_bbox = c(-125, 24, -66, 50),     # lon_min, lat_min, lon_max, lat_max
-  # sample-level check of the Littleton and Platteville time stamps
-  aqs_sites_of_interest = c("08-035-0004", "08-123-0008"),
+  # Sample-level check of sampling clocks. AQS records the time each sample
+  # BEGAN, in local standard time. The first pull (Sept 2026) returned
+  # time_local 06:00 with duration "3 HOURS" for Chatfield State Park and
+  # Platteville: the 09:00 stamp in CDPHE's packets is the END of a 06:00-09:00
+  # MST sample. This list adds the COATTS 24-h sites (to confirm
+  # midnight-to-midnight), the other two national 3-h sites (California) and
+  # three 8-h PAMS sites (to learn the 8-h sampling clock).
+  aqs_sites_of_interest = c(
+    "08-035-0004", "08-123-0008",                                   # CHCO, PVCO (3 h)
+    "08-001-0010", "08-123-0015", "08-077-0018", "08-059-0015",     # ADCO, LSCO, GPCO, JFCO (24 h)
+    "08-041-0017", "08-043-0004", "08-101-0017",                    # COCO, CNCO, POCO (24 h)
+    "06-029-2012", "06-019-5001",                                   # Bakersfield, Clovis (3 h)
+    "08-059-0006", "06-065-8001", "39-035-0060"),                   # Rocky Flats, Rubidoux, GT Craig (8 h)
 
   # ---- diagnostics (step 09): tests of explanations, uses existing outputs ----
   run_diagnostics = TRUE,

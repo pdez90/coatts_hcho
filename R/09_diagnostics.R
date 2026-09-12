@@ -2,12 +2,12 @@
 # 09_diagnostics.R - tests of candidate explanations for the main results
 #
 # Uses outputs of steps 04, 05, 07 and 08 only (no downloads).
-#   1. 3-h arm: do TEMPO columns in the two candidate windows (06-09 and 09-12
-#      MST) vary together from day to day? Are early scans screened out more
-#      often, or noisier, at one site than the other?
-#   2. 3-h arm: start vs end convention compared on the SAME samples
+#   1. 3-h arm: do TEMPO columns in the sampling window and in the window after
+#      it vary together from day to day? Are the scans in either window screened
+#      out more often, or noisier, at one site than the other?
+#   2. 3-h arm: the sampling window vs the window after it, on the SAME samples
 #      (Williams' test for dependent correlations + paired bootstrap), and the
-#      seasonal mix of usable samples under each convention
+#      seasonal mix of usable samples in each window
 #   3. 24-h arm: how much day-to-day column variability is retrieval noise, and
 #      the correlation ceiling that noise alone implies (by site and block size)
 #   4. Terrain heterogeneity inside the averaging blocks (TEMPO surface
@@ -17,7 +17,7 @@
 #   6. 24-h arm: do early-morning (06-09 MST) scans carry as much day-to-day
 #      information as 09-12 MST scans? The 24-h samples span both windows, so a
 #      difference here reflects the retrievals, not the sampling time - the
-#      control needed to read the 3-h start/end contrast (test 2)
+#      control needed to read the 3-h window-versus-lag contrast (test 2)
 # Outputs: output/tables/diag1_* ... diag6_*, output/figures/figS3_*, figS4_*
 # =============================================================================
 source("R/00_config.R")
@@ -112,63 +112,72 @@ note <- function(...) { line <- paste0(...); summary_lines <<- c(summary_lines, 
 th_primary_path <- file.path(P$processed, "threeh_matched_primary.csv")
 have_threeh <- isTRUE(CFG$run_three_hour_arm) && file.exists(th_primary_path) && file.exists(A3$cells)
 if (have_threeh) {
-  log_msg("Tests 1-2: 3-h arm")
+  log_msg("Tests 1-2: 3-h arm (the sampling window vs the window after it)")
   prim3 <- read_tbl(th_primary_path, colClasses = list(character = "stamp_local")) |>
     mutate(sample_date = as.Date(sample_date), season = factor(season, levels = season_levels),
-           usable = as.logical(usable))
+           usable = as.logical(usable), lag_h = suppressWarnings(as.numeric(lag_h)))
   if ("stamp_time_unusual" %in% names(prim3) && isTRUE(CFG$threeh_exclude_unusual_stamps)) {
     prim3 <- filter(prim3, !(as.logical(stamp_time_unusual) %in% TRUE))
   }
-  stopifnot(all(c("start", "end") %in% prim3$convention))
+  lag_w <- 0                                            # the sampling window itself
+  pos_lags <- CFG$threeh_lags_h[CFG$threeh_lags_h > 0]
+  lag_a <- if (length(pos_lags)) min(pos_lags) else NA_real_
+  if (is.na(lag_a) || !all(c(lag_w, lag_a) %in% unique(prim3$lag_h))) {
+    stop("step 07 output does not hold lag 0 and a positive lag - rerun R/07_threeh_analysis.R")
+  }
+  after_lab <- sprintf("+%g h", lag_a)
 
   wide3 <- prim3 |>
-    select(site, sample_date, stamp_local, season, hcho_ugm3, convention, tempo_vc_1e15, n_valid_scans) |>
-    pivot_wider(names_from = convention, values_from = c(tempo_vc_1e15, n_valid_scans))
-  both <- wide3 |> filter(is.finite(hcho_ugm3), is.finite(tempo_vc_1e15_start), is.finite(tempo_vc_1e15_end))
-  note("3-h samples usable under both conventions: ", nrow(both), " (",
+    filter(lag_h %in% c(lag_w, lag_a)) |>
+    mutate(which = if_else(lag_h == lag_w, "window", "after")) |>
+    select(site, sample_date, stamp_local, season, hcho_ugm3, which, tempo_vc_1e15, n_valid_scans) |>
+    pivot_wider(names_from = which, values_from = c(tempo_vc_1e15, n_valid_scans))
+  both <- wide3 |> filter(is.finite(hcho_ugm3), is.finite(tempo_vc_1e15_window), is.finite(tempo_vc_1e15_after))
+  note("3-h samples usable in both the sampling window and ", after_lab, ": ", nrow(both), " (",
        paste(names(table(both$site)), table(both$site), sep = " ", collapse = ", "), ")")
 
-  # ---- 1a. same-day columns in the two windows ------------------------------------
+  # ---- 1a. same-sample columns in the two windows ---------------------------------
   window_pair <- function(d) {
     if (nrow(d) < 6) return(tibble(n = nrow(d)))
     an <- d |>
       mutate(ym = floor_date(sample_date, "month")) |>
       group_by(site, ym) |> filter(n() >= CFG$min_days_per_site_month) |>
-      mutate(a_start = tempo_vc_1e15_start - mean(tempo_vc_1e15_start),
-             a_end = tempo_vc_1e15_end - mean(tempo_vc_1e15_end)) |>
+      mutate(a_window = tempo_vc_1e15_window - mean(tempo_vc_1e15_window),
+             a_after = tempo_vc_1e15_after - mean(tempo_vc_1e15_after)) |>
       ungroup()
-    dif <- d$tempo_vc_1e15_start - d$tempo_vc_1e15_end
+    dif <- d$tempo_vc_1e15_after - d$tempo_vc_1e15_window
     tibble(n = nrow(d),
-           r_columns = cor(d$tempo_vc_1e15_start, d$tempo_vc_1e15_end),
+           r_columns = cor(d$tempo_vc_1e15_window, d$tempo_vc_1e15_after),
            n_anomalies = nrow(an),
-           r_column_anomalies = if (nrow(an) >= 6) cor(an$a_start, an$a_end) else NA_real_,
-           median_column_start_1e15 = median(d$tempo_vc_1e15_start),
-           median_column_end_1e15 = median(d$tempo_vc_1e15_end),
-           median_diff_start_minus_end = median(dif),
+           r_column_anomalies = if (nrow(an) >= 6) cor(an$a_window, an$a_after) else NA_real_,
+           median_column_window_1e15 = median(d$tempo_vc_1e15_window),
+           median_column_after_1e15 = median(d$tempo_vc_1e15_after),
+           median_diff_after_minus_window = median(dif),
            wilcoxon_p = suppressWarnings(wilcox.test(dif)$p.value))
   }
   t1a <- by_site_and_all(both, window_pair)
   out_tbl(t1a, "diag1_threeh_window_columns.csv")
   print(t1a)
-  for (i in seq_len(nrow(t1a))) note("  ", t1a$site[i], ": r(09-12 vs 06-09 columns) = ", round(t1a$r_columns[i], 2),
-                                     "; anomalies r = ", round(t1a$r_column_anomalies[i], 2),
-                                     "; median start-end = ", round(t1a$median_diff_start_minus_end[i], 2), " e15")
+  for (i in seq_len(nrow(t1a))) note("  ", t1a$site[i], ": r(sampling window vs ", after_lab, " columns) = ",
+                                     round(t1a$r_columns[i], 2), "; anomalies r = ",
+                                     round(t1a$r_column_anomalies[i], 2), "; median difference ",
+                                     round(t1a$median_diff_after_minus_window[i], 2), " e15")
 
-  # ---- 1b. screening and noise of scans in each window ------------------------------
+  # ---- 1b. screening and noise of the scans in each window ------------------------
   cells3 <- read_cells(A3$cells)
   man3 <- read_manifest(A3$manifest) |> distinct(granule, mid_utc)
   scans3 <- scan_level(cells3, block = 1L) |> inner_join(man3, by = "granule", relationship = "many-to-many")
   samp3 <- prim3 |> distinct(site, sample_date, stamp_local, season)
-  win3 <- map(c("start", "end"), function(cv) {
+  win3 <- map(c(lag_w, lag_a), function(l) {
     samp3 |>
       mutate(stamp = parse_date_time(stamp_local, orders = c("Ymd HM", "Ymd HMS"), tz = "UTC"),
-             win_start_local = if (cv == "start") stamp else stamp - CFG$threeh_duration_s,
+             win_start_local = stamp - CFG$threeh_duration_s + l * 3600,
              win_start_utc = win_start_local - CFG$utc_offset_hours * 3600,
              win_end_utc = win_start_utc + CFG$threeh_duration_s,
-             convention = cv)
+             lag_h = l)
   }) |> list_rbind()
   sw <- win3 |>
-    select(site, sample_date, stamp_local, season, convention, win_start_utc, win_end_utc) |>
+    select(site, sample_date, stamp_local, season, lag_h, win_start_utc, win_end_utc) |>
     inner_join(scans3, by = "site", relationship = "many-to-many") |>
     filter(mid_utc >= win_start_utc, mid_utc < win_end_utc)
 
@@ -186,67 +195,70 @@ if (have_threeh) {
   }
   noise3 <- sw |>
     filter(valid) |>
-    arrange(convention, site, stamp_local, mid_utc) |>
-    group_by(convention, site, stamp_local) |>
+    arrange(lag_h, site, stamp_local, mid_utc) |>
+    group_by(lag_h, site, stamp_local) |>
     mutate(d = vc - lag(vc)) |>
     ungroup() |>
     filter(!is.na(d)) |>
-    group_by(convention, site) |>
+    group_by(lag_h, site) |>
     summarise(n_scan_pairs = n(),
               scan_noise_rms_1e15 = sqrt(mean(d^2) / 2) / 1e15,   # upper bound: includes real hourly change
               scan_noise_mad_1e15 = mad(d) / sqrt(2) / 1e15,
               .groups = "drop")
   t1b <- bind_rows(
-    sw |> group_by(convention, site) |> screen_summary() |> mutate(season = "all") |> left_join(noise3, by = c("convention", "site")),
-    sw |> group_by(convention, site, season) |> screen_summary() |> mutate(season = as.character(season))
+    sw |> group_by(lag_h, site) |> screen_summary() |> mutate(season = "all") |> left_join(noise3, by = c("lag_h", "site")),
+    sw |> group_by(lag_h, site, season) |> screen_summary() |> mutate(season = as.character(season))
   ) |>
-    mutate(window = if_else(convention == "start", "stamp to stamp+3h (09-12 MST)", "stamp-3h to stamp (06-09 MST)")) |>
-    relocate(convention, window, site, season) |>
-    arrange(site, season != "all", season, convention)
+    mutate(window = if_else(lag_h == 0, "sampling window", sprintf("+%g h after sampling", lag_h))) |>
+    relocate(lag_h, window, site, season) |>
+    arrange(site, season != "all", season, lag_h)
   out_tbl(t1b, "diag1_threeh_window_screening.csv")
   print(filter(t1b, season == "all") |>
-          select(convention, site, scans, valid_scan_share, share_cells_fail_sza, share_cells_fail_cloud,
+          select(window, site, scans, valid_scan_share, share_cells_fail_sza, share_cells_fail_cloud,
                  median_cell_uncertainty_1e15, scan_noise_rms_1e15))
 
-  # ---- 2a. start vs end on the same samples ---------------------------------------------
+  # ---- 2a. sampling window vs the window after it, on the same samples ------------
   both_anom <- both |>
     mutate(ym = floor_date(sample_date, "month")) |>
     group_by(site, ym) |> filter(n() >= CFG$min_days_per_site_month) |>
     mutate(s_a = hcho_ugm3 - mean(hcho_ugm3),
-           cs_a = tempo_vc_1e15_start - mean(tempo_vc_1e15_start),
-           ce_a = tempo_vc_1e15_end - mean(tempo_vc_1e15_end)) |>
+           ca_window = tempo_vc_1e15_window - mean(tempo_vc_1e15_window),
+           ca_after = tempo_vc_1e15_after - mean(tempo_vc_1e15_after)) |>
     ungroup()
   t2a <- bind_rows(
-    by_site_and_all(both, function(d) dep_cor_test(d$hcho_ugm3, d$tempo_vc_1e15_start, d$tempo_vc_1e15_end)) |>
+    by_site_and_all(both, function(d) dep_cor_test(d$hcho_ugm3, d$tempo_vc_1e15_after, d$tempo_vc_1e15_window)) |>
       mutate(comparison = "whole period", .after = site),
-    by_site_and_all(both_anom, function(d) dep_cor_test(d$s_a, d$cs_a, d$ce_a)) |>
+    by_site_and_all(both_anom, function(d) dep_cor_test(d$s_a, d$ca_after, d$ca_window)) |>
       mutate(comparison = "within-month anomalies", .after = site)
-  )
-  out_tbl(t2a, "diag2_threeh_paired_conventions.csv")
+  ) |>
+    rename(any_of(c(r_after = "r_start", r_sampling_window = "r_end",
+                    diff_after_minus_window = "diff_start_minus_end")))
+  out_tbl(t2a, "diag2_threeh_window_vs_after.csv")
   print(t2a)
-  for (i in seq_len(nrow(t2a))) note("  ", t2a$site[i], ", ", t2a$comparison[i], " (same ", t2a$n[i], " samples): r start ",
-                                     round(t2a$r_start[i], 2), " vs end ", round(t2a$r_end[i], 2),
+  for (i in seq_len(nrow(t2a))) note("  ", t2a$site[i], ", ", t2a$comparison[i], " (same ", t2a$n[i],
+                                     " samples): r in the sampling window ", round(t2a$r_sampling_window[i], 2),
+                                     " vs ", after_lab, " ", round(t2a$r_after[i], 2),
                                      ", Williams p = ", signif(t2a$williams_p[i], 2))
 
-  # ---- 2b. which months end up usable under each convention ---------------------------
+  # ---- 2b. which months end up usable, by window ----------------------------------
   t2b <- prim3 |>
-    group_by(convention, site, season) |>
+    group_by(lag_h, site, season) |>
     summarise(samples = n(), n_usable = sum(usable), usable_pct = round(100 * mean(usable), 1), .groups = "drop") |>
-    arrange(site, convention, season)
+    arrange(site, lag_h, season)
   out_tbl(t2b, "diag2_threeh_usable_by_season.csv")
 
   # ---- figure S3 ------------------------------------------------------------------
   labs3 <- t1a |> filter(site != "all sites") |>
     mutate(label = sprintf("n = %d, r = %.2f\nanomaly r = %.2f", n, r_columns, r_column_anomalies))
-  pS3 <- ggplot(both, aes(tempo_vc_1e15_end, tempo_vc_1e15_start, colour = season)) +
+  pS3 <- ggplot(both, aes(tempo_vc_1e15_window, tempo_vc_1e15_after, colour = season)) +
     geom_abline(slope = 1, intercept = 0, linetype = 2, colour = "grey50") +
     geom_point(size = 1.6, alpha = 0.8) +
     geom_text(data = labs3, aes(x = -Inf, y = Inf, label = label), inherit.aes = FALSE,
               hjust = -0.08, vjust = 1.2, size = 3) +
     facet_wrap(~site) +
-    labs(x = "TEMPO column, 06-09 MST (1e15 molec/cm2)",
-         y = "TEMPO column, 09-12 MST (1e15 molec/cm2)",
-         colour = "Season", title = "Same-sample TEMPO columns in the two candidate 3-h windows") +
+    labs(x = "TEMPO column in the sampling window (1e15 molec/cm2)",
+         y = paste0("TEMPO column ", after_lab, " later (1e15 molec/cm2)"),
+         colour = "Season", title = "Same-sample TEMPO columns: sampling window vs the window after it") +
     theme_bw(base_size = 10)
   ggsave(file.path(P$figures, "figS3_threeh_window_columns.png"), pS3, width = 8, height = 4.3, dpi = 300)
   log_msg("  figure: figS3_threeh_window_columns.png")
@@ -399,11 +411,11 @@ s24 <- read_if("stats_by_site.csv"); a24 <- read_if("stats_within_month_anomalie
 s3 <- read_if("threeh_stats_by_site.csv"); a3 <- read_if("threeh_stats_within_month_anomalies.csv")
 perf <- bind_rows(
   if (!is.null(s24)) transmute(s24, site, arm = "24-h", r_whole_period = pearson_r),
-  if (!is.null(s3)) s3 |> filter(convention == "start", site != "all sites") |> transmute(site, arm = "3-h (start)", r_whole_period = pearson_r)
+  if (!is.null(s3) && "lag_h" %in% names(s3)) s3 |> filter(lag_h == 0, site != "all sites") |> transmute(site, arm = "3-h (sampling window)", r_whole_period = pearson_r)
 ) |>
   left_join(bind_rows(
     if (!is.null(a24)) a24 |> filter(site != "all sites") |> transmute(site, arm = "24-h", r_anomalies = pearson_r, n_anomalies = n),
-    if (!is.null(a3)) a3 |> filter(convention == "start", site != "all sites") |> transmute(site, arm = "3-h (start)", r_anomalies = pearson_r, n_anomalies = n)
+    if (!is.null(a3) && "lag_h" %in% names(a3)) a3 |> filter(lag_h == 0, site != "all sites") |> transmute(site, arm = "3-h (sampling window)", r_anomalies = pearson_r, n_anomalies = n)
   ), by = c("site", "arm"))
 t4a <- left_join(terrain, perf, by = "site", relationship = "many-to-many") |> arrange(block_label, desc(approx_elev_range_m))
 out_tbl(t4a, "diag4_terrain_and_agreement.csv")

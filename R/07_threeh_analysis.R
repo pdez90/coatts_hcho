@@ -1,13 +1,20 @@
 # =============================================================================
-# 07_threeh_analysis.R - match 3-h samples to TEMPO scans inside each window
+# 07_threeh_analysis.R - 3-h samples vs TEMPO scans, by lag from the sampling window
 #
-# For each sample, the sampling window is [stamp, stamp + 3 h) under the
-# "start" convention or [stamp - 3 h, stamp) under "end" (CDPHE to confirm).
-# TEMPO scans whose midpoint falls in the window are screened and averaged
-# (same screening as the 24-h arm). Variants: convention x cloud threshold x block.
+# The sampling window is now known: AQS records the time each sample began, and
+# reports 06:00 with a 3-hour duration for Chatfield State Park and Platteville
+# (step 10). The 09:00 stamp in CDPHE's packets is therefore the END of the
+# sample, and the window is [stamp - duration, stamp).
+#
+# For each lag L in CFG$threeh_lags_h, TEMPO scans whose midpoint falls in
+# [win_start + L, win_end + L) are screened and averaged. L = 0 is the sampling
+# window itself; positive lags are scans after sampling ended, which test how
+# agreement depends on the delay between sampling and the satellite view (the
+# morning boundary layer grows and mixes over these hours).
 # Needs: step 06, then steps 02 and 03 run with options(hcho.arm = "threeh").
 # Outputs: data/processed/threeh_matched_*.csv, output/tables/threeh_*.csv,
-#          output/figures/fig7_threeh_scatter.png, fig8_threeh_sensitivity.png
+#          output/figures/fig7_threeh_scatter.png, fig8_threeh_sensitivity.png,
+#          fig10_threeh_lag_curve.png
 # =============================================================================
 source("R/00_config.R")
 source("R/helpers_stats.R")
@@ -40,6 +47,17 @@ for (v in c("main_data_quality_flag", "eff_cloud_fraction", "snow_ice_fraction",
 }
 log_msg(nrow(samples), " 3-h samples; ", nrow(cells), " TEMPO cell rows")
 
+# label a lag with the clock hours it covers, from the usual sample stamp
+modal_end_hour <- as.integer(names(sort(table(hour(samples$stamp_local)), decreasing = TRUE))[1])
+dur_h <- CFG$threeh_duration_s / 3600
+lag_clock <- function(l) sprintf("%s%g h: %02d-%02d MST", ifelse(l > 0, "+", ""), l,
+                                 (modal_end_hour - dur_h + l) %% 24, (modal_end_hour + l) %% 24)
+lag_levels <- sort(unique(CFG$threeh_lags_h))
+lag_label <- function(l) factor(l, levels = lag_levels,
+                                labels = ifelse(lag_levels == 0,
+                                                paste0("sampling window (", lag_clock(0), ")"),
+                                                vapply(lag_levels, lag_clock, character(1))))
+
 # ---- screening and scan-level values (as in step 04) -------------------------
 scan_values <- function(max_ecf, block) {
   cells |>
@@ -58,25 +76,25 @@ scan_values <- function(max_ecf, block) {
     inner_join(manifest, by = "granule")
 }
 
-sample_windows <- function(convention) {
+# sampling window: [stamp - duration, stamp); shifted by lag_h hours
+sample_windows <- function(lag_h) {
   dur <- CFG$threeh_duration_s
   samples |>
-    mutate(win_start_local = if (convention == "start") stamp_local else stamp_local - dur,
+    mutate(win_start_local = stamp_local - dur + lag_h * 3600,
            win_end_local = win_start_local + dur,
            win_start_utc = win_start_local - CFG$utc_offset_hours * 3600,
            win_end_utc = win_end_local - CFG$utc_offset_hours * 3600)
 }
 
-variants <- expand_grid(convention = CFG$threeh_stamp_conventions,
-                        max_ecf = c(0.1, 0.2, 0.3), block = c(0L, 1L, 2L)) |>
+variants <- expand_grid(lag_h = lag_levels, max_ecf = c(0.1, 0.2, 0.3), block = c(0L, 1L, 2L)) |>
   mutate(block_label = sprintf("%dx%d", 2L * block + 1L, 2L * block + 1L))
 
 scan_cache <- list()
-matched <- pmap(variants, function(convention, max_ecf, block, block_label) {
+matched <- pmap(variants, function(lag_h, max_ecf, block, block_label) {
   key <- paste(max_ecf, block)
   if (is.null(scan_cache[[key]])) scan_cache[[key]] <<- scan_values(max_ecf, block)
   sv <- scan_cache[[key]]
-  w <- sample_windows(convention)
+  w <- sample_windows(lag_h)
   per_sample <- w |>
     select(site, stamp_local, win_start_utc, win_end_utc) |>
     inner_join(sv, by = "site", relationship = "many-to-many") |>
@@ -88,7 +106,7 @@ matched <- pmap(variants, function(convention, max_ecf, block, block_label) {
               .groups = "drop")
   w |>
     left_join(per_sample, by = c("site", "stamp_local")) |>
-    mutate(convention = convention, max_ecf = max_ecf, block = block, block_label = block_label,
+    mutate(lag_h = lag_h, max_ecf = max_ecf, block = block, block_label = block_label,
            n_scans = coalesce(n_scans, 0L), n_valid_scans = coalesce(n_valid_scans, 0L))
 }) |> list_rbind() |>
   mutate(tempo_vc_1e15 = tempo_vc / 1e15,
@@ -97,76 +115,96 @@ matched <- pmap(variants, function(convention, max_ecf, block, block_label) {
          usable = !is.na(tempo_vc) & !is.na(hcho_ugm3))
 
 data.table::fwrite(matched, file.path(P$processed, "threeh_matched_variants.csv"))
-primary <- matched |> filter(max_ecf == CFG$qc_max_cloud_fraction, block == 1L)   # both conventions
+primary <- matched |> filter(max_ecf == CFG$qc_max_cloud_fraction, block == 1L)   # all lags
 data.table::fwrite(primary, file.path(P$processed, "threeh_matched_primary.csv"))
 
 # ---- coverage ---------------------------------------------------------------------
 coverage <- primary |>
-  group_by(convention, site, site_name) |>
+  group_by(lag_h, site, site_name) |>
   summarise(samples = n(), with_any_scan = sum(n_scans > 0), n_usable = sum(usable),
             usable_pct = round(100 * mean(usable), 1),
-            median_scans_in_window = median(n_scans), .groups = "drop")
+            median_scans_in_window = median(n_scans), .groups = "drop") |>
+  mutate(window = as.character(lag_label(lag_h)), .after = lag_h) |>
+  arrange(site, lag_h)
 data.table::fwrite(coverage, file.path(P$tables, "threeh_coverage.csv"))
 print(coverage)
 
 # ---- relationship ------------------------------------------------------------------
 use <- filter(primary, usable)
 stats <- bind_rows(
-  use |> group_by(convention) |> group_modify(~ relstats(.x)) |> ungroup() |> mutate(site = "all sites"),
-  use |> group_by(convention, site) |> group_modify(~ relstats(.x)) |> ungroup()
-) |> relocate(convention, site)
+  use |> group_by(lag_h) |> group_modify(~ relstats(.x)) |> ungroup() |> mutate(site = "all sites"),
+  use |> group_by(lag_h, site) |> group_modify(~ relstats(.x)) |> ungroup()
+) |>
+  mutate(window = as.character(lag_label(lag_h))) |>
+  relocate(lag_h, window, site) |>
+  arrange(site, lag_h)
 data.table::fwrite(stats, file.path(P$tables, "threeh_stats_by_site.csv"))
-print(select(stats, convention, site, n, pearson_r, pearson_p, spearman_rho, rma_slope, median_h_eff_km))
+print(select(stats, lag_h, site, n, pearson_r, pearson_p, spearman_rho, rma_slope, median_h_eff_km))
 
-anom_stats <- map(CFG$threeh_stamp_conventions, function(cv) {
-  an <- add_month_anomalies(filter(use, convention == cv), CFG$min_days_per_site_month)
+anom_stats <- map(lag_levels, function(l) {
+  d <- filter(use, lag_h == l)
+  if (nrow(d) < 6) return(NULL)
+  an <- add_month_anomalies(d, CFG$min_days_per_site_month)
+  if (!nrow(an)) return(NULL)
   bind_rows(anomstats(an) |> mutate(site = "all sites"),
             an |> group_by(site) |> group_modify(~ anomstats(.x)) |> ungroup()) |>
-    mutate(convention = cv)
-}) |> list_rbind() |> relocate(convention, site)
+    mutate(lag_h = l)
+}) |> list_rbind() |>
+  mutate(window = as.character(lag_label(lag_h))) |>
+  relocate(lag_h, window, site) |>
+  arrange(site, lag_h)
 data.table::fwrite(anom_stats, file.path(P$tables, "threeh_stats_within_month_anomalies.csv"))
 print(anom_stats)
 
-# Pooled regression with site and month-of-year effects
-month_fx <- map(CFG$threeh_stamp_conventions, function(cv) {
-  d <- filter(use, convention == cv)
+# Pooled regression with site and month-of-year effects, per lag
+month_fx <- map(lag_levels, function(l) {
+  d <- filter(use, lag_h == l)
   if (nrow(d) < 12 || n_distinct(month(d$sample_date)) < 2) return(NULL)
   fml <- if (n_distinct(d$site) > 1) hcho_ugm3 ~ tempo_vc_1e15 + factor(month(sample_date)) + site
          else hcho_ugm3 ~ tempo_vc_1e15 + factor(month(sample_date))
   co <- summary(lm(fml, data = d))$coefficients
-  tibble(convention = cv, n = nrow(d), estimate = co["tempo_vc_1e15", 1],
-         std_error = co["tempo_vc_1e15", 2], p_value = co["tempo_vc_1e15", 4])
+  tibble(lag_h = l, window = as.character(lag_label(l)), n = nrow(d),
+         estimate = co["tempo_vc_1e15", 1], std_error = co["tempo_vc_1e15", 2],
+         p_value = co["tempo_vc_1e15", 4])
 }) |> list_rbind()
-if (!is.null(month_fx)) data.table::fwrite(month_fx, file.path(P$tables, "threeh_month_effects_lm.csv"))
+if (!is.null(month_fx) && nrow(month_fx)) {
+  data.table::fwrite(month_fx, file.path(P$tables, "threeh_month_effects_lm.csv"))
+  print(month_fx)
+}
 
 sens <- matched |>
   filter(usable) |>
-  group_by(convention, max_ecf, block_label) |>
+  group_by(lag_h, max_ecf, block_label) |>
   summarise(n = n(),
             spearman_rho = suppressWarnings(cor(tempo_vc, hcho_ugm3, method = "spearman")),
-            pearson_r = cor(tempo_vc, hcho_ugm3), .groups = "drop")
+            pearson_r = cor(tempo_vc, hcho_ugm3), .groups = "drop") |>
+  mutate(window = as.character(lag_label(lag_h)), .after = lag_h)
 data.table::fwrite(sens, file.path(P$tables, "threeh_sensitivity.csv"))
 
 # ---- smoke (NOAA HMS) -------------------------------------------------------------------
+# The smoke flag describes the sample's own window, so it applies to every lag.
 smoke_path <- file.path(P$processed, "smoke_flags.csv")
 if (file.exists(smoke_path) && nrow(use)) {
   smoke3 <- read_tbl(smoke_path, colClasses = list(character = "stamp_local")) |>
     filter(arm == "threeh") |>
-    select(site, stamp_key = stamp_local, convention, hms_available, smoke_any, smoke_class)
+    select(site, stamp_key = stamp_local, hms_available, smoke_any, smoke_class) |>
+    distinct(site, stamp_key, .keep_all = TRUE)
   use_s <- use |>
     mutate(stamp_key = format(stamp_local, "%Y-%m-%d %H:%M")) |>
-    left_join(smoke3, by = c("site", "stamp_key", "convention"))
+    left_join(smoke3, by = c("site", "stamp_key"))
   if (!any(!is.na(use_s$smoke_any))) {
     log_msg("No HMS coverage for the 3-h windows - skipping smoke stratification")
   } else {
-  smoke_stats3 <- bind_rows(
-    use_s |> filter(!is.na(smoke_any)) |> group_by(convention, smoke_any) |>
-      group_modify(~ relstats(.x)) |> ungroup() |> mutate(subset = "by smoke flag"),
-    use_s |> filter(smoke_any %in% FALSE) |> group_by(convention) |>
-      group_modify(~ relstats(.x)) |> ungroup() |> mutate(subset = "smoke windows excluded")
-  ) |> relocate(subset, convention, smoke_any)
-  data.table::fwrite(smoke_stats3, file.path(P$tables, "threeh_stats_by_smoke.csv"))
-  print(select(smoke_stats3, any_of(c("subset", "convention", "smoke_any", "n", "pearson_r", "spearman_rho"))))
+    smoke_stats3 <- bind_rows(
+      use_s |> filter(!is.na(smoke_any)) |> group_by(lag_h, smoke_any) |>
+        group_modify(~ relstats(.x)) |> ungroup() |> mutate(subset = "by smoke flag"),
+      use_s |> filter(smoke_any %in% FALSE) |> group_by(lag_h) |>
+        group_modify(~ relstats(.x)) |> ungroup() |> mutate(subset = "smoke windows excluded")
+    ) |>
+      mutate(window = as.character(lag_label(lag_h))) |>
+      relocate(subset, lag_h, window, smoke_any)
+    data.table::fwrite(smoke_stats3, file.path(P$tables, "threeh_stats_by_smoke.csv"))
+    print(select(smoke_stats3, any_of(c("subset", "lag_h", "smoke_any", "n", "pearson_r", "spearman_rho"))))
   }
 } else {
   log_msg("No smoke_flags.csv (run R/08_smoke_hms.R) - skipping smoke analysis")
@@ -176,32 +214,60 @@ if (file.exists(smoke_path) && nrow(use)) {
 theme_set(theme_bw(base_size = 11) + theme(strip.background = element_rect(fill = "grey92")))
 U_UGM3 <- "\u00b5g/m\u00b3"; U_COL <- "10\u00b9\u2075 molec/cm\u00b2"; U_RHO <- "\u03c1"
 season_cols <- c(DJF = "#3b6fb6", MAM = "#5aa469", JJA = "#d9822b", SON = "#8a5fb0")
-conv_lab <- function(x) factor(x, levels = c("start", "end"),
-                               labels = c("stamp = start (09-12 MST)", "stamp = end (06-09 MST)"))
 
-site_stats <- filter(stats, site != "all sites", !is.na(pearson_r)) |> mutate(convention = conv_lab(convention))
+site_stats <- filter(stats, site != "all sites", !is.na(pearson_r)) |> mutate(window_f = lag_label(lag_h))
 if (nrow(use)) {
-  p7 <- ggplot(mutate(use, convention = conv_lab(convention)), aes(tempo_vc_1e15, hcho_ugm3)) +
-    geom_point(aes(colour = season), size = 1.6, alpha = 0.85) +
+  p7 <- ggplot(mutate(use, window_f = lag_label(lag_h)), aes(tempo_vc_1e15, hcho_ugm3)) +
+    geom_point(aes(colour = season), size = 1.5, alpha = 0.85) +
     geom_abline(data = filter(site_stats, !is.na(rma_slope)),
                 aes(slope = rma_slope, intercept = rma_intercept), linewidth = 0.6) +
     geom_text(data = site_stats, aes(x = -Inf, y = Inf,
               label = sprintf("n=%d  r=%.2f  %s=%.2f", n, pearson_r, U_RHO, spearman_rho)),
-              hjust = -0.05, vjust = 1.3, size = 3) +
-    facet_grid(convention ~ site, scales = "free") +
+              hjust = -0.05, vjust = 1.3, size = 2.8) +
+    facet_grid(window_f ~ site, scales = "free") +
     scale_colour_manual(values = season_cols, drop = FALSE) +
-    labs(x = paste0("TEMPO HCHO column, mean of screened scans in the 3-h window (", U_COL, ")"),
-         y = paste0("Surface HCHO, 3-h (", U_UGM3, ")"), colour = NULL,
-         title = "3-hour samples vs TEMPO scans in the sampling window (RMA line where r is significant)")
-  ggsave(file.path(P$figures, "fig7_threeh_scatter.png"), p7, width = 9, height = 7, dpi = 300)
+    labs(x = paste0("TEMPO HCHO column, mean of screened scans in the window (", U_COL, ")"),
+         y = paste0("Surface HCHO, 3-h sample (", U_UGM3, ")"), colour = NULL,
+         title = "3-hour samples vs TEMPO scans, by lag from the sampling window",
+         subtitle = "RMA line where the Pearson correlation is significant")
+  ggsave(file.path(P$figures, "fig7_threeh_scatter.png"), p7, width = 8.5,
+         height = 2 + 1.7 * length(lag_levels), dpi = 300, limitsize = FALSE)
   log_msg("  figure: fig7_threeh_scatter.png")
 }
-p8 <- ggplot(mutate(sens, convention = conv_lab(convention)),
+
+p8 <- ggplot(mutate(sens, window_f = lag_label(lag_h)),
              aes(factor(max_ecf), spearman_rho, colour = block_label, group = block_label)) +
-  geom_line() + geom_point(aes(size = n)) + facet_wrap(~ convention) +
+  geom_line() + geom_point(aes(size = n)) + facet_wrap(~ window_f) +
   scale_size_continuous(range = c(1.5, 4)) +
   labs(x = "Maximum effective cloud fraction", y = paste("Pooled Spearman", U_RHO),
-       colour = "Block", size = "n", title = "3-hour arm: sensitivity to screening and stamp convention")
-ggsave(file.path(P$figures, "fig8_threeh_sensitivity.png"), p8, width = 8, height = 4, dpi = 300)
+       colour = "Block", size = "n",
+       title = "3-hour arm: sensitivity to screening, by lag from the sampling window")
+ggsave(file.path(P$figures, "fig8_threeh_sensitivity.png"), p8, width = 9, height = 6, dpi = 300)
 log_msg("  figure: fig8_threeh_sensitivity.png")
+
+# agreement as a function of lag: the headline of this arm
+lag_curve <- bind_rows(
+  stats |> filter(site == "all sites") |> transmute(lag_h, n, r = pearson_r, kind = "whole period"),
+  anom_stats |> filter(site == "all sites") |> transmute(lag_h, n, r = pearson_r, kind = "within-month anomalies")
+) |> filter(!is.na(r))
+if (nrow(lag_curve)) {
+  p10 <- ggplot(lag_curve, aes(lag_h, r, colour = kind, shape = kind)) +
+    geom_hline(yintercept = 0, colour = "grey70") +
+    geom_vline(xintercept = 0, linetype = 2, colour = "grey60") +
+    geom_line(linewidth = 0.7) + geom_point(size = 2.6) +
+    geom_text(aes(label = n), vjust = -1.1, size = 3, show.legend = FALSE) +
+    scale_x_continuous(breaks = lag_levels,
+                       labels = vapply(lag_levels, function(l) sub(":.*", "", lag_clock(l)), character(1))) +
+    labs(x = paste0("Lag of the TEMPO window from the sampling window (0 = ", lag_clock(0), ")"),
+         y = "Pearson r with 3-h surface HCHO", colour = NULL, shape = NULL,
+         title = "Agreement rises after the sample ends, as the boundary layer mixes",
+         subtitle = "Point labels are the number of matched samples") +
+    theme(legend.position = "bottom")
+  ggsave(file.path(P$figures, "fig10_threeh_lag_curve.png"), p10, width = 7, height = 4.6, dpi = 300)
+  log_msg("  figure: fig10_threeh_lag_curve.png")
+  for (i in seq_len(nrow(lag_curve))) {
+    log_msg("  ", lag_curve$kind[i], ", lag ", lag_curve$lag_h[i], " h (", lag_clock(lag_curve$lag_h[i]),
+            "): r = ", round(lag_curve$r[i], 2), " (n = ", lag_curve$n[i], ")")
+  }
+}
 log_msg("3-hour arm done.")

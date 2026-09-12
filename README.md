@@ -79,17 +79,21 @@ Their formaldehyde samples are 3-hour samples stamped 09:00 — explicit
 | Step | Script | What it does | Main output |
 |---|---|---|---|
 | 6 | `R/06_threeh_samples.R` | Downloads the 2024 and 2025 site packets, keeps ambient 3-h formaldehyde (QC samples and null-qualified rows removed), one row per sample | `data/processed/threeh_hcho.csv`, `output/tables/threeh_inventory.csv` |
-| 2, 3 | same scripts, arm `threeh` | TEMPO scans 05–13 MST on sample days; cells around the two sites (separate caches) | `threeh_tempo_manifest.csv`, `threeh_tempo_site_cells.csv.gz` |
-| 7 | `R/07_threeh_analysis.R` | Averages screened scans whose midpoint falls inside each sampling window; correlations, within-month anomalies, month-effects regression, sensitivity | `output/tables/threeh_*.csv`, `fig7_threeh_scatter.png`, `fig8_threeh_sensitivity.png` |
+| 2, 3 | same scripts, arm `threeh` | TEMPO scans 03–19 MST on sample days; cells around the two sites (separate caches) | `threeh_tempo_manifest.csv`, `threeh_tempo_site_cells.csv.gz` |
+| 7 | `R/07_threeh_analysis.R` | Averages screened scans in the sampling window and in windows lagged from it; correlations, within-month anomalies, month-effects regression, sensitivity, and agreement against lag | `output/tables/threeh_*.csv`, `fig7_threeh_scatter.png`, `fig8_threeh_sensitivity.png`, `fig10_threeh_lag_curve.png` |
 
-Whether the 09:00 stamp is the start (09–12 MST) or end (06–09 MST) of the
-sample, and whether it is MST year-round, is not yet confirmed, so every result is given for both conventions
-(`threeh_stamp_conventions`); "start" is treated as primary. Scans are assigned
-by their granule midpoint, which can be ~30 min off the time TEMPO actually
-viewed Colorado. `threeh_include_2024 = TRUE` (default) uses the 2024 packets.
-Two 2025 samples (CHCO and PVCO, 2025-06-12) are stamped 23:59 rather than 09:00;
-they stay in `threeh_hcho.csv` with `stamp_time_unusual = TRUE` but are left out
-of the matching until CDPHE confirms their timing (`threeh_exclude_unusual_stamps`).
+The 09:00 stamp is the **end** of sampling: EPA's AQS holds these samples with a
+start time of 06:00 MST and a duration of 3 hours (step 10), so the sampling
+window is 06:00–09:00 MST. Step 7 averages TEMPO scans over that window and over
+windows shifted by `threeh_lags_h` (default −3, 0, +3, +6, +9 h), which measures
+how agreement depends on the delay between sampling and the satellite view;
+`fig10_threeh_lag_curve.png` is that curve. Scans are assigned by their granule
+midpoint, which can be ~30 min off the time TEMPO actually viewed Colorado.
+`threeh_include_2024 = TRUE` (default) uses the 2024 packets. Two 2025 samples
+(CHCO and PVCO, 2025-06-12) are stamped 23:59 rather than 09:00 in the packets —
+AQS shows no such stamps — so they stay in `threeh_hcho.csv` with
+`stamp_time_unusual = TRUE` and are left out of the matching
+(`threeh_exclude_unusual_stamps`).
 To run one step of this arm by hand: `options(hcho.arm = "threeh"); source("R/03_tempo_extract.R")`.
 
 ### Smoke flags (NOAA Hazard Mapping System)
@@ -111,8 +115,8 @@ explanations for the main results. Run it alone with `source("R/09_diagnostics.R
 
 | Test | Question | Output |
 |---|---|---|
-| 1 | 3-h arm: do same-sample TEMPO columns in the two candidate windows (06–09, 09–12 MST) vary together? Are early scans screened out (solar zenith angle, cloud, snow, quality flag) or noisier at one site? | `diag1_threeh_window_columns.csv`, `diag1_threeh_window_screening.csv`, `figS3_threeh_window_columns.png` |
-| 2 | 3-h arm: start vs end convention on the same samples (Williams' test for dependent correlations, paired bootstrap CI); seasonal mix of usable samples | `diag2_threeh_paired_conventions.csv`, `diag2_threeh_usable_by_season.csv` |
+| 1 | 3-h arm: do same-sample TEMPO columns in the sampling window and in the window after it vary together? Are the scans in either window screened out (solar zenith angle, cloud, snow, quality flag) or noisier at one site? | `diag1_threeh_window_columns.csv`, `diag1_threeh_window_screening.csv`, `figS3_threeh_window_columns.png` |
+| 2 | 3-h arm: the sampling window vs the window after it, on the same samples (Williams' test for dependent correlations, paired bootstrap CI); seasonal mix of usable samples | `diag2_threeh_window_vs_after.csv`, `diag2_threeh_usable_by_season.csv` |
 | 3 | 24-h arm: share of day-to-day column variance that is retrieval noise, and the correlation ceiling it implies, by site and block size. Noise is estimated from reported uncertainties (cells in a block fully correlated or independent) and from differences between successive valid scans (an upper bound on noise, since it includes real hourly change) | `diag3_noise_ceiling.csv`, `figS4_noise_ceiling.png` |
 | 4 | Terrain heterogeneity inside each averaging block (spread of TEMPO surface pressure) next to site agreement; within-month anomaly correlations by site and season | `diag4_terrain_and_agreement.csv`, `diag4_anomaly_r_by_site_season.csv` |
 | 5 | Smoke days: cloud fraction, scan survival and coverage by smoke class within season (HMS maps smoke only in clear imagery) | `diag5_smoke_clouds_by_season.csv`, `diag5_smoke_cloud_tests.csv` |

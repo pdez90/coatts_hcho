@@ -36,15 +36,15 @@ if (isTRUE(CFG$run_three_hour_arm) && file.exists(th_path)) {
     filter(!is.na(hcho_ugm3), !is.na(lat)) |>
     mutate(sample_date = as.Date(sample_date),
            stamp = parse_date_time(stamp_local, orders = c("Ymd HM", "Ymd HMS"), tz = "UTC"))
-  w3 <- map(CFG$threeh_stamp_conventions, function(cv) {
-    th |>
-      distinct(site, lat, lon, sample_date, stamp_local, stamp) |>
-      mutate(arm = "threeh", convention = cv,
-             win_start_local = if (cv == "start") stamp else stamp - CFG$threeh_duration_s,
-             win_start_utc = win_start_local - CFG$utc_offset_hours * 3600,
-             win_end_utc = win_start_utc + CFG$threeh_duration_s) |>
-      select(-stamp, -win_start_local)
-  }) |> list_rbind()
+  # the sampling window itself: [stamp - duration, stamp), the stamp being the
+  # end of sampling (confirmed against AQS start times in step 10)
+  w3 <- th |>
+    distinct(site, lat, lon, sample_date, stamp_local, stamp) |>
+    mutate(arm = "threeh", convention = "sampling window",
+           win_start_local = stamp - CFG$threeh_duration_s,
+           win_start_utc = win_start_local - CFG$utc_offset_hours * 3600,
+           win_end_utc = win_start_utc + CFG$threeh_duration_s) |>
+    select(-stamp, -win_start_local)
   windows <- bind_rows(windows, w3)
 }
 pad <- CFG$hms_time_pad_hours * 3600

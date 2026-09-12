@@ -6,7 +6,9 @@
 # CDPHE confirmed the 2024 wide packets hold the same 3-h samples), stamped 09:00.
 # This step downloads those packets, keeps ambient 3-h formaldehyde (QC samples
 # and rows with AQS Null Data Qualifiers removed, as in step 01) and writes one
-# row per site x sample stamp. The TEMPO scans are then
+# row per site x sample stamp. The 09:00 stamp is the END of sampling: EPA's AQS
+# holds these samples with a start time of 06:00 MST (step 10).
+# The TEMPO scans are then
 # listed and extracted by steps 02 and 03 with options(hcho.arm = "threeh"),
 # and matched in step 07.
 # Output: data/processed/threeh_hcho.csv
