@@ -14,7 +14,11 @@
 #      pressure); day-to-day agreement by site and season
 #   5. Smoke days: cloud fraction and scan survival by smoke class within
 #      season (HMS analysts map smoke only where skies are clear)
-# Outputs: output/tables/diag1_* ... diag5_*, output/figures/figS3_*, figS4_*
+#   6. 24-h arm: do early-morning (06-09 MST) scans carry as much day-to-day
+#      information as 09-12 MST scans? The 24-h samples span both windows, so a
+#      difference here reflects the retrievals, not the sampling time - the
+#      control needed to read the 3-h start/end contrast (test 2)
+# Outputs: output/tables/diag1_* ... diag6_*, output/figures/figS3_*, figS4_*
 # =============================================================================
 source("R/00_config.R")
 source("R/helpers_stats.R")
@@ -227,7 +231,7 @@ if (have_threeh) {
   # ---- 2b. which months end up usable under each convention ---------------------------
   t2b <- prim3 |>
     group_by(convention, site, season) |>
-    summarise(samples = n(), usable = sum(usable), usable_pct = round(100 * mean(usable), 1), .groups = "drop") |>
+    summarise(samples = n(), n_usable = sum(usable), usable_pct = round(100 * mean(usable), 1), .groups = "drop") |>
     arrange(site, convention, season)
   out_tbl(t2b, "diag2_threeh_usable_by_season.csv")
 
@@ -240,8 +244,8 @@ if (have_threeh) {
     geom_text(data = labs3, aes(x = -Inf, y = Inf, label = label), inherit.aes = FALSE,
               hjust = -0.08, vjust = 1.2, size = 3) +
     facet_wrap(~site) +
-    labs(x = "TEMPO column, window before the stamp (06-09 MST), 1e15 molec/cm2",
-         y = "TEMPO column, window after the stamp (09-12 MST), 1e15 molec/cm2",
+    labs(x = "TEMPO column, 06-09 MST (1e15 molec/cm2)",
+         y = "TEMPO column, 09-12 MST (1e15 molec/cm2)",
          colour = "Season", title = "Same-sample TEMPO columns in the two candidate 3-h windows") +
     theme_bw(base_size = 10)
   ggsave(file.path(P$figures, "figS3_threeh_window_columns.png"), pS3, width = 8, height = 4.3, dpi = 300)
@@ -274,6 +278,9 @@ noise_rows <- map(sort(unique(variants24$block)), function(b) {
               # reported uncertainty of the daily mean, two bounds:
               var_corr  = if (any(valid)) mean(u_rms[valid]^2, na.rm = TRUE) / sum(valid) else NA_real_,               # cells in a block fully correlated
               var_indep = if (any(valid)) mean(u_rms[valid]^2 / n_pass[valid], na.rm = TRUE) / sum(valid) else NA_real_, # cells independent
+              # same with the median scan instead of the mean square (robust to a few very uncertain scans)
+              var_med_corr  = if (any(valid)) median(u_rms[valid]^2, na.rm = TRUE) / sum(valid) else NA_real_,
+              var_med_indep = if (any(valid)) median(u_rms[valid]^2 / n_pass[valid], na.rm = TRUE) / sum(valid) else NA_real_,
               .groups = "drop")
   chk <- inner_join(daily, select(d, site, sample_date, tempo_vc), by = c("site", "sample_date"))
   log_msg(sprintf("  %s: recomputed daily columns match step 04 to within %.2g molec/cm2 (n = %d)",
@@ -291,7 +298,7 @@ noise_rows <- map(sort(unique(variants24$block)), function(b) {
 
   an <- add_month_anomalies(d, CFG$min_days_per_site_month) |>
     group_by(site, ym) |> mutate(n_month = n()) |> ungroup() |>
-    left_join(select(daily, site, sample_date, n_valid, var_corr, var_indep), by = c("site", "sample_date"))
+    left_join(select(daily, site, sample_date, n_valid, var_corr, var_indep, var_med_corr, var_med_indep), by = c("site", "sample_date"))
 
   ceiling_stats <- function(x, scan_var) {
     if (nrow(x) < 6) return(tibble(n_anomalies = nrow(x)))
@@ -299,6 +306,8 @@ noise_rows <- map(sort(unique(variants24$block)), function(b) {
     obs_var <- var(x$column_anom)
     nv_corr  <- mean(x$var_corr * shrink, na.rm = TRUE) / 1e30
     nv_indep <- mean(x$var_indep * shrink, na.rm = TRUE) / 1e30
+    nv_med_corr  <- mean(x$var_med_corr * shrink, na.rm = TRUE) / 1e30
+    nv_med_indep <- mean(x$var_med_indep * shrink, na.rm = TRUE) / 1e30
     nv_emp   <- mean(scan_var / x$n_valid * shrink, na.rm = TRUE) / 1e30
     ceil <- function(nv) sqrt(max(0, 1 - nv / obs_var))
     tibble(n_anomalies = nrow(x),
@@ -311,7 +320,13 @@ noise_rows <- map(sort(unique(variants24$block)), function(b) {
            noise_share_empirical = nv_emp / obs_var,
            ceiling_reported_corr = ceil(nv_corr),
            ceiling_reported_indep = ceil(nv_indep),
-           ceiling_empirical = ceil(nv_emp))
+           noise_sd_reported_median_corr_1e15 = sqrt(nv_med_corr),
+           noise_sd_reported_median_indep_1e15 = sqrt(nv_med_indep),
+           ceiling_reported_median_corr = ceil(nv_med_corr),
+           ceiling_reported_median_indep = ceil(nv_med_indep),
+           ceiling_empirical = ceil(nv_emp),
+           # observed r divided by the empirical ceiling: the agreement expected if the column had no random scan noise
+           r_noise_corrected = ifelse(ceil(nv_emp) > 0, cor(x$column_anom, x$surface_anom) / ceil(nv_emp), NA_real_))
   }
   per_site <- imap(split(an, an$site), function(x, s) {
     sv <- emp_site$scan_noise_var[emp_site$site == s]
@@ -324,11 +339,13 @@ noise_rows <- map(sort(unique(variants24$block)), function(b) {
 }) |> list_rbind()
 out_tbl(noise_rows, "diag3_noise_ceiling.csv")
 print(noise_rows |> select(site, block_label, n_anomalies, anomaly_r_observed, sd_column_anomaly_1e15,
-                           noise_sd_empirical_1e15, ceiling_empirical, ceiling_reported_corr, ceiling_reported_indep))
+                           noise_sd_empirical_1e15, ceiling_empirical, r_noise_corrected,
+                           ceiling_reported_median_corr, ceiling_reported_median_indep))
 for (i in which(noise_rows$block_label == "3x3")) {
   note("  ", noise_rows$site[i], " (3x3): anomaly r ", round(noise_rows$anomaly_r_observed[i], 2),
        "; ceiling from column noise ", round(noise_rows$ceiling_empirical[i], 2), " (empirical), ",
-       round(noise_rows$ceiling_reported_corr[i], 2), "-", round(noise_rows$ceiling_reported_indep[i], 2), " (reported)")
+       round(noise_rows$ceiling_reported_median_corr[i], 2), "-", round(noise_rows$ceiling_reported_median_indep[i], 2),
+       " (reported, median scan); noise-corrected r ", round(noise_rows$r_noise_corrected[i], 2))
 }
 
 site_order <- c(noise_rows |> filter(site != "all sites") |> distinct(site) |> pull(site), "all sites")
@@ -336,8 +353,8 @@ fS4 <- noise_rows |>
   filter(block_label == "3x3") |>
   select(site, `observed anomaly r` = anomaly_r_observed,
          `ceiling: empirical scan-to-scan noise` = ceiling_empirical,
-         `ceiling: reported uncertainty, cells correlated` = ceiling_reported_corr,
-         `ceiling: reported uncertainty, cells independent` = ceiling_reported_indep) |>
+         `ceiling: reported uncertainty (median scan), cells correlated` = ceiling_reported_median_corr,
+         `ceiling: reported uncertainty (median scan), cells independent` = ceiling_reported_median_indep) |>
   pivot_longer(-site) |>
   mutate(site = factor(site, levels = rev(site_order)),
          y = as.numeric(site) + (as.numeric(factor(name)) - 2.5) * 0.18)   # small vertical offsets per series
@@ -453,6 +470,78 @@ if (file.exists(smoke_path)) {
                                      "% vs ", t5b$usable_pct_smoke_free[i], "%")
 } else {
   log_msg("Test 5 skipped (smoke_flags.csv not found)")
+}
+
+# =============================================================================
+# Test 6: information in early-morning vs late-morning scans (24-h arm)
+# =============================================================================
+log_msg("Test 6: time of day (24-h arm)")
+tod_breaks <- c(6, 9, 12, 15, 18)
+tod_labels <- c("06-09", "09-12", "12-15", "15-18")
+man24h <- read_manifest(A24$manifest) |> select(granule, sample_date, local_hour)
+sc6 <- scan_level(cells24, block = 1L) |>
+  inner_join(man24h, by = "granule", relationship = "many-to-many") |>
+  filter(valid) |>
+  mutate(window = as.character(cut(local_hour, breaks = tod_breaks, labels = tod_labels, right = FALSE))) |>
+  filter(!is.na(window)) |>
+  mutate(is_early = window == "06-09", is_late = window == "09-12")
+win6 <- sc6 |>
+  group_by(site, sample_date, window) |>
+  summarise(column_all = mean(vc) / 1e15, n_valid_scans = n(),
+            # one scan each side of 09:00 (the last before, the first after): equal numbers of scans
+            column_one = if (any(is_early)) vc[which.max(local_hour)] / 1e15
+                         else if (any(is_late)) vc[which.min(local_hour)] / 1e15 else NA_real_,
+            median_sza = median(sza, na.rm = TRUE),
+            .groups = "drop")
+surf6 <- prim24 |> filter(is.finite(hcho_ugm3)) |> select(site, sample_date, hcho_ugm3)
+
+anom_on <- function(d, cols) {
+  d |>
+    mutate(ym = floor_date(sample_date, "month")) |>
+    group_by(site, ym) |> filter(n() >= CFG$min_days_per_site_month) |>
+    mutate(across(all_of(c("hcho_ugm3", cols)), ~ .x - mean(.x), .names = "{.col}_anom")) |>
+    ungroup()
+}
+# 6a. each window on all days with a valid scan in it
+t6a <- map(tod_labels, function(w) {
+  d <- win6 |> filter(window == w) |> inner_join(surf6, by = c("site", "sample_date"))
+  if (nrow(d) < 8) return(NULL)
+  by_site_and_all(d, function(x) {
+    if (nrow(x) < 8) return(tibble(n = nrow(x)))
+    an <- anom_on(x, "column_all")
+    tibble(n = nrow(x), median_valid_scans = median(x$n_valid_scans), median_sza = median(x$median_sza, na.rm = TRUE),
+           r_whole_period = cor(x$hcho_ugm3, x$column_all),
+           n_anomalies = nrow(an),
+           r_anomalies = if (nrow(an) >= 8) cor(an$hcho_ugm3_anom, an$column_all_anom) else NA_real_)
+  }) |> mutate(window = w, .after = site)
+}) |> list_rbind() |>
+  arrange(site, window)
+out_tbl(t6a, "diag6_time_of_day_windows.csv")
+print(t6a)
+
+# 6b. 06-09 vs 09-12 on the same days (Williams' test), all scans and one scan per window
+early <- win6 |> filter(window == "06-09") |> select(site, sample_date, early_all = column_all, early_one = column_one)
+late  <- win6 |> filter(window == "09-12") |> select(site, sample_date, late_all = column_all, late_one = column_one)
+pair6 <- inner_join(early, late, by = c("site", "sample_date")) |> inner_join(surf6, by = c("site", "sample_date"))
+note("24-h site-days with valid scans in both 06-09 and 09-12 MST: ", nrow(pair6))
+t6b <- map(c("all", "one"), function(v) {
+  ce <- paste0("early_", v); cl <- paste0("late_", v)
+  an6 <- anom_on(pair6, c(ce, cl))
+  bind_rows(
+    by_site_and_all(pair6, function(x) dep_cor_test(x$hcho_ugm3, x[[cl]], x[[ce]])) |>
+      mutate(comparison = "whole period", .after = site),
+    by_site_and_all(an6, function(x) dep_cor_test(x$hcho_ugm3_anom, x[[paste0(cl, "_anom")]], x[[paste0(ce, "_anom")]])) |>
+      mutate(comparison = "within-month anomalies", .after = site)
+  ) |>
+    mutate(scans = if (v == "all") "all valid scans in window" else "one scan nearest 09:00", .after = site)
+}) |> list_rbind() |>
+  rename(any_of(c(r_09_12 = "r_start", r_06_09 = "r_end", diff_09_12_minus_06_09 = "diff_start_minus_end")))
+out_tbl(t6b, "diag6_time_of_day_paired.csv")
+print(t6b |> select(any_of(c("site", "scans", "comparison", "n", "r_09_12", "r_06_09", "r_between_window_columns", "williams_p"))))
+for (i in which(t6b$site == "all sites")) {
+  note("  24-h, all sites, ", t6b$scans[i], ", ", t6b$comparison[i], " (n = ", t6b$n[i], "): r 09-12 ",
+       round(t6b$r_09_12[i], 2), " vs 06-09 ", round(t6b$r_06_09[i], 2), ", between-window column r ",
+       round(t6b$r_between_window_columns[i], 2), ", Williams p = ", signif(t6b$williams_p[i], 2))
 }
 
 writeLines(summary_lines, file.path(P$tables, "diag_summary.txt"))
