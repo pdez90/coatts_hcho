@@ -15,3 +15,6 @@ renv/staging/
 
 # unpublished manuscript drafts (remove this line to version them)
 manuscript/
+
+# files the desktop app saves into the project
+Claude outputs/
