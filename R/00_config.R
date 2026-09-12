@@ -99,6 +99,13 @@ CFG <- list(
   # networks. EPA's AirData files need no key; sample-level records (which carry
   # the time each sample began) come from the AQS API and need AQS_EMAIL/AQS_KEY.
   run_aqs_inventory = TRUE,
+  run_aqs_samples = TRUE,                    # step 11: sample-level pull (needs an API key)
+  aqs_api_pause_s = 5,                       # AQS asks for modest request rates
+  # site grouping for the national TEMPO extraction (step 12): one OPeNDAP
+  # request per group and scan, so bigger boxes mean fewer, larger requests
+  aqs_cluster_deg_lat = 1.25,
+  aqs_cluster_deg_lon = 2.5,
+  aqs_scans_per_day_guess = 13,              # daylight TEMPO scans, for the cost estimate
   aqs_base_url = "https://aqs.epa.gov/aqsweb/airdata/",
   aqs_param_hcho = "43502",                  # AQS parameter code for formaldehyde
   aqs_years = c(2024L, 2025L),

@@ -135,6 +135,7 @@ network, and writes the sites that pass `aqs_durations` and `aqs_min_samples`.
 | Step | Script | What it does | Main output |
 |---|---|---|---|
 | 10 | `R/10_aqs_inventory.R` | Downloads the AirData annual summaries and monitor metadata, keeps formaldehyde, classifies monitors by duration and network, lists candidate sites | `output/tables/aqs_hcho_summary.csv`, `output/tables/aqs_hcho_inventory.csv`, `data/processed/aqs_candidate_sites.csv` |
+| 11 | `R/11_aqs_samples.R` | Pulls the individual samples for those sites from the AQS API (one request per state and year, cached), converts units, drops null-qualified records, averages duplicate POCs, and writes each sample's window in UTC. Also reports the sampling clock at each site and the likely cost of the national TEMPO extraction | `data/processed/aqs_hcho_samples.csv`, `output/tables/aqs_sample_clocks.csv`, `output/tables/aqs_samples_inventory.csv`, `output/tables/aqs_cluster_cost.csv` |
 
 With an AQS API key the step also pulls sample-level records for
 `aqs_sites_of_interest` and tabulates their time stamps and durations
@@ -145,9 +146,11 @@ Colorado samples. To get a key, run
 `AQS_EMAIL` and `AQS_KEY` in `~/.Renviron`.
 
 `run_all.R` order: 01 → 02 → 03 → 04 (24-h data) → 06 → 02 → 03 (3-h data) →
-08 (smoke) → 05 → 07 (analyses) → 09 (diagnostics) → 10 (AQS inventory). Turn
-parts off with `run_three_hour_arm`, `run_smoke_flags`, `run_diagnostics` and
-`run_aqs_inventory` in `R/00_config.R`.
+08 (smoke) → 05 → 07 (analyses) → 09 (diagnostics) → 10, 11 (national data).
+Turn parts off with `run_three_hour_arm`, `run_smoke_flags`, `run_diagnostics`,
+`run_aqs_inventory` and `run_aqs_samples` in `R/00_config.R`. Step 11 needs an
+AQS API key (`AQS_EMAIL`, `AQS_KEY` in `~/.Renviron`); without one it stops with
+instructions and the rest of the pipeline carries on.
 
 Every step caches what it has done. If step 3 is interrupted (it makes roughly
 one request per TEMPO scan, on the order of 2,000), run it again and it

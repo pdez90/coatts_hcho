@@ -261,7 +261,7 @@ if (nrow(lag_curve)) {
                        labels = vapply(lag_levels, function(l) sub(":.*", "", lag_clock(l)), character(1))) +
     labs(x = paste0("Lag of the TEMPO window from the sampling window (0 = ", lag_clock(0), ")"),
          y = "Pearson r with 3-h surface HCHO", colour = NULL, shape = NULL,
-         title = "Agreement peaks three hours after the sample ends, as the boundary layer mixes",
+         title = "Agreement peaks three hours after the sample ends",
          subtitle = "Point labels are the number of matched samples") +
     theme(legend.position = "bottom")
   ggsave(file.path(P$figures, "fig10_threeh_lag_curve.png"), p10, width = 7, height = 4.6, dpi = 300)
