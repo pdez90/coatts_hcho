@@ -119,9 +119,31 @@ explanations for the main results. Run it alone with `source("R/09_diagnostics.R
 
 Key lines are also written to `output/tables/diag_summary.txt`.
 
+### National formaldehyde data (EPA AQS)
+
+Step 10 (`R/10_aqs_inventory.R`) inventories every formaldehyde monitor in EPA's
+Air Quality System (parameter 43502) for `aqs_years`, using the pre-generated
+AirData files (`annual_conc_by_monitor_<year>.zip`, `aqs_monitors.zip`; no API
+key needed, cached in `data/raw/aqs`). It reports monitors by sample duration
+(24 h as at NATTS/NCore sites, and 1 h / 3 h / 8 h as at PAMS sites) and by
+network, and writes the sites that pass `aqs_durations` and `aqs_min_samples`.
+
+| Step | Script | What it does | Main output |
+|---|---|---|---|
+| 10 | `R/10_aqs_inventory.R` | Downloads the AirData annual summaries and monitor metadata, keeps formaldehyde, classifies monitors by duration and network, lists candidate sites | `output/tables/aqs_hcho_summary.csv`, `output/tables/aqs_hcho_inventory.csv`, `data/processed/aqs_candidate_sites.csv` |
+
+With an AQS API key the step also pulls sample-level records for
+`aqs_sites_of_interest` and tabulates their time stamps and durations
+(`output/tables/aqs_named_sites_sample_times.csv`). AQS records the time each
+sample began, so this is an independent check on the 09:00 stamps of the 3-hour
+Colorado samples. To get a key, run
+`browseURL("https://aqs.epa.gov/data/api/signup?email=YOUR@EMAIL")` once and put
+`AQS_EMAIL` and `AQS_KEY` in `~/.Renviron`.
+
 `run_all.R` order: 01 → 02 → 03 → 04 (24-h data) → 06 → 02 → 03 (3-h data) →
-08 (smoke) → 05 → 07 (analyses) → 09 (diagnostics). Turn parts off with
-`run_three_hour_arm`, `run_smoke_flags` and `run_diagnostics` in `R/00_config.R`.
+08 (smoke) → 05 → 07 (analyses) → 09 (diagnostics) → 10 (AQS inventory). Turn
+parts off with `run_three_hour_arm`, `run_smoke_flags`, `run_diagnostics` and
+`run_aqs_inventory` in `R/00_config.R`.
 
 Every step caches what it has done. If step 3 is interrupted (it makes roughly
 one request per TEMPO scan, on the order of 2,000), run it again and it

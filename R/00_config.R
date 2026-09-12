@@ -89,6 +89,22 @@ CFG <- list(
   # stamp_time_unusual) but left out of the TEMPO matching in step 07.
   threeh_exclude_unusual_stamps = TRUE,
 
+  # ---- national arm: EPA AQS formaldehyde (NATTS / NCore / PAMS) ----
+  # Step 10 inventories what AQS holds for formaldehyde: which monitors, at what
+  # sample duration (24-h NATTS/NCore style, sub-daily PAMS style), in which
+  # networks. EPA's AirData files need no key; sample-level records (which carry
+  # the time each sample began) come from the AQS API and need AQS_EMAIL/AQS_KEY.
+  run_aqs_inventory = TRUE,
+  aqs_base_url = "https://aqs.epa.gov/aqsweb/airdata/",
+  aqs_param_hcho = "43502",                  # AQS parameter code for formaldehyde
+  aqs_years = c(2024L, 2025L),
+  aqs_refresh = FALSE,                       # TRUE re-downloads the AirData files
+  aqs_durations = c("24 h", "8 h", "3 h", "1 h"),
+  aqs_min_samples = 20L,                     # per site over aqs_years, to be a candidate
+  aqs_conus_bbox = c(-125, 24, -66, 50),     # lon_min, lat_min, lon_max, lat_max
+  # sample-level check of the Littleton and Platteville time stamps
+  aqs_sites_of_interest = c("08-035-0004", "08-123-0008"),
+
   # ---- diagnostics (step 09): tests of explanations, uses existing outputs ----
   run_diagnostics = TRUE,
 
@@ -145,6 +161,7 @@ P <- list(
   raw_coatts   = "data/raw/coatts",
   raw_tempo    = "data/raw/tempo_subsets",
   raw_hms      = "data/raw/hms_smoke",
+  raw_aqs      = "data/raw/aqs",
   interim      = "data/interim",
   tempo_cells  = "data/interim/tempo_cells",
   processed    = "data/processed",

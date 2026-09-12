@@ -11,6 +11,7 @@
 #   smoke flags       08 NOAA HMS (needs the sample files of both arms)
 #   analyses          05 (24-h) -> 07 (3-h)
 #   diagnostics       09 (tests of explanations; no downloads)
+#   national data     10 (EPA AQS formaldehyde inventory)
 # =============================================================================
 main <- function() {
   if (!file.exists("R/00_config.R")) stop("Set the working directory to the project root (~/HCHO).")
@@ -25,6 +26,7 @@ main <- function() {
   three_h <- isTRUE(cfg_env$CFG$run_three_hour_arm)
   smoke   <- isTRUE(cfg_env$CFG$run_smoke_flags)
   diag    <- isTRUE(cfg_env$CFG$run_diagnostics)
+  aqs     <- isTRUE(cfg_env$CFG$run_aqs_inventory)
 
   steps <- data.frame(script = character(), arm = character())
   add <- function(script, arm, when = TRUE) if (when) steps[nrow(steps) + 1, ] <<- list(script, arm)
@@ -39,6 +41,7 @@ main <- function() {
   add("R/05_analysis.R",        "coatts")
   add("R/07_threeh_analysis.R", "threeh", three_h)
   add("R/09_diagnostics.R",     "coatts", diag)
+  add("R/10_aqs_inventory.R",   "coatts", aqs)
 
   for (k in seq_len(nrow(steps))) {
     s <- steps$script[k]; arm <- steps$arm[k]
