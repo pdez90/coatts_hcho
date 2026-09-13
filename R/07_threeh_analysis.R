@@ -42,7 +42,8 @@ for (col in setdiff(names(cells), c("granule", "scan_start_utc", "site"))) {
   if (!is.numeric(x) || inherits(x, "integer64")) cells[[col]] <- suppressWarnings(as.numeric(as.character(x)))
 }
 for (v in c("main_data_quality_flag", "eff_cloud_fraction", "snow_ice_fraction",
-            "solar_zenith_angle", "pbl_height", "vertical_column_uncertainty")) {
+            "solar_zenith_angle", "pbl_height", "vertical_column_uncertainty",
+            "surface_pressure")) {
   if (!v %in% names(cells)) cells[[v]] <- NA_real_
 }
 log_msg(nrow(samples), " 3-h samples; ", nrow(cells), " TEMPO cell rows")
@@ -71,6 +72,7 @@ scan_values <- function(max_ecf, block) {
     summarise(n_cells = n(), n_pass = sum(pass),
               vc  = if (any(pass)) mean(vertical_column[pass]) else NA_real_,
               pbl = if (any(pass)) mean(pbl_height[pass], na.rm = TRUE) else NA_real_,
+              sp  = if (any(pass)) mean(surface_pressure[pass], na.rm = TRUE) else NA_real_,
               .groups = "drop") |>
     mutate(valid = n_pass >= pmax(1, ceiling(CFG$qc_min_cell_fraction * n_cells))) |>
     inner_join(manifest, by = "granule")
@@ -103,6 +105,7 @@ matched <- pmap(variants, function(lag_h, max_ecf, block, block_label) {
     summarise(n_scans = n(), n_valid_scans = sum(valid),
               tempo_vc = if (any(valid)) mean(vc[valid]) else NA_real_,
               tempo_pbl_m = if (any(valid)) mean(pbl[valid], na.rm = TRUE) else NA_real_,
+              tempo_press_hpa = if (any(valid)) mean(sp[valid], na.rm = TRUE) else NA_real_,
               .groups = "drop")
   w |>
     left_join(per_sample, by = c("site", "stamp_local")) |>
@@ -110,7 +113,14 @@ matched <- pmap(variants, function(lag_h, max_ecf, block, block_label) {
            n_scans = coalesce(n_scans, 0L), n_valid_scans = coalesce(n_valid_scans, 0L))
 }) |> list_rbind() |>
   mutate(tempo_vc_1e15 = tempo_vc / 1e15,
-         h_eff_km = ifelse(tempo_vc > 0 & hcho_molec_cm3 > 0, tempo_vc / hcho_molec_cm3 / 1e5, NA_real_),
+         # as in step 04: reported values are at 25 C and 1 atm; these packets carry
+         # no met, so the number density uses TEMPO's surface pressure and a fixed
+         # temperature (CFG$hcho_fallback_temp_c)
+         hcho_ppb_std = ugm3_std_to_ppb(hcho_ugm3),
+         hcho_molec_cm3_local = ppb_to_molec_cm3(hcho_ppb_std, CFG$hcho_fallback_temp_c, tempo_press_hpa),
+         h_eff_std_km = ifelse(tempo_vc > 0 & hcho_molec_cm3 > 0, tempo_vc / hcho_molec_cm3 / 1e5, NA_real_),
+         h_eff_km = ifelse(tempo_vc > 0 & hcho_molec_cm3_local > 0,
+                           tempo_vc / hcho_molec_cm3_local / 1e5, h_eff_std_km),
          tempo_pbl_km = tempo_pbl_m / 1000,
          usable = !is.na(tempo_vc) & !is.na(hcho_ugm3))
 

@@ -106,6 +106,17 @@ CFG <- list(
   aqs_cluster_deg_lat = 1.25,
   aqs_cluster_deg_lon = 2.5,
   aqs_scans_per_day_guess = 13,              # daylight TEMPO scans, for the cost estimate
+  # step 12: which national samples get TEMPO subsets. The sub-daily sites are
+  # the smaller job and the more informative one, so they run first; switch to
+  # "24 h" (or list all three) for the rest.
+  run_aqs_tempo = FALSE,                     # step 12 is long: switch it on deliberately
+  aqs_arm_durations = c("3 h", "8 h"),
+  aqs_lag_pad_h = 3,                         # hours kept on each side of a sample window
+  aqs_max_clusters = NA,                     # test mode: only the first N clusters
+  # step 13: lags (hours) from each sampling window, as in the 3-h arm. The 24-h
+  # samples are matched only at lag 0, since they already span the day.
+  run_aqs_analysis = TRUE,
+  aqs_lags_h = c(-3, 0, 3, 6),
   aqs_base_url = "https://aqs.epa.gov/aqsweb/airdata/",
   aqs_param_hcho = "43502",                  # AQS parameter code for formaldehyde
   aqs_years = c(2024L, 2025L),
@@ -175,7 +186,14 @@ CFG <- list(
   n_parallel = 4L,             # concurrent OPeNDAP requests
   max_granules = NA,           # e.g. 5 for a quick test of step 3; NA = all
   keep_subsets = FALSE,        # delete each granule subset once its site cells are extracted
-  hcho_molar_mass = 30.026     # g/mol
+  hcho_molar_mass = 30.026,    # g/mol
+  # CDPHE's ug/m3 match the same samples' AQS ppb records converted at 25 C and
+  # 1 atm to within 0.2 % at every Colorado site (checked in step 11), so the
+  # reported mass concentrations are at standard conditions, not local ones.
+  hcho_reported_conditions = "standard",
+  # Temperature used for the number density when no co-located measurement is
+  # available. A 10 K error moves the number density (and H_eff) by about 3.5 %.
+  hcho_fallback_temp_c = 15
 )
 
 # ---- paths -----------------------------------------------------------------
@@ -358,9 +376,18 @@ season_of <- function(d) {
          levels = c("DJF", "MAM", "JJA", "SON"))
 }
 
-# ug/m3 (local conditions) -> molecules/cm3 ; independent of T and P
+# ug/m3 -> molecules/cm3 IF the concentration is a mass per actual volume.
+# CDPHE and AQS report at standard conditions (25 C, 1 atm), so this is the
+# number density the air would have at 25 C and 1 atm, not at the site.
 ugm3_to_molec_cm3 <- function(c_ugm3, M = CFG$hcho_molar_mass) {
   c_ugm3 * 6.02214076e23 * 1e-12 / M
+}
+# Reported ug/m3 at standard conditions -> mixing ratio (exact), then the number
+# density at the site's own temperature and pressure.
+ugm3_std_to_ppb <- function(c_ugm3, M = CFG$hcho_molar_mass) c_ugm3 * 24.45 / M
+ppb_to_molec_cm3 <- function(ppb, temp_c, press_hpa) {
+  n_air <- (press_hpa * 100) / (1.380649e-23 * (temp_c + 273.15)) * 1e-6   # molecules/cm3
+  ppb * 1e-9 * n_air
 }
 # ug/m3 -> ppbv given temperature (C) and pressure (hPa)
 ugm3_to_ppb <- function(c_ugm3, temp_c, press_hpa, M = CFG$hcho_molar_mass) {

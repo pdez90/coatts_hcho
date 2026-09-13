@@ -41,9 +41,21 @@ if (length(dropped)) {
 
 # columns that may be missing depending on the collection version
 for (v in c("main_data_quality_flag", "eff_cloud_fraction", "snow_ice_fraction",
-            "solar_zenith_angle", "pbl_height", "vertical_column_uncertainty")) {
+            "solar_zenith_angle", "pbl_height", "vertical_column_uncertainty",
+            "surface_pressure")) {
   if (!v %in% names(cells)) cells[[v]] <- NA_real_
 }
+
+# Temperature for the number density: the packet's own met where the site and
+# month have it, otherwise the site median, otherwise CFG$hcho_fallback_temp_c.
+met_month <- coatts |>
+  filter(!is.na(temp_c)) |>
+  group_by(site, month = month(sample_date)) |>
+  summarise(temp_c_month = median(temp_c), .groups = "drop")
+met_site <- coatts |>
+  filter(!is.na(temp_c)) |>
+  group_by(site) |>
+  summarise(temp_c_site = median(temp_c), .groups = "drop")
 
 variants <- expand_grid(max_ecf = c(0.1, 0.2, 0.3),
                         block = c(0L, 1L, 2L),         # 1x1, 3x3, 5x5
@@ -66,6 +78,7 @@ hourly_for <- function(max_ecf, block) {
               vc  = if (any(pass)) mean(vertical_column[pass]) else NA_real_,
               vcu = if (any(pass)) sqrt(mean(vertical_column_uncertainty[pass]^2)) else NA_real_,
               pbl = if (any(pass)) mean(pbl_height[pass], na.rm = TRUE) else NA_real_,
+              sp  = if (any(pass)) mean(surface_pressure[pass], na.rm = TRUE) else NA_real_,
               ecf = mean(eff_cloud_fraction, na.rm = TRUE),
               .groups = "drop") |>
     mutate(valid = n_pass >= pmax(1, ceiling(CFG$qc_min_cell_fraction * n_cells)))
@@ -84,6 +97,7 @@ daily_for <- function(h, window) {
               tempo_vc_sd = if (sum(valid) > 1) sd(vc[valid]) else NA_real_,
               tempo_vcu = if (any(valid)) sqrt(mean(vcu[valid]^2)) / sqrt(sum(valid)) else NA_real_,
               tempo_pbl_m = if (any(valid)) mean(pbl[valid], na.rm = TRUE) else NA_real_,
+              tempo_press_hpa = if (any(valid)) mean(sp[valid], na.rm = TRUE) else NA_real_,
               mean_ecf = mean(ecf, na.rm = TRUE),
               .groups = "drop")
 }
@@ -100,14 +114,25 @@ daily <- pmap(variants, function(max_ecf, block, window, block_label) {
 # (outages, or no midday scan) get n_scans = 0 and a missing column value.
 matched <- coatts |>
   filter(!is.na(hcho_ugm3)) |>
+  mutate(month = month(sample_date)) |>
   select(site, site_name, program, lat, lon, sample_date, season, year,
          hcho_ugm3, hcho_molec_cm3, hcho_ppb_local, non_detect, below_mdl, flags) |>
   cross_join(variants) |>
   left_join(daily, by = c("site", "sample_date", "max_ecf", "block", "block_label", "window")) |>
+  left_join(met_month, by = c("site", "month" = "month")) |>
+  left_join(met_site, by = "site") |>
   mutate(n_scans = coalesce(n_scans, 0L),
          n_valid_scans = coalesce(n_valid_scans, 0L),
          tempo_vc_1e15 = tempo_vc / 1e15,
-         h_eff_km = ifelse(tempo_vc > 0 & hcho_molec_cm3 > 0, tempo_vc / hcho_molec_cm3 / 1e5, NA_real_),
+         # reported concentrations are at 25 C and 1 atm, so convert to a mixing
+         # ratio and then to the number density at the site's own T and P
+         temp_c_used = coalesce(temp_c, temp_c_month, temp_c_site, CFG$hcho_fallback_temp_c),
+         press_hpa_used = coalesce(press_hpa, tempo_press_hpa),
+         hcho_ppb_std = ugm3_std_to_ppb(hcho_ugm3),
+         hcho_molec_cm3_local = ppb_to_molec_cm3(hcho_ppb_std, temp_c_used, press_hpa_used),
+         h_eff_std_km = ifelse(tempo_vc > 0 & hcho_molec_cm3 > 0, tempo_vc / hcho_molec_cm3 / 1e5, NA_real_),
+         h_eff_km = ifelse(tempo_vc > 0 & hcho_molec_cm3_local > 0,
+                           tempo_vc / hcho_molec_cm3_local / 1e5, h_eff_std_km),
          tempo_pbl_km = tempo_pbl_m / 1000,
          usable = !is.na(tempo_vc) & !is.na(hcho_ugm3))
 
@@ -117,6 +142,12 @@ primary <- matched |>
   filter(max_ecf == CFG$qc_max_cloud_fraction, block == 1L, window == "all_day")
 data.table::fwrite(primary, file.path(P$processed, "matched_primary.csv"))
 
+prim_chk <- filter(matched, max_ecf == CFG$qc_max_cloud_fraction, block == 1L, window == "all_day", usable)
+log_msg("Number density: ", sum(!is.na(prim_chk$temp_c)), " of ", nrow(prim_chk),
+        " matched days used measured temperature, ",
+        sum(!is.na(prim_chk$press_hpa)), " measured pressure (others: site-month median T, TEMPO surface pressure); ",
+        "median H_eff ", round(median(prim_chk$h_eff_km, na.rm = TRUE), 2), " km at local conditions vs ",
+        round(median(prim_chk$h_eff_std_km, na.rm = TRUE), 2), " km at standard conditions")
 log_msg("Primary variant (ECF <= ", CFG$qc_max_cloud_fraction, ", 3x3, all day): ",
         sum(primary$usable), " usable site-days of ", nrow(primary), " COATTS sample days (",
         sum(primary$n_scans == 0), " with no TEMPO scan at all)")

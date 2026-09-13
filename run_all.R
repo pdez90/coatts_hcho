@@ -11,7 +11,7 @@
 #   smoke flags       08 NOAA HMS (needs the sample files of both arms)
 #   analyses          05 (24-h) -> 07 (3-h)
 #   diagnostics       09 (tests of explanations; no downloads)
-#   national data     10 (EPA AQS formaldehyde inventory) -> 11 (sample-level pull)
+#   national data     10 (AQS inventory) -> 11 (samples) -> 12 (TEMPO) -> 13 (analysis)
 # =============================================================================
 main <- function() {
   if (!file.exists("R/00_config.R")) stop("Set the working directory to the project root (~/HCHO).")
@@ -28,6 +28,9 @@ main <- function() {
   diag    <- isTRUE(cfg_env$CFG$run_diagnostics)
   aqs     <- isTRUE(cfg_env$CFG$run_aqs_inventory)
   aqs_s   <- isTRUE(cfg_env$CFG$run_aqs_samples)
+  aqs_t   <- isTRUE(cfg_env$CFG$run_aqs_tempo)
+  aqs_a   <- isTRUE(cfg_env$CFG$run_aqs_analysis) &&
+             file.exists(file.path("data", "processed", "aqs_tempo_site_cells.csv.gz"))
 
   steps <- data.frame(script = character(), arm = character())
   add <- function(script, arm, when = TRUE) if (when) steps[nrow(steps) + 1, ] <<- list(script, arm)
@@ -44,6 +47,8 @@ main <- function() {
   add("R/09_diagnostics.R",     "coatts", diag)
   add("R/10_aqs_inventory.R",   "coatts", aqs)
   add("R/11_aqs_samples.R",     "coatts", aqs_s)
+  add("R/12_tempo_national.R",  "coatts", aqs_t)
+  add("R/13_national_analysis.R", "coatts", aqs_a)
 
   for (k in seq_len(nrow(steps))) {
     s <- steps$script[k]; arm <- steps$arm[k]

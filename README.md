@@ -145,10 +145,20 @@ Colorado samples. To get a key, run
 `browseURL("https://aqs.epa.gov/data/api/signup?email=YOUR@EMAIL")` once and put
 `AQS_EMAIL` and `AQS_KEY` in `~/.Renviron`.
 
+| 12 | `R/12_tempo_national.R` | Groups the national sites into boxes, finds TEMPO granules for each box (one CMR query per box and month), then requests one OPeNDAP subset per box and scan, keeping a 5×5 cell block around each site. `aqs_arm_durations` selects which samples to cover; everything caches, so a long run can be stopped and resumed | `data/processed/aqs_tempo_site_cells.csv.gz`, `data/processed/aqs_tempo_manifest.csv` |
+
+| 13 | `R/13_national_analysis.R` | Matches every national sample to its TEMPO scans (and to windows lagged from it), then reports coverage, correlations and within-month anomaly correlations by site, sample duration, lag and time of day, with a sensitivity table and three figures | `output/tables/national_*.csv`, `fig11_national_lag_curve.png`, `fig12_national_by_start_hour.png`, `fig13_national_site_map.png` |
+
+Step 12 is the long one. With the default `aqs_arm_durations = c("3 h", "8 h")`
+it covers 44 sites in about 28 boxes and roughly 25,000 OPeNDAP requests (expect
+a few hours); the 102 sites with 24-h samples are about the same again. It is off
+by default (`run_aqs_tempo`), and it reuses the grid layout cached by step 3, so
+run step 3 at least once first.
+
 `run_all.R` order: 01 → 02 → 03 → 04 (24-h data) → 06 → 02 → 03 (3-h data) →
 08 (smoke) → 05 → 07 (analyses) → 09 (diagnostics) → 10, 11 (national data).
 Turn parts off with `run_three_hour_arm`, `run_smoke_flags`, `run_diagnostics`,
-`run_aqs_inventory` and `run_aqs_samples` in `R/00_config.R`. Step 11 needs an
+`run_aqs_inventory`, `run_aqs_samples` and `run_aqs_tempo` in `R/00_config.R`. Step 11 needs an
 AQS API key (`AQS_EMAIL`, `AQS_KEY` in `~/.Renviron`); without one it stops with
 instructions and the rest of the pipeline carries on.
 
