@@ -115,8 +115,9 @@ daily <- pmap(variants, function(max_ecf, block, window, block_label) {
 matched <- coatts |>
   filter(!is.na(hcho_ugm3)) |>
   mutate(month = month(sample_date)) |>
-  select(site, site_name, program, lat, lon, sample_date, season, year,
-         hcho_ugm3, hcho_molec_cm3, hcho_ppb_local, non_detect, below_mdl, flags) |>
+  select(site, site_name, program, lat, lon, sample_date, month, season, year,
+         hcho_ugm3, hcho_molec_cm3, hcho_ppb_local, non_detect, below_mdl, flags,
+         temp_c, press_hpa) |>
   cross_join(variants) |>
   left_join(daily, by = c("site", "sample_date", "max_ecf", "block", "block_label", "window")) |>
   left_join(met_month, by = c("site", "month" = "month")) |>
