@@ -202,6 +202,10 @@ contrast <- function(x, label, arm) {
   # A cluster bootstrap over very few sites resamples only a handful of distinct
   # values, so its interval is degenerate rather than narrow. Report no interval
   # below MIN_SITES_CI clusters.
+  # Seed each stratum's bootstrap independently. Sharing one RNG stream would
+  # make every interval depend on how many strata ran before it, so adding or
+  # suppressing a stratum would silently shift the others' confidence limits.
+  set.seed(42L)
   boot <- if (length(sites) >= MIN_SITES_CI) replicate(NBOOT, {
     s <- sample(sites, length(sites), replace = TRUE)
     mean(unlist(lapply(s, function(z) pm$d[pm$site == z])))
