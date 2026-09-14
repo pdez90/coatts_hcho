@@ -4,6 +4,8 @@ output/
 logs/
 *.nc4
 # local scratch
+# Rscript writes this whenever a plot is drawn without an explicit device
+Rplots.pdf
 _to_delete_/
 .Rhistory
 .RData
