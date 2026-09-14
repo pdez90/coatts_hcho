@@ -285,17 +285,20 @@ if (nrow(by_hour)) {
 }
 
 if (nrow(by_site) && "anom_pearson_r" %in% names(by_site) && any(!is.na(by_site$anom_pearson_r))) {
-  p13 <- ggplot(by_site, aes(lon, lat, colour = anom_pearson_r, size = anom_n)) +
+  dur_order <- intersect(c("24 h", "8 h", "3 h", "1 h"), unique(by_site$duration_class))
+  p13 <- by_site |>
+    mutate(duration_class = factor(duration_class, levels = dur_order)) |>
+    ggplot(aes(lon, lat, colour = anom_pearson_r, size = anom_n)) +
     geom_point(alpha = 0.9) +
     scale_colour_gradient2(low = "#b2182b", mid = "grey85", high = "#2166ac", midpoint = 0,
                            limits = c(-0.8, 0.8), oob = scales::squish) +
     scale_size_continuous(range = c(1.5, 5)) +
-    facet_wrap(~ duration_class) +
+    facet_wrap(~ duration_class, ncol = 1) +
     labs(x = "Longitude", y = "Latitude", colour = "Day-to-day r", size = "n",
          title = "Day-to-day agreement between TEMPO and surface formaldehyde, by site",
          subtitle = "Within-month anomalies, scans inside the sampling window") +
     coord_quickmap()
-  ggsave(file.path(P$figures, "fig13_national_site_map.png"), p13, width = 9, height = 5, dpi = 300)
+  ggsave(file.path(P$figures, "fig13_national_site_map.png"), p13, width = 5.5, height = 8.8, dpi = 300)
   log_msg("  figure: fig13_national_site_map.png")
 }
 

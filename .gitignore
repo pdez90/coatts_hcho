@@ -13,8 +13,9 @@ _to_delete_/
 renv/library/
 renv/staging/
 
-# unpublished manuscript drafts (remove this line to version them)
-manuscript/
+# unpublished manuscript drafts (the build sources in manuscript/src are versioned)
+manuscript/*.docx
+manuscript/src/node_modules/
 
 # files the desktop app saves into the project
 Claude outputs/
