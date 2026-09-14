@@ -295,8 +295,8 @@ if (nrow(by_site) && "anom_pearson_r" %in% names(by_site) && any(!is.na(by_site$
     scale_size_continuous(range = c(1.5, 5)) +
     facet_wrap(~ duration_class, ncol = 1) +
     labs(x = "Longitude", y = "Latitude", colour = "Day-to-day r", size = "n",
-         title = "Day-to-day agreement between TEMPO and surface formaldehyde, by site",
-         subtitle = "Within-month anomalies, scans inside the sampling window") +
+         title = "Day-to-day agreement, TEMPO vs surface HCHO",
+         subtitle = "Within-month anomalies; scans inside the sampling window") +
     coord_quickmap()
   ggsave(file.path(P$figures, "fig13_national_site_map.png"), p13, width = 5.5, height = 8.8, dpi = 300)
   log_msg("  figure: fig13_national_site_map.png")
