@@ -117,7 +117,12 @@ CFG <- list(
   aqs_max_clusters = NA,                     # test mode: only the first N clusters
   # step 13: lags (hours) from each sampling window, as in the 3-h arm. The 24-h
   # samples are matched only at lag 0, since they already span the day.
+
   run_aqs_analysis = TRUE,
+  # Figure 1 site map (needs elevatr + terra) and the clear-sky representativeness
+  # test; both are cheap and read only what earlier steps already wrote.
+  run_site_map = TRUE,
+  run_clear_sky_bias = TRUE,
   aqs_lags_h = c(-3, 0, 3, 6),
   aqs_base_url = "https://aqs.epa.gov/aqsweb/airdata/",
   aqs_param_hcho = "43502",                  # AQS parameter code for formaldehyde
