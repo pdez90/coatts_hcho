@@ -73,12 +73,29 @@ for (a in unique(types$arm)) {
 # valid when at least half the block's cells pass; a day is usable when at least
 # one scan is valid. "Rescued by cloud" means the day becomes usable if the
 # effective cloud fraction threshold alone is dropped.
-attribute <- function(cells_path, label, day_from) {
+#
+# The rescue counts are NOT mutually exclusive. A sampling period usually
+# contains several scans and different scans within it can fail different
+# criteria, so one screened-out period can be rescued by more than one single
+# relaxation. Only rescued_by_none is disjoint from the rest.
+#
+# Two scopes are tabulated, distinguished by the `scope` column:
+#   "comparison (24 h)" - exactly the screened-out 24 h sample days that enter
+#                         the contrast in part 2, so the denominator matches the
+#                         day-type table above. This is what the paper quotes.
+#   "all site-days"     - every site-day in the cell extraction: both Colorado
+#                         arms, and nationally every sample duration. Reported
+#                         for completeness only.
+attribute <- function(cells_path, label, day_from, keep = NULL) {
   if (!file.exists(cells_path)) { log_msg("  ", basename(cells_path), " absent; attribution skipped"); return(NULL) }
   cols <- c("granule", "site", "di", "dj", "cell_lon", "scan_start_utc",
             "main_data_quality_flag", "eff_cloud_fraction",
             "snow_ice_fraction", "solar_zenith_angle")
-  cells <- data.table::fread(cells_path, select = cols, showProgress = FALSE)
+  # site must stay character: some AQS site keys are numeric-looking and would
+  # otherwise lose their leading zeros and fail to join to the matched data
+  cells <- data.table::fread(cells_path, select = cols,
+                             colClasses = list(character = "site"),
+                             showProgress = FALSE)
   cells <- cells[abs(di) <= 1L & abs(dj) <= 1L]
   cells[, `:=`(
     ok_q = !is.na(main_data_quality_flag) & main_data_quality_flag <= 0,
@@ -103,17 +120,46 @@ attribute <- function(cells_path, label, day_from) {
                           noSnow  = sum(v(noSnow, n)) > 0,
                           noFlag  = sum(v(noFlag, n)) > 0),
                       by = .(site, sample_date)]
-  out <- per_day[full == FALSE, .(
-    screened_out_days = .N,
-    rescued_by_cloud  = sum(noCloud),
-    rescued_by_snow   = sum(noSnow),
-    rescued_by_sza    = sum(noSZA),
-    rescued_by_flag   = sum(noFlag),
-    rescued_by_none   = sum(!noCloud & !noSnow & !noSZA & !noFlag))]
-  out[, `:=`(arm = label, usable_days = sum(per_day$full),
-             pct_cloud = round(100 * rescued_by_cloud / screened_out_days, 1))]
-  data.table::setcolorder(out, "arm")
-  out[]
+  tally <- function(pd, scope) {
+    so <- pd[full == FALSE]
+    n  <- max(nrow(so), 1L)
+    data.table::data.table(
+      arm = label, scope = scope,
+      site_days = nrow(pd), usable_days = sum(pd$full),
+      screened_out_days = nrow(so),
+      rescued_by_cloud  = sum(so$noCloud),
+      rescued_by_snow   = sum(so$noSnow),
+      rescued_by_sza    = sum(so$noSZA),
+      rescued_by_flag   = sum(so$noFlag),
+      rescued_by_none   = sum(!so$noCloud & !so$noSnow & !so$noSZA & !so$noFlag),
+      pct_cloud = round(100 * sum(so$noCloud) / n, 1))
+  }
+
+  res <- list(tally(per_day, "all site-days"))
+  if (!is.null(keep) && nrow(keep)) {
+    k <- unique(data.table::as.data.table(keep)[, .(site = as.character(site),
+                                                    sample_date = as.Date(sample_date))])
+    m <- per_day[k, on = .(site, sample_date), nomatch = 0L]
+    log_msg(sprintf("  %s: %d of %d screened-out 24 h sample days located in the cell extraction (%.0f%%)",
+                    label, nrow(m), nrow(k), 100 * nrow(m) / max(nrow(k), 1L)))
+    if (nrow(m) < nrow(k))
+      warning(label, ": ", nrow(k) - nrow(m),
+              " screened-out sample days are absent from the cell extraction; ",
+              "the quoted denominator will not match the day-type table.",
+              call. = FALSE)
+    if (any(m$full))
+      warning(label, ": ", sum(m$full), " days classified as screened out in the ",
+              "matched data pass the full screen when re-evaluated here.", call. = FALSE)
+    res <- c(list(tally(m, "comparison (24 h)")), res)
+  }
+  data.table::rbindlist(res)
+}
+
+# the screened-out days that actually enter the contrast in part 2
+screened_days <- function(a) {
+  data.table::as.data.table(
+    d |> filter(arm == a, day_type == "screened out") |>
+      dplyr::select(site, sample_date) |> dplyr::distinct())
 }
 
 attr_co <- attribute(
@@ -122,7 +168,8 @@ attr_co <- attribute(
     man <- read_tbl(file.path(P$processed, "tempo_manifest.csv")) |>
       distinct(granule, sample_date) |> mutate(sample_date = as.Date(sample_date))
     merge(ps, data.table::as.data.table(man), by = "granule", all.x = TRUE)
-  })
+  },
+  keep = screened_days("Colorado (24 h)"))
 # national: local standard date from the scan time and the site's longitude
 attr_nat <- attribute(
   file.path(P$processed, "aqs_tempo_site_cells.csv.gz"), "National (24 h)",
@@ -130,14 +177,15 @@ attr_nat <- attribute(
     ps[, sample_date := as.Date(as.POSIXct(scan_start_utc, tz = "UTC") +
                                   round(lon / 15) * 3600)]
     ps
-  })
+  },
+  keep = screened_days("National (24 h)"))
 attr_all <- data.table::rbindlist(list(attr_co, attr_nat), fill = TRUE)
 if (nrow(attr_all)) {
   data.table::fwrite(attr_all, file.path(P$tables, "observability_screen_attribution.csv"))
   for (i in seq_len(nrow(attr_all))) {
     a <- attr_all[i]
-    log_msg(sprintf("%s screening attribution: %d screened-out site-days; relaxing the cloud threshold alone rescues %d (%.0f%%), snow/ice %d, SZA %d, quality flag %d; %d rescued by none",
-                    a$arm, a$screened_out_days, a$rescued_by_cloud, a$pct_cloud,
+    log_msg(sprintf("%s screening attribution [%s]: %d screened-out site-days; relaxing the cloud threshold alone rescues %d (%.0f%%), snow/ice %d, SZA %d, quality flag %d; %d rescued by none (counts overlap)",
+                    a$arm, a$scope, a$screened_out_days, a$rescued_by_cloud, a$pct_cloud,
                     a$rescued_by_snow, a$rescued_by_sza, a$rescued_by_flag, a$rescued_by_none))
   }
 }
