@@ -21,8 +21,13 @@ source("R/00_config.R")
 samples_path <- file.path(P$processed, "aqs_hcho_samples.csv")
 if (!file.exists(samples_path)) stop("Run R/11_aqs_samples.R first (no ", samples_path, ")")
 
-cells_dir  <- file.path(P$interim, "aqs_tempo_cells")
-man_dir    <- file.path(P$interim, "aqs_manifests")
+# Cells and manifests are cached per duration set: adding the 24-h sites later
+# must not change the site list of a box that already holds sub-daily cells
+# (that would clear them). Step 5 below combines every arm's cells.
+arm_tag    <- gsub("[^0-9a-z]", "", paste(sort(CFG$aqs_arm_durations), collapse = "_"))
+cells_root <- file.path(P$interim, "aqs_tempo_cells")
+cells_dir  <- file.path(cells_root, arm_tag)
+man_dir    <- file.path(P$interim, "aqs_manifests", arm_tag)
 invisible(lapply(c(cells_dir, man_dir), dir.create, recursive = TRUE, showWarnings = FALSE))
 
 samples <- read_tbl(samples_path, colClasses = list(character = c("site_id", "qualifiers"))) |>
@@ -120,7 +125,8 @@ cmr_query <- function(bbox, t0, t1, depth = 0) {
 
 cluster_manifest <- function(cl, cl_sites, cl_samples) {
   f <- file.path(man_dir, paste0(cl, ".csv"))
-  pad <- CFG$aqs_lag_pad_h * 3600
+  # 24-h samples already span the day, so they need no lag padding
+  pad <- if_else(cl_samples$duration_class == "24 h", 0, CFG$aqs_lag_pad_h * 3600)
   windows <- cl_samples |> transmute(w0 = start_utc - pad, w1 = end_utc + pad)
   if (file.exists(f)) {
     man <- read_tbl(f, colClasses = "character") |>
@@ -266,10 +272,17 @@ for (ci in seq_along(clusters)) {
 }
 manifest_all <- list_rbind(manifests)
 if (!nrow(manifest_all)) stop("No granules found for any cluster.")
-data.table::fwrite(manifest_all, file.path(P$processed, "aqs_tempo_manifest.csv"))
+man_out <- file.path(P$processed, "aqs_tempo_manifest.csv")
+if (file.exists(man_out)) {                       # keep granules listed by earlier arms
+  old <- read_tbl(man_out, colClasses = "character") |>
+    transmute(granule, opendap_url, mid_utc = ymd_hms(mid_utc),
+              cluster = if ("cluster" %in% names(read_tbl(man_out, nrows = 1))) cluster else NA_character_)
+  manifest_all <- bind_rows(manifest_all, old) |> distinct(granule, .keep_all = TRUE)
+}
+data.table::fwrite(manifest_all, man_out)
 
 # ---- 5. combine the cell files ----------------------------------------------
-files <- list.files(cells_dir, pattern = "\\.csv$", recursive = TRUE, full.names = TRUE)
+files <- list.files(cells_root, pattern = "\\.csv$", recursive = TRUE, full.names = TRUE)
 files <- files[!str_detect(basename(files), "^_sites")]
 id_cols <- c("granule", "scan_start_utc", "site")
 cells <- data.table::rbindlist(
@@ -277,9 +290,10 @@ cells <- data.table::rbindlist(
 for (col in setdiff(names(cells), id_cols)) {
   data.table::set(cells, j = col, value = suppressWarnings(as.numeric(as.character(cells[[col]]))))
 }
+cells <- unique(cells, by = c("granule", "site", "di", "dj"))   # a site can appear in two arms
 out <- file.path(P$processed, "aqs_tempo_site_cells.csv.gz")
 data.table::fwrite(cells, out)
-log_msg("Wrote ", nrow(cells), " cell rows from ", length(files), " cached scans to ", out)
+log_msg("Wrote ", nrow(cells), " cell rows from ", length(files), " cached scan files (all arms) to ", out)
 log_msg("Total ", nrow(manifest_all), " cluster-scans over ", length(manifests), " clusters; ",
         done_granules, " extracted in this run; ",
         sprintf("%.1f", as.numeric(difftime(Sys.time(), t_start, units = "mins"))), " min elapsed")

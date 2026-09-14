@@ -106,11 +106,13 @@ CFG <- list(
   aqs_cluster_deg_lat = 1.25,
   aqs_cluster_deg_lon = 2.5,
   aqs_scans_per_day_guess = 13,              # daylight TEMPO scans, for the cost estimate
-  # step 12: which national samples get TEMPO subsets. The sub-daily sites are
-  # the smaller job and the more informative one, so they run first; switch to
-  # "24 h" (or list all three) for the rest.
+  # step 12: which national samples get TEMPO subsets. The sub-daily sites
+  # ("3 h", "8 h") were extracted on 12 Sept 2026 and are cached per duration
+  # set, so this now covers the 24-h sites; set it back to c("3 h", "8 h") only
+  # if those need re-extracting. Step 13 always analyses every site that has
+  # cells, whichever arm they came from.
   run_aqs_tempo = FALSE,                     # step 12 is long: switch it on deliberately
-  aqs_arm_durations = c("3 h", "8 h"),
+  aqs_arm_durations = c("24 h"),
   aqs_lag_pad_h = 3,                         # hours kept on each side of a sample window
   aqs_max_clusters = NA,                     # test mode: only the first N clusters
   # step 13: lags (hours) from each sampling window, as in the 3-h arm. The 24-h
