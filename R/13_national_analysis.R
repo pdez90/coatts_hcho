@@ -205,9 +205,24 @@ by_site <- use |>
   }) |>
   ungroup() |>
   arrange(duration_class, desc(pearson_r))
+# many site-level tests: report a Benjamini-Hochberg false-discovery-rate count
+# alongside the nominal one, so the significance counts are not read as 141
+# independent uncorrected tests
+by_site <- by_site |>
+  mutate(pearson_q = p.adjust(pearson_p, method = "BH"),
+         anom_pearson_q = if ("anom_pearson_p" %in% names(by_site))
+           p.adjust(anom_pearson_p, method = "BH") else NA_real_)
 data.table::fwrite(by_site, file.path(P$tables, "national_stats_by_site.csv"))
 log_msg("Sites with a significant whole-period correlation: ",
-        sum(by_site$pearson_p < 0.05, na.rm = TRUE), " of ", nrow(by_site))
+        sum(by_site$pearson_p < 0.05, na.rm = TRUE), " of ", nrow(by_site),
+        " at nominal p < 0.05; ", sum(by_site$pearson_q < 0.05, na.rm = TRUE),
+        " at Benjamini-Hochberg q < 0.05")
+if ("anom_pearson_p" %in% names(by_site)) {
+  log_msg("Sites with a significant day-to-day correlation: ",
+          sum(by_site$anom_pearson_p < 0.05, na.rm = TRUE), " of ",
+          sum(!is.na(by_site$anom_pearson_p)), " at nominal p < 0.05; ",
+          sum(by_site$anom_pearson_q < 0.05, na.rm = TRUE), " at BH q < 0.05")
+}
 if ("anom_pearson_r" %in% names(by_site)) {
   log_msg("Median within-month anomaly r across sites: ",
           round(median(by_site$anom_pearson_r, na.rm = TRUE), 2),
