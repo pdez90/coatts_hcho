@@ -123,6 +123,7 @@ CFG <- list(
   # test; both are cheap and read only what earlier steps already wrote.
   run_site_map = TRUE,
   run_clear_sky_bias = TRUE,
+  run_toc_graphic = TRUE,                     # step 16: the ES&T TOC/abstract graphic
   aqs_lags_h = c(-3, 0, 3, 6),
   aqs_base_url = "https://aqs.epa.gov/aqsweb/airdata/",
   aqs_param_hcho = "43502",                  # AQS parameter code for formaldehyde

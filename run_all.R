@@ -31,6 +31,7 @@ main <- function() {
   aqs_t   <- isTRUE(cfg_env$CFG$run_aqs_tempo)
   map_fig   <- isTRUE(cfg_env$CFG$run_site_map)
   clear_sky <- isTRUE(cfg_env$CFG$run_clear_sky_bias)
+  toc_fig   <- isTRUE(cfg_env$CFG$run_toc_graphic)
   aqs_a   <- isTRUE(cfg_env$CFG$run_aqs_analysis) &&
              file.exists(file.path("data", "processed", "aqs_tempo_site_cells.csv.gz"))
 
@@ -53,6 +54,7 @@ main <- function() {
   add("R/13_national_analysis.R", "coatts", aqs_a)
   add("R/14_site_map.R",        "coatts", map_fig)
   add("R/15_clear_sky_bias.R",  "coatts", clear_sky)
+  add("R/16_toc_graphic.R",     "coatts", toc_fig)
 
   for (k in seq_len(nrow(steps))) {
     s <- steps$script[k]; arm <- steps$arm[k]

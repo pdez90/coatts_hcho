@@ -17,7 +17,7 @@ module.exports = {
 
   authors: ["[[Author list, affiliations and corresponding author to be completed.]]"],
 
-  tocNote: "[[TOC/abstract graphic required by ES&T - to be supplied. Suggested: the Figure 1 map of site-level day-to-day correlation, cropped to CONUS, with a one-line caption.]]",
+  tocNote: "[[TOC/abstract graphic not yet built. Run Rscript R/16_toc_graphic.R, which writes output/figures/toc_graphic.tiff (300 dpi, 3.25 x 1.75 in, for submission) and toc_graphic.png (embedded here on the next build).]]",
 
   keywords: ["formaldehyde", "TEMPO", "satellite validation", "air toxics monitoring", "hazardous air pollutants", "geostationary remote sensing"],
 

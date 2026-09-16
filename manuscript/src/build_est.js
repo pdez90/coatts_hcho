@@ -162,7 +162,20 @@ if (C.notes && C.notes.length) {
 }
 main.push(new Paragraph({ alignment: AlignmentType.LEFT, spacing: { after: 240 }, children: runs(C.title, { bold: true, size: 30 }) }));
 C.authors.forEach(a => main.push(P(a)));
-main.push(new Paragraph({ children: runs(C.tocNote, { size: 20 }), spacing: { after: 200 } }));
+// TOC graphic: embed it once R/16_toc_graphic.R has produced it, at the 3.25 in
+// width ACS specifies, so what the reviewer sees is the size it will be used at.
+const tocFile = FIG + "toc_graphic.png";
+if (fs.existsSync(tocFile)) {
+  const px = pngSize(tocFile);
+  const w = Math.round(3.25 * 96), h = Math.round(w * px.h / px.w);
+  main.push(new Paragraph({ children: runs("For Table of Contents use only", { size: 20, bold: true }), spacing: { before: 120, after: 60 } }));
+  main.push(new Paragraph({ alignment: AlignmentType.LEFT, spacing: { after: 60 },
+    children: [new ImageRun({ type: "png", data: fs.readFileSync(tocFile), transformation: { width: w, height: h },
+      altText: { title: "TOC graphic", description: "Day-to-day agreement between TEMPO HCHO columns and surface monitors", name: "toc_graphic.png" } })] }));
+  main.push(new Paragraph({ children: runs("Submitted separately as toc_graphic.tiff (300 dpi, 3.25 × 1.75 in).", { size: 18 }), spacing: { after: 200 } }));
+} else {
+  main.push(new Paragraph({ children: runs(C.tocNote, { size: 20 }), spacing: { after: 200 } }));
+}
 main.push(H1("Abstract"));
 C.abstract.forEach(t => main.push(P(t)));
 main.push(P("Keywords: " + C.keywords.join("; ")));
