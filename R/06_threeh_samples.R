@@ -106,6 +106,93 @@ parsed <- pmap(select(files, file, site, layout, path), function(file, site, lay
 }) |> list_rbind()
 if (is.null(parsed) || !nrow(parsed)) stop("No 3-h formaldehyde rows parsed.")
 
+# ---- 2b. 2023 samples from AQS ------------------------------------------------
+# The CDPHE packets begin in 2024. AQS holds 2023 for these sites WITH the sample
+# start time attached, which the 2023 ozone-precursor summary workbook does not
+# carry, so AQS is the source and the workbook is only a cross-check
+# (R/check_2023_workbook.R). TEMPO granules begin in August 2023, and
+# CFG$date_range makes that cut below. Chatfield reported no 2023 formaldehyde to
+# AQS; the loop handles either site being absent.
+if (isTRUE(CFG$threeh_include_2023_aqs)) {
+  aqs_email <- Sys.getenv("AQS_EMAIL"); aqs_key <- Sys.getenv("AQS_KEY")
+  sites_2023 <- tibble::tribble(
+    ~site,  ~state, ~county, ~site_no,
+    "CHCO", "08",   "035",   "0004",
+    "PVCO", "08",   "123",   "0008")
+  cache_dir <- file.path(P$raw_aqs, "samples")
+  dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
+
+  fetch_aqs_year <- function(site, state, county, site_no) {
+    f <- file.path(cache_dir, sprintf("check%d_%s.csv.gz", CFG$threeh_aqs_year, site))
+    if (file.exists(f)) { log_msg("  ", site, " ", CFG$threeh_aqs_year, ": cached"); return(read_tbl(f, colClasses = "character")) }
+    if (!nzchar(aqs_email) || !nzchar(aqs_key)) {
+      stop("AQS_EMAIL and AQS_KEY are needed to fetch ", CFG$threeh_aqs_year, " for ", site)
+    }
+    req <- public_request("https://aqs.epa.gov/data/api/sampleData/bySite") |>
+      httr2::req_url_query(email = aqs_email, key = aqs_key, param = CFG$aqs_param_hcho,
+                           bdate = sprintf("%d0101", CFG$threeh_aqs_year),
+                           edate = sprintf("%d1231", CFG$threeh_aqs_year),
+                           state = state, county = county, site = site_no) |>
+      httr2::req_timeout(300)
+    j <- httr2::resp_body_json(httr2::req_perform(req), simplifyVector = TRUE)
+    Sys.sleep(CFG$aqs_api_pause_s)
+    d <- if (is.null(j$Data) || !length(j$Data)) tibble() else tibble::as_tibble(j$Data)
+    if (!nrow(d)) { log_msg("  ", site, " ", CFG$threeh_aqs_year, ": no formaldehyde in AQS"); return(NULL) }
+    d <- mutate(d, across(everything(), as.character))
+    data.table::fwrite(d, f)
+    d
+  }
+
+  null_codes <- CFG$aqs_null_qualifiers_fallback
+  has_null_qualifier <- function(q) {
+    vapply(str_split(coalesce(q, ""), ","), function(parts) {
+      codes <- str_trim(str_replace(str_trim(parts), "\\s*-.*$", ""))
+      any(codes %in% null_codes)
+    }, logical(1))
+  }
+
+  aqs23 <- pmap(sites_2023, function(site, state, county, site_no) {
+    d <- tryCatch(fetch_aqs_year(site, state, county, site_no),
+                  error = function(e) { warning("AQS ", site, ": ", conditionMessage(e)); NULL })
+    if (is.null(d) || !nrow(d)) return(NULL)
+    mutate(d, site = site)
+  }) |> list_rbind()
+
+  if (!is.null(aqs23) && nrow(aqs23)) {
+    keep <- aqs23 |>
+      mutate(value_ppb = suppressWarnings(as.numeric(sample_measurement)),
+             dur_h = suppressWarnings(as.numeric(str_extract(sample_duration, "\\d+")))) |>
+      filter(!is.na(value_ppb), !is.na(dur_h),
+             abs(dur_h * 3600 - CFG$threeh_duration_s) < 1,
+             str_detect(units_of_measure, regex("billion", ignore_case = TRUE)),
+             !has_null_qualifier(qualifier))
+    log_msg("  AQS ", CFG$threeh_aqs_year, ": ", nrow(keep), " ambient 3-h formaldehyde samples of ",
+            nrow(aqs23), " rows returned")
+    if (nrow(keep)) {
+      # AQS reports these in parts per billion carbon, which for formaldehyde is
+      # parts per billion by volume; convert on the same standard-conditions
+      # convention the packets use, so the two years are on one scale.
+      add <- keep |>
+        # tz = "UTC" to match excel_or_text_datetime(), which reads the packets'
+        # naive stamps as UTC. Without it these are built in the session zone and
+        # bind_rows() re-renders them in the packets' zone, landing them at 15:00
+        # or 16:00 depending on daylight saving - which the unusual-stamp guard
+        # catches, but only after the samples have been silently excluded.
+        transmute(stamp_local = as.POSIXct(paste(date_local, "09:00:00"), tz = "UTC"),
+                  lat = suppressWarnings(as.numeric(latitude)),
+                  lon = suppressWarnings(as.numeric(longitude)),
+                  value = value_ppb * CFG$hcho_molar_mass / 24.45,
+                  duration_s = CFG$threeh_duration_s,
+                  qc_code = NA_integer_,
+                  flags = coalesce(qualifier, ""),
+                  site = site,
+                  source_file = paste0("AQS sampleData ", CFG$threeh_aqs_year))
+      parsed <- bind_rows(parsed, add)
+      log_msg("  added ", nrow(add), " rows from AQS before the ", format(CFG$date_range[1]), " cut")
+    }
+  }
+}
+
 site_names <- c(CHCO = "Littleton", PVCO = "Platteville")
 coords <- parsed |> filter(!is.na(lat), !is.na(lon)) |>
   group_by(site) |> summarise(lat = median(lat), lon = median(lon), .groups = "drop")

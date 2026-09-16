@@ -34,7 +34,10 @@ suppressPackageStartupMessages({
 CFG <- list(
   # Analysis period. Fixed so that packets CDPHE posts later (e.g. 2026) do
   # not silently change results. TEMPO V04 starts Aug 2023.
-  date_range = as.Date(c("2024-01-01", "2025-12-31")),
+  # The 3-h arm reaches back to TEMPO's first month of granules (August 2023)
+  # through AQS; the CDPHE packets and the national arm begin in 2024, so the
+  # earlier window simply yields no rows for them.
+  date_range = as.Date(c("2023-08-01", "2025-12-31")),
   # CDPHE revises packets "as data review and validation is completed".
   # FALSE = use files already in data/raw/coatts (reproducible);
   # TRUE  = download again and report files whose checksum changed.
@@ -87,6 +90,8 @@ CFG <- list(
   # 2024 wide packets for these sites have 09:00 stamps but no duration field.
   # CDPHE confirmed (Sept 2026) that they are the same 3-h samples.
   threeh_include_2024 = TRUE,
+  threeh_include_2023_aqs = TRUE,          # 2023 3-h samples from AQS (packets start 2024)
+  threeh_aqs_year = 2023L,
   # Two 2025 samples (CHCO and PVCO, 2025-06-12) are stamped 23:59 instead of
   # 09:00: qc_code 0, no qualifiers, on the regular 1-in-6-day schedule. Until
   # CDPHE confirms their timing they are kept in threeh_hcho.csv (flagged
