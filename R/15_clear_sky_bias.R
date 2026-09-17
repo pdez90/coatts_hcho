@@ -112,13 +112,22 @@ attribute <- function(cells_path, label, day_from, keep = NULL) {
                              colClasses = list(character = "site"),
                              showProgress = FALSE)
   cells <- cells[abs(di) <= 1L & abs(dj) <= 1L]
-  z <- function(x) data.table::fifelse(is.na(x), 0, as.numeric(x))  # missing passes
+  # The same missing-value semantics as helpers_screen.R: a present-but-missing
+  # ancillary value fails the cell. An earlier version here made a missing value
+  # pass, to mirror the pipeline as it then stood; the pipeline no longer works
+  # that way, and this routine produces manuscript-facing numbers (the share of
+  # screened-out days that relaxing cloud alone would rescue), so it must screen
+  # on the rule the analysis actually uses. The criteria are separate because the
+  # attribution needs to drop them one at a time, which hcho_screen_pass() cannot
+  # express; fread(select = cols) above fails loudly if a column is absent, so
+  # there is no availability branch to take here.
+  ok_of <- function(v, lim) !is.na(cells[[v]]) & cells[[v]] <= lim
   cells[, `:=`(
     ok_v = !is.na(vertical_column),
-    ok_q = z(main_data_quality_flag) <= CFG$qc_max_quality_flag,
-    ok_e = !is.na(eff_cloud_fraction) & eff_cloud_fraction <= CFG$qc_max_cloud_fraction,
-    ok_s = z(solar_zenith_angle) <= CFG$qc_max_sza,
-    ok_n = z(snow_ice_fraction)  <= CFG$qc_max_snow_ice)]
+    ok_q = ok_of("main_data_quality_flag", CFG$qc_max_quality_flag),
+    ok_e = ok_of("eff_cloud_fraction", CFG$qc_max_cloud_fraction),
+    ok_s = ok_of("solar_zenith_angle", CFG$qc_max_sza),
+    ok_n = ok_of("snow_ice_fraction",  CFG$qc_max_snow_ice))]
   per_scan <- cells[, .(n_cells = .N,
                         full    = sum(ok_v & ok_q & ok_e & ok_s & ok_n),
                         noCloud = sum(ok_v & ok_q & ok_s & ok_n),

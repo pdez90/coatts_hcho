@@ -40,10 +40,12 @@ for (col in setdiff(names(cells), c("granule", "scan_start_utc", "site"))) {
   x <- cells[[col]]
   if (!is.numeric(x) || inherits(x, "integer64")) cells[[col]] <- suppressWarnings(as.numeric(as.character(x)))
 }
-for (v in c("main_data_quality_flag", "eff_cloud_fraction", "snow_ice_fraction",
-            "solar_zenith_angle", "pbl_height", "vertical_column_uncertainty", "surface_pressure")) {
-  if (!v %in% names(cells)) cells[[v]] <- NA_real_
-}
+# Placeholders for absent ancillary columns are NOT created here. Creating them
+# before hcho_prepare_cells() runs would hide true schema absence from it: the
+# helper decides availability from names(cells), so a manufactured all-NA column
+# reads as "present but broken" and stops the run, instead of skipping an
+# unavailable criterion loudly as intended. The helper creates every placeholder
+# it needs, after it has recorded what the extraction actually carried.
 manifest <- read_tbl(man_path, colClasses = "character") |>
   transmute(granule, mid_utc = ymd_hms(mid_utc)) |>
   distinct(granule, .keep_all = TRUE)

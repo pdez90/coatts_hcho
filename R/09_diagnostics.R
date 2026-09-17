@@ -21,6 +21,7 @@
 # Outputs: output/tables/diag1_* ... diag6_*, output/figures/figS3_*, figS4_*
 # =============================================================================
 source("R/00_config.R")
+source("R/helpers_screen.R")   # one definition of the TEMPO cell screen
 source("R/helpers_stats.R")
 set.seed(42)
 nboot <- 2000L
@@ -44,12 +45,14 @@ read_cells <- function(path) {
     x <- cells[[col]]
     if (!is.numeric(x) || inherits(x, "integer64")) cells[[col]] <- suppressWarnings(as.numeric(as.character(x)))
   }
-  for (v in c("main_data_quality_flag", "eff_cloud_fraction", "snow_ice_fraction", "solar_zenith_angle",
-              "pbl_height", "vertical_column_uncertainty", "surface_pressure")) {
-    if (!v %in% names(cells)) cells[[v]] <- NA_real_
-  }
-  cells
+  # Availability, placeholders and the gap report come from helpers_screen.R, so
+  # this diagnostic screens on exactly the rule the analysis uses. QC_ABSENT is
+  # recorded for flag_cells() below.
+  prep <- hcho_prepare_cells(cells)
+  QC_ABSENT <<- prep$absent
+  prep$cells
 }
+QC_ABSENT <- character(0)
 read_manifest <- function(path) {
   read_tbl(path, colClasses = "character") |>
     transmute(sample_date = as.Date(sample_date), granule, mid_utc = ymd_hms(mid_utc),
@@ -58,13 +61,21 @@ read_manifest <- function(path) {
 }
 nan_to_na <- function(x) ifelse(is.nan(x), NA_real_, x)
 
-# Cell screening exactly as in steps 04 and 07, plus the reason(s) a cell fails
+# The same missing-value semantics as helpers_screen.R: a value that is present
+# but missing for this cell FAILS it, rather than passing as the most permissive
+# value the criterion allows. This cannot call hcho_screen_pass() directly
+# because the diagnostic reports which criterion failed, which that function
+# does not return - so the criteria are spelled out, and must stay in step with
+# it. A criterion whose variable the extraction does not carry is skipped, as
+# there.
 flag_cells <- function(d, max_ecf = CFG$qc_max_cloud_fraction) {
+  bad <- function(v, lim) if (v %in% QC_ABSENT) rep(FALSE, nrow(d)) else
+                          is.na(d[[v]]) | d[[v]] > lim
   d |>
-    mutate(fail_sza   = coalesce(solar_zenith_angle, 0) > CFG$qc_max_sza,
-           fail_snow  = coalesce(snow_ice_fraction, 0) > CFG$qc_max_snow_ice,
-           fail_qf    = is.na(vertical_column) | coalesce(main_data_quality_flag, 0) > CFG$qc_max_quality_flag,
-           fail_cloud = is.na(eff_cloud_fraction) | eff_cloud_fraction > max_ecf,
+    mutate(fail_sza   = bad("solar_zenith_angle", CFG$qc_max_sza),
+           fail_snow  = bad("snow_ice_fraction",  CFG$qc_max_snow_ice),
+           fail_qf    = is.na(vertical_column) | bad("main_data_quality_flag", CFG$qc_max_quality_flag),
+           fail_cloud = bad("eff_cloud_fraction", max_ecf),
            pass = !fail_sza & !fail_snow & !fail_qf & !fail_cloud)
 }
 # One row per granule x site: block mean of passing cells and screening shares

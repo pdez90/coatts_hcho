@@ -19,19 +19,15 @@ and figures — runs from R.
      Restart R afterwards. Tokens expire after 60 days.
    - Alternative: a `~/.netrc` with
      `machine urs.earthdata.nasa.gov login <user> password <password>`.
-3. **Pin package versions with renv** (recommended for reproducibility):
+3. **Restore the pinned package versions.** `renv.lock` is committed, so a
+   fresh clone reproduces the environment the analysis was run with:
    ```r
    setwd("~/HCHO")
    install.packages("renv")
-   renv::init()        # first time: creates renv.lock from this project's packages
-   # ... after a successful run:
-   renv::snapshot()    # records exact versions
-   # on another machine / later:
-   renv::restore()
+   renv::restore()     # installs the versions recorded in renv.lock
    ```
-   `renv.lock` is what actually pins the versions, so it belongs in the
-   repository — `renv::restore()` on another machine is only reproducible if the
-   lock file is committed. Without renv, `R/00_config.R` installs whatever CRAN
+   `renv::snapshot()` is only needed if you change the package set and want the
+   lock file to record it. Without renv, `R/00_config.R` installs whatever CRAN
    currently serves, which is convenient but not reproducible.
 
 ## Run
@@ -159,7 +155,10 @@ by default (`run_aqs_tempo`), and it reuses the grid layout cached by step 3, so
 run step 3 at least once first.
 
 `run_all.R` order: 01 → 02 → 03 → 04 (24-h data) → 06 → 02 → 03 (3-h data) →
-08 (smoke) → 05 → 07 (analyses) → 09 (diagnostics) → 10, 11 (national data).
+08 (smoke) → 05 → 07 (analyses) → 09 (diagnostics) → 10, 11 (national data) →
+12 (national TEMPO) → 13 (national analysis) → 14 (site map) → 15 (observability
+bias) → 16 (TOC graphic). One invocation schedules the whole chain on a fresh
+clone; steps 11–16 are skipped, with a message, when AQS credentials are absent.
 Turn parts off with `run_three_hour_arm`, `run_smoke_flags`, `run_diagnostics`,
 `run_aqs_inventory`, `run_aqs_samples` and `run_aqs_tempo` in `R/00_config.R`. Step 11 needs an
 AQS API key (`AQS_EMAIL`, `AQS_KEY` in `~/.Renviron`); without one `run_all.R`
