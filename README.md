@@ -149,9 +149,15 @@ Colorado samples. To get a key, run
 | 13 | `R/13_national_analysis.R` | Matches every national sample to its TEMPO scans (and to windows lagged from it), then reports coverage, correlations and within-month anomaly correlations by site, sample duration, lag and time of day, with a sensitivity table and three figures | `output/tables/national_*.csv`, `fig11_national_lag_curve.png`, `fig12_national_by_start_hour.png`, `fig13_national_site_map.png` |
 
 Step 12 is the long one. `aqs_arm_durations` names all three duration sets, so
-it covers every national site — about 58 boxes and roughly 85,000 OPeNDAP
-requests; expect many hours. It is off by default (`run_aqs_tempo = FALSE`), and
-it reuses the grid layout cached by step 3, so run step 3 at least once first.
+it covers every national site. Two different numbers describe its size and they
+are not in conflict: step 11 prints a **pre-flight estimate** — 58 clusters and
+roughly 85,000 requests, being every site that has samples times a
+scans-per-day guess (`aqs_scans_per_day_guess`) — while the extraction that
+produced the published outputs covered **50 clusters and 88,622 cluster-scans**
+(Text S3), because step 12 drops sites without coordinates or without granules
+and counts the scans it actually retrieves. Either way, expect many hours. It is
+off by default (`run_aqs_tempo = FALSE`), and it reuses the grid layout cached
+by step 3, so run step 3 at least once first.
 
 `run_all.R` order: 01 → 02 → 03 → 04 (24-h data) → 06 → 02 → 03 (3-h data) →
 08 (smoke) → 05 → 07 (analyses) → 09 (diagnostics) → 10, 11 (national data) →
