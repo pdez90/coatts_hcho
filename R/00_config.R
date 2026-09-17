@@ -111,13 +111,21 @@ CFG <- list(
   aqs_cluster_deg_lat = 1.25,
   aqs_cluster_deg_lon = 2.5,
   aqs_scans_per_day_guess = 13,              # daylight TEMPO scans, for the cost estimate
-  # step 12: which national samples get TEMPO subsets. The sub-daily sites
-  # ("3 h", "8 h") were extracted on 12 Sept 2026 and are cached per duration
-  # set, so this now covers the 24-h sites; set it back to c("3 h", "8 h") only
-  # if those need re-extracting. Step 13 always analyses every site that has
-  # cells, whichever arm they came from.
-  run_aqs_tempo = FALSE,                     # step 12 is long: switch it on deliberately
-  aqs_arm_durations = c("24 h"),
+  # step 12: which national samples get TEMPO subsets. This names the FULL set
+  # the published analysis covers, which is not how it was produced here: the
+  # sub-daily sites were extracted on 12 Sept 2026 under c("3 h", "8 h") and the
+  # 24 h sites afterwards under c("24 h"). Step 12 combines every cached cluster
+  # regardless of which duration set produced it, so this working copy already
+  # holds all three -- but a clean clone has no such caches, and with only some
+  # durations named it would extract only those and step 13 would analyse only
+  # those. Naming all three is what makes the committed configuration
+  # reproducible from nothing. Step 13 analyses every site that has cells.
+  #
+  # Re-enabling step 12 where per-arm caches already exist may clear clusters
+  # whose site list has changed and re-extract them: correct, but expensive.
+  # The caches here are complete, which is why step 12 is off.
+  run_aqs_tempo = FALSE,       # ~85,000 OPeNDAP requests: opt in deliberately
+  aqs_arm_durations = c("3 h", "8 h", "24 h"),
   aqs_lag_pad_h = 3,                         # hours kept on each side of a sample window
   aqs_max_clusters = NA,                     # test mode: only the first N clusters
   # step 13: lags (hours) from each sampling window, as in the 3-h arm. The 24-h

@@ -172,8 +172,9 @@ inv <- smoke |>
 data.table::fwrite(inv, file.path(P$tables, "smoke_inventory.csv"))
 
 # ---- 4b. sensitivity: what a strict overlap test would have given ------------
-# Widening each window by hms_time_pad_hours is a choice forced by the gap
-# between the HMS imagery periods, not a neutral default. The strict test it
+# Widening each window by hms_time_pad_hours is a precaution, not a neutral
+# default: HMS polygons are analyst delineations from discrete visible imagery,
+# so an hour no polygon covers is not thereby established as free of smoke. The strict test it
 # replaces is therefore reported rather than merely described, so a reader can
 # see how much the padding changes and judge it. This writes a table only; the
 # flags above, and every result that uses them, are unchanged.

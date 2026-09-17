@@ -77,9 +77,10 @@ for (a in unique(types$arm)) {
 # This mirrors the pipeline exactly rather than approximately, because a
 # diagnostic that screens or dates scans differently from the analysis it is
 # explaining invites the question it is meant to settle:
-#   * the cell test is screen_pass() of R/04 and scan_values() of R/13 - a cell
-#     needs a vertical column, and a MISSING flag, solar zenith angle or snow
-#     fraction passes (coalesce to 0) while a missing cloud fraction fails;
+#   * the cell test matches helpers_screen.R, which R/04, R/07, R/09 and R/13
+#     all use - a cell needs a vertical column, and a MISSING flag, solar zenith
+#     angle, snow fraction or cloud fraction FAILS it (an earlier version made
+#     the first three pass, mirroring the pipeline as it then stood);
 #   * a scan counts when n_pass >= pmax(1, ceiling(qc_min_cell_fraction*n_cells));
 #   * scans are assigned to sample days the way the pipeline assigns them -
 #     Colorado through tempo_manifest.csv, nationally by matching the scan's

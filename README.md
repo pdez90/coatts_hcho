@@ -148,17 +148,25 @@ Colorado samples. To get a key, run
 
 | 13 | `R/13_national_analysis.R` | Matches every national sample to its TEMPO scans (and to windows lagged from it), then reports coverage, correlations and within-month anomaly correlations by site, sample duration, lag and time of day, with a sensitivity table and three figures | `output/tables/national_*.csv`, `fig11_national_lag_curve.png`, `fig12_national_by_start_hour.png`, `fig13_national_site_map.png` |
 
-Step 12 is the long one. With the default `aqs_arm_durations = c("3 h", "8 h")`
-it covers 44 sites in about 28 boxes and roughly 25,000 OPeNDAP requests (expect
-a few hours); the 102 sites with 24-h samples are about the same again. It is off
-by default (`run_aqs_tempo`), and it reuses the grid layout cached by step 3, so
-run step 3 at least once first.
+Step 12 is the long one. `aqs_arm_durations` names all three duration sets, so
+it covers every national site — about 58 boxes and roughly 85,000 OPeNDAP
+requests; expect many hours. It is off by default (`run_aqs_tempo = FALSE`), and
+it reuses the grid layout cached by step 3, so run step 3 at least once first.
 
 `run_all.R` order: 01 → 02 → 03 → 04 (24-h data) → 06 → 02 → 03 (3-h data) →
 08 (smoke) → 05 → 07 (analyses) → 09 (diagnostics) → 10, 11 (national data) →
 12 (national TEMPO) → 13 (national analysis) → 14 (site map) → 15 (observability
-bias) → 16 (TOC graphic). One invocation schedules the whole chain on a fresh
-clone; steps 11–16 are skipped, with a message, when AQS credentials are absent.
+bias) → 16 (TOC graphic). Steps 11–16 are skipped, with a message, when AQS
+credentials are absent.
+
+**Reproducing the national arm from a clean clone takes one edit and one
+command, not one command.** Step 12 is off by default because it is a multi-hour
+download, so set `run_aqs_tempo = TRUE` in `R/00_config.R` first. With that flag
+on, a single `Rscript run_all.R` schedules 12 → 13 → 14–16 in the same
+invocation: each step is gated on its input being produced earlier in that run,
+not on a file that happened to exist at startup. Leave the flag off and
+everything except the national TEMPO extraction still runs end to end — the
+Colorado case study, the diagnostics, and the AQS inventory and sample pull.
 Turn parts off with `run_three_hour_arm`, `run_smoke_flags`, `run_diagnostics`,
 `run_aqs_inventory`, `run_aqs_samples` and `run_aqs_tempo` in `R/00_config.R`. Step 11 needs an
 AQS API key (`AQS_EMAIL`, `AQS_KEY` in `~/.Renviron`); without one `run_all.R`

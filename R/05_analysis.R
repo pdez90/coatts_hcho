@@ -71,8 +71,10 @@ if (requireNamespace("lme4", quietly = TRUE) && n_distinct(use$site) >= 3) {
 # ---- 2b. within-month anomalies (removes the shared seasonal cycle) -------------------
 # Both quantities peak in summer, so correlations over the year partly reflect
 # seasonality. Demeaning within each site x calendar month keeps only
-# day-to-day covariation. p-values ignore the degrees of freedom used by the
-# monthly means and are therefore optimistic.
+# day-to-day covariation. The ordinary Pearson p-values ignore the degrees of
+# freedom used by the monthly means and are therefore optimistic; both they and
+# the within-site-month permutation p-values are written, and the permutation
+# values are the ones the manuscript quotes.
 anom <- add_month_anomalies(use, CFG$min_days_per_site_month)
 anom_stats <- bind_rows(
   anomstats(anom) |> mutate(site = "all sites", .before = 1),
