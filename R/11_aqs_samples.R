@@ -177,8 +177,20 @@ print(inv |> group_by(duration_class) |> slice_head(n = 5) |>
         select(duration_class, site_id, site_name, state, samples, days, start_hours))
 
 # ---- 4. what the TEMPO extraction will cost --------------------------------------
-# sites are grouped into boxes; step 12 makes one OPeNDAP request per box and scan
+# Sites are grouped into boxes; step 12 makes one OPeNDAP request per box and
+# scan. The estimate covers what step 12 is CONFIGURED to extract, so it filters
+# to CFG$aqs_arm_durations the way step 12 does. Without that filter the figure
+# would be an upper bound across every duration in CFG$aqs_durations, which
+# includes "1 h". Today that is the same number - AQS holds no 1 h formaldehyde
+# at all, the PAMS hourly option being unused - so this changes nothing now and
+# keeps the estimate honest if a 1 h site ever appears.
+#
+# It is an estimate either way: step 12 drops sites without coordinates or
+# without granules, and counts the scans it actually retrieves rather than
+# aqs_scans_per_day_guess. The realised extraction was 50 clusters and 88,622
+# cluster-scans against the 58 and ~85,000 estimated here.
 clus <- samples |>
+  filter(duration_class %in% CFG$aqs_arm_durations) |>
   distinct(site_id, lat, lon, duration_class, sample_date_local) |>
   mutate(cluster = paste0("c", round(lat / CFG$aqs_cluster_deg_lat), "_",
                           round(lon / CFG$aqs_cluster_deg_lon)))
