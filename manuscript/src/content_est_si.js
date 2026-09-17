@@ -65,9 +65,9 @@ module.exports = {
     { h1: "S8. Colorado case-study results", p: [
       "Availability. Of the 453 site-days with valid 24 h samples, 338 (74.6 %) had at least one valid TEMPO scan under the primary screening, and 15 had no TEMPO granules (Table S1). Coverage ranged from 63.6 % at La Salle to 85.4 % at Grand Junction, with a median of 4-5 valid scans per sample day at all sites except Wheat Ridge (2). Coverage was lowest in winter: 52.1 % of December-February sample days were matched, against 76.7 % in spring, 90.2 % in summer and 81.1 % in autumn (Figure S5, Table S5).",
 
-      "Agreement. Surface HCHO and TEMPO columns followed the same seasonal cycle, with summer maxima at all sites with year-round records (Figure S6). Across all sites, daily mean columns correlated with surface HCHO at r = 0.56 (ρ = 0.57, n = 338; Table S2, Figure S7). The RMA slope was 0.39 (0.35-0.44) µg m^{-3} per 10^{15} molecules cm^{-2} with an intercept of 1.26 µg m^{-3}; median values were 2.66 µg m^{-3} at the surface and 3.50 × 10^{15} molecules cm^{-2} in the column. Correlations were significant at five sites, from 0.49 at Pueblo to 0.74 at La Salle and 0.83 at Cañon City, and not significant at Colorado Springs (0.29, n = 23) or Wheat Ridge (-0.13, n = 10). Within individual seasons pooled correlations were weaker: 0.24 in winter (p = 0.06), 0.21 in spring (p = 0.07), 0.26 in summer (p = 0.02) and 0.52 in autumn (p < 0.001). In the mixed-effects model with season effects the column coefficient was 0.140 ± 0.020 µg m^{-3} per 10^{15} molecules cm^{-2} (t = 7.1); with calendar-month effects it decreased to 0.096 ± 0.022 (t = 4.3), confirming that part of the whole-period association is seasonal.",
+      "Agreement. Surface HCHO and TEMPO columns followed the same seasonal cycle, with summer maxima at all sites with year-round records (Figure S6). Across all sites, daily mean columns correlated with surface HCHO at r = 0.56 (ρ = 0.57, n = 338; Table S2, Figure S7). The RMA slope was 0.39 (0.27-0.48) µg m^{-3} per 10^{15} molecules cm^{-2} with an intercept of 1.26 µg m^{-3}; median values were 2.66 µg m^{-3} at the surface and 3.50 × 10^{15} molecules cm^{-2} in the column. Correlations were significant at five sites, from 0.49 at Pueblo to 0.74 at La Salle and 0.83 at Cañon City, and not significant at Colorado Springs (0.29, n = 23) or Wheat Ridge (-0.13, n = 10). Within individual seasons pooled correlations were weaker: 0.24 in winter (p = 0.06), 0.21 in spring (p = 0.07), 0.26 in summer (p = 0.02) and 0.52 in autumn (p < 0.001). In the mixed-effects model with season effects the column coefficient was 0.140 ± 0.020 µg m^{-3} per 10^{15} molecules cm^{-2} (t = 7.1); with calendar-month effects it decreased to 0.096 ± 0.022 (t = 4.3), confirming that part of the whole-period association is seasonal.",
 
-      "After removing site and calendar-month means the pooled day-to-day correlation was 0.30 (n = 305 in 70 site-months, p = 0.0005; Figure S8), with an ordinary least squares slope of 0.098 µg m^{-3} per 10^{15} molecules cm^{-2}. Day-to-day agreement was strongest at La Salle (0.62, n = 56) and Commerce City (0.48, n = 74), both significant under the permutation test (p = 0.0005), and weaker at Grand Junction (0.21, n = 101). Neither Grand Junction (p = 0.10) nor Cañon City (0.55 on only 20 samples, p = 0.16) is significant once the estimation of the site-month means is accounted for, although both would be under the ordinary test; that gap is a caution about short records rather than a finding. At Colorado Springs, Pueblo and Wheat Ridge, where records cover at most six months, anomaly correlations were negative and not significant.",
+      "After removing site and calendar-month means the pooled day-to-day correlation was 0.30 (n = 305 in 70 site-months, p = 0.0005; Figure S8), with an ordinary least squares slope of 0.098 µg m^{-3} per 10^{15} molecules cm^{-2}. Day-to-day agreement was strongest at La Salle (0.62, n = 56) and Commerce City (0.48, n = 74), both significant under the permutation test (p = 0.001 and 0.0005 respectively), and weaker at Grand Junction (0.21, n = 101). Neither Grand Junction (p = 0.09) nor Cañon City (0.55 on only 20 samples, p = 0.15) is significant once the estimation of the site-month means is accounted for, although both would be under the ordinary test; that gap is a caution about short records rather than a finding. At Colorado Springs, Pueblo and Wheat Ridge, where records cover at most six months, anomaly correlations were negative and not significant.",
 
       "Sensitivity. Spatial averaging had the largest effect (Figure S2). With a cloud fraction threshold of 0.2 and all daylight scans, the pooled Pearson correlation increased from 0.47 for the single cell containing the site to 0.56 for a 3 × 3 block and 0.61 for a 5 × 5 block. Restricting scans to 10:00-14:00 MST lowered correlations for every block size (0.38, 0.50 and 0.59). Changing the cloud fraction threshold between 0.1 and 0.3 changed all-day correlations by at most 0.03 for a given block size, and midday correlations by up to 0.06, with the strictest threshold giving the highest values. The number of matched site-days ranged from 294 to 355 across these choices.",
 
@@ -75,7 +75,7 @@ module.exports = {
 
       "Three-hour samples. Under the primary screening, 54 of 114 samples at Chatfield State Park (47 %) and 54 of 117 at Platteville (46 %) had a valid scan inside the 06:00-09:00 MST sampling window, with a median of two scans per window (Table S4). Windows shifted later had better coverage: 63 % and 60 % for 09:00-12:00, and 45 % and 54 % for 12:00-15:00. No scan passed screening in the 03:00-06:00 window, and only seven Platteville samples in 15:00-18:00, because of the solar zenith angle limit. Inside the sampling window, 37 % of block cells failed the solar zenith angle criterion, against 4 % three hours later.",
 
-      "The two sites behave differently, and that difference is the result. At Chatfield State Park the sampling window carries almost no day-to-day information (within-month anomaly r = 0.01, n = 46) while the window three hours later carries a good deal (0.48, n = 63, p < 0.001) and the window after that little (0.24, n = 31, p = 0.25). At Platteville the same three windows give 0.25 (n = 43, p = 0.13), 0.16 (n = 58, p = 0.24) and -0.02 (n = 51, p = 0.92): none of them significant, and no advantage for the later window. Pooled over both sites the values are 0.14 (n = 89, p = 0.21), 0.32 (n = 121, p = 0.002) and 0.07 (n = 82, p = 0.60). Whole-period correlations show the same split: 0.22 and 0.57 at Chatfield, 0.48 and 0.36 at Platteville (Figures S11 and S12, Table S4).",
+      "The two sites behave differently, and that difference is the result. At Chatfield State Park the sampling window carries almost no day-to-day information (within-month anomaly r = 0.01, n = 46) while the window three hours later carries a good deal (0.48, n = 63, p = 0.001) and the window after that little (0.24, n = 31, p = 0.27). At Platteville the same three windows give 0.25 (n = 43, p = 0.14), 0.16 (n = 58, p = 0.22) and -0.02 (n = 51, p = 0.92): none of them significant, and no advantage for the later window. Pooled over both sites the values are 0.14 (n = 89, p = 0.20), 0.32 (n = 121, p = 0.0005) and 0.07 (n = 82, p = 0.60). Whole-period correlations show the same split: 0.22 and 0.57 at Chatfield, 0.48 and 0.36 at Platteville (Figures S11 and S12, Table S4).",
 
       "The 2023 extension adds samples at Platteville and none at Chatfield, and Platteville is the site whose ordering between the two windows differs, so we recomputed both sites on 2024-2025 alone (Table S6). Chatfield is unchanged, having no 2023 record. At Platteville the later window has no advantage in either period, which is what we claim; but the apparent preference for the sampling window is period-dependent. On 2024-2025 alone the two windows are indistinguishable (anomalies 0.26 on 32 samples against 0.28 on 45), whereas with 2023 the sampling window is nominally ahead (0.25 on 43 against 0.16 on 58). No Platteville anomaly correlation is significant in either period. We therefore claim only that Chatfield gains substantially from the later window and Platteville does not, and not that Platteville does better during sampling.",
 
@@ -104,30 +104,30 @@ module.exports = {
         ["Pueblo (POCO)", "08-101-0017", "Pueblo", "38.236", "−104.581", "Jul–Dec 2025", "30", "25", "2.51"],
         ["3 h COOPs ozone-precursor samples", "", "", "", "", "", "", "", ""],
         ["Chatfield State Park (CHCO)", "08-035-0004", "Douglas", "39.534", "−105.070", "Feb 2024–Dec 2025", "114", "54^{a}", "1.96 (2024), 2.92 (2025)"],
-        ["Platteville (PVCO)", "08-123-0008", "Weld", "40.209", "−104.824", "Jan 2024–Jul 2025", "92", "42^{a}", "2.66 (2024), 2.96 (2025)"]
+        ["Platteville (PVCO)", "08-123-0008", "Weld", "40.209", "−104.824", "Aug 2023–Jul 2025", "117", "54^{a}", "2.58 (2023), 2.66 (2024), 3.00 (2025)"]
       ],
       notes: "^{a} Matched samples with at least one screened TEMPO scan inside the 06:00-09:00 MST sampling window. Site names and AQS identifiers are as recorded in AQS."
     }},
 
     { table: {
-      caption: "Table S2. Agreement between daily mean TEMPO HCHO columns and 24 h surface HCHO by Colorado site (primary screening). RMA slopes (µg m^{-3} per 10^{15} molecules cm^{-2}, bootstrap 95 % confidence interval) are shown where the Pearson correlation is significant. Anomalies are deviations from site and calendar-month means (site-months with ≥ 3 samples).",
+      caption: "Table S2. Agreement between daily mean TEMPO HCHO columns and 24 h surface HCHO by Colorado site (primary screening). RMA slopes (µg m^{-3} per 10^{15} molecules cm^{-2}, bootstrap 95 % confidence interval) are given for every site; where r is near zero the sign of the slope is unstable and the interval spans zero, which is the informative signal rather than a reason to withhold it. The pooled interval resamples sites; site intervals resample that site's own samples and are descriptive. Anomalies are deviations from site and calendar-month means (site-months with ≥ 3 samples).",
       header: ["Site", "n", "r", "ρ", "RMA slope", "Anomaly n", "Anomaly r"],
       widths: [2400, 800, 900, 900, 1826, 1100, 1100],
       rows: [
-        ["Grand Junction", "105", "0.53", "0.51", "0.34 (0.27–0.43)", "101", "0.21"],
-        ["Cañon City", "21", "0.83", "0.71", "0.43 (0.33–0.60)", "20", "0.55"],
-        ["Wheat Ridge", "10", "−0.13^{*}", "0.09^{*}", "–", "8", "−0.41^{*}"],
+        ["Grand Junction", "105", "0.53", "0.51", "0.34 (0.27–0.43)", "101", "0.21^{*}"],
+        ["Cañon City", "21", "0.83", "0.71", "0.43 (0.33–0.60)", "20", "0.55^{*}"],
+        ["Wheat Ridge", "10", "−0.13^{*}", "0.09^{*}", "−0.31 (−0.48 to 0.77)", "8", "−0.41^{*}"],
         ["Commerce City", "84", "0.63", "0.60", "0.45 (0.39–0.53)", "74", "0.48"],
-        ["Colorado Springs", "23", "0.29^{*}", "0.41^{*}", "–", "23", "−0.24^{*}"],
+        ["Colorado Springs", "23", "0.29^{*}", "0.41^{*}", "0.15 (−0.13 to 0.23)", "23", "−0.24^{*}"],
         ["La Salle", "70", "0.74", "0.76", "0.31 (0.25–0.38)", "56", "0.62"],
         ["Pueblo", "25", "0.49", "0.58", "0.28 (0.20–0.38)", "23", "−0.23^{*}"],
-        ["All sites", "338", "0.56", "0.57", "0.39 (0.35–0.44)", "305", "0.30"]
+        ["All sites", "338", "0.56", "0.57", "0.39 (0.27–0.48)", "305", "0.30"]
       ],
-      notes: "^{*} Not significant (p ≥ 0.05). Anomaly p-values are optimistic (Supporting text S4)."
+      notes: "^{*} Not significant (p ≥ 0.05): whole-period values use the ordinary correlation test, anomalies the within-site-month permutation test (Supporting text S4)."
     }},
 
     { table: {
-      caption: "Table S3. Site-level correlations reaching nominal and false-discovery-rate significance, by sample duration. Counts are over site-duration combinations with at least 10 matched samples, at the primary screening and with scans inside the sampling window. The Benjamini-Hochberg correction is applied across all 141 tests in each family. Whole-period counts use the ordinary correlation test; day-to-day counts use the within-site-month permutation test (Text S3), which is the stricter of the two - the ordinary test applied to the same anomalies would give 103 and 102 rather than 96 and 93. These counts are reported for completeness; the distribution of the correlations themselves is more informative, and no conclusion in the paper depends on a count.",
+      caption: "Table S3. Site-level correlations reaching nominal and false-discovery-rate significance, by sample duration. Counts are over site-duration combinations with at least 10 matched samples, at the primary screening and with scans inside the sampling window. The Benjamini-Hochberg correction is applied across all 141 tests in each family. Whole-period counts use the ordinary correlation test; day-to-day counts use the within-site-month permutation test (Text S4), which is the stricter of the two - the ordinary test applied to the same anomalies would give 103 and 102 rather than 96 and 93. These counts are reported for completeness; the distribution of the correlations themselves is more informative, and no conclusion in the paper depends on a count.",
       header: ["Duration", "Sites", "Whole period, p < 0.05", "Whole period, BH q < 0.05", "Day-to-day, p < 0.05", "Day-to-day, BH q < 0.05"],
       widths: [1300, 1100, 1700, 1700, 1600, 1626],
       rows: [
@@ -149,13 +149,13 @@ module.exports = {
         ["Pearson r, both sites", "0.35 (n = 108, p < 0.001)", "0.49 (n = 142, p < 0.001)", "0.18 (n = 114, p = 0.06)"],
         ["Pearson r, Chatfield State Park", "0.22 (n = 54, p = 0.10)", "0.57 (n = 72, p < 0.001)", "0.10 (n = 51, p = 0.48)"],
         ["Pearson r, Platteville", "0.48 (n = 54, p < 0.001)", "0.36 (n = 70, p = 0.002)", "0.23 (n = 63, p = 0.07)"],
-        ["Within-month anomaly r, both sites", "0.14 (n = 89, p = 0.21)", "0.32 (n = 121, p = 0.002)", "0.07 (n = 82, p = 0.60)"],
-        ["Within-month anomaly r, Chatfield State Park", "0.01 (n = 46, p = 0.97)", "0.48 (n = 63, p < 0.001)", "0.24 (n = 31, p = 0.25)"],
-        ["Within-month anomaly r, Platteville", "0.25 (n = 43, p = 0.13)", "0.16 (n = 58, p = 0.24)", "-0.02 (n = 51, p = 0.92)"],
+        ["Within-month anomaly r, both sites", "0.14 (n = 89, p = 0.20)", "0.32 (n = 121, p = 0.0005)", "0.07 (n = 82, p = 0.60)"],
+        ["Within-month anomaly r, Chatfield State Park", "0.01 (n = 46, p = 0.97)", "0.48 (n = 63, p = 0.001)", "0.24 (n = 31, p = 0.27)"],
+        ["Within-month anomaly r, Platteville", "0.25 (n = 43, p = 0.14)", "0.16 (n = 58, p = 0.22)", "-0.02 (n = 51, p = 0.92)"],
         ["Column coefficient with site and month effects", "0.033 ± 0.036 (p = 0.36)", "0.127 ± 0.036 (p < 0.001)", "-0.015 ± 0.030 (p = 0.62)"],
         ["Median H_{eff} / median TEMPO PBL height (km)", "0.99 / 0.47", "0.95 / 1.50", "0.94 / 2.21"]
       ],
-      notes: "Anomaly p-values are within-site-month permutation values (Text S3); the smallest attainable is 0.0005. Whole-period p-values are the ordinary parametric test. The -3 h window (03-06 MST) contained no usable scans; the +9 h window (15-18 MST) yielded seven Platteville samples and is not shown. The column coefficient is in µg m^{-3} per 10^{15} molecules cm^{-2}."
+      notes: "Anomaly p-values are within-site-month permutation values (Text S4); the smallest attainable is 0.0005. Whole-period p-values are the ordinary parametric test. The -3 h window (03-06 MST) contained no usable scans; the +9 h window (15-18 MST) yielded seven Platteville samples and is not shown. The column coefficient is in µg m^{-3} per 10^{15} molecules cm^{-2}."
     }},
 
     { table: {
@@ -182,11 +182,11 @@ module.exports = {
       rows: [
         ["Platteville, whole-period r, 2024-2025 only", "0.55 (n = 42)", "0.46 (n = 54)", "0.24 (n = 50)"],
         ["Platteville, whole-period r, with 2023", "0.48 (n = 54)", "0.36 (n = 70)", "0.23 (n = 63)"],
-        ["Platteville, anomaly r, 2024-2025 only", "0.26 (n = 32, p = 0.20)", "0.28 (n = 45, p = 0.07)", "-0.11 (n = 40, p = 0.57)"],
-        ["Platteville, anomaly r, with 2023", "0.25 (n = 43, p = 0.13)", "0.16 (n = 58, p = 0.24)", "-0.02 (n = 51, p = 0.92)"],
-        ["Chatfield State Park, anomaly r (no 2023 record)", "0.01 (n = 46, p = 0.97)", "0.48 (n = 63, p < 0.001)", "0.24 (n = 31, p = 0.25)"]
+        ["Platteville, anomaly r, 2024-2025 only", "0.26 (n = 32, p = 0.21)", "0.28 (n = 45, p = 0.07)", "-0.11 (n = 40, p = 0.56)"],
+        ["Platteville, anomaly r, with 2023", "0.25 (n = 43, p = 0.14)", "0.16 (n = 58, p = 0.22)", "-0.02 (n = 51, p = 0.92)"],
+        ["Chatfield State Park, anomaly r (no 2023 record)", "0.01 (n = 46, p = 0.97)", "0.48 (n = 63, p = 0.001)", "0.24 (n = 31, p = 0.27)"]
       ],
-      notes: "Anomaly p-values are within-site-month permutation values (Text S3). The later window has no advantage at Platteville in either period, which is the claim made in the text; the apparent preference for the sampling window appears only once 2023 is included, and no Platteville anomaly correlation is significant in either period."
+      notes: "Anomaly p-values are within-site-month permutation values (Text S4). The later window has no advantage at Platteville in either period, which is the claim made in the text; the apparent preference for the sampling window appears only once 2023 is included, and no Platteville anomaly correlation is significant in either period."
     }},
 
     // ------------------------------------------------------------- figures

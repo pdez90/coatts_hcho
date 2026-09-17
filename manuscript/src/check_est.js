@@ -62,8 +62,11 @@ console.log("  reading " + tableFiles.length + " output tables from " + TABLE_DI
 
 const draftText = harvest(V19).join("  ");
 
-// numbers worth checking: decimals, and integers of three digits or more
-const NUM = /-?\d+\.\d+|\b\d{3,}\b/g;
+// Decimals, and integers of two digits or more. Two-digit integers matter:
+// Table S1 carried "92 samples, 42 matched" for Platteville through the 2023
+// extension because the old threshold of three digits never looked at them.
+// Years and section numbers are the cost, and they land in the review list.
+const NUM = /-?\d+\.\d+|\b\d{2,}\b/g;
 
 const ALLOW = new Set([
   "7000",   // the ES&T word limit, quoted in the drafting notes

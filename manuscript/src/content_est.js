@@ -61,13 +61,13 @@ module.exports = {
     ]},
 
     { table: {
-      caption: "Table 1. The national comparison by sample duration. Sites and samples are those reported to AQS for 2024-2025; matched counts and correlations use the primary screening (effective cloud fraction ≤ 0.2, 3 × 3 cell block) with scans inside the sampling window. Day-to-day correlations use deviations from site and calendar-month means. Median day-to-day r by site is computed over sites with at least 10 matched samples.",
+      caption: "Table 1. The national comparison by sample duration. Sites and samples are those reported to AQS for 2024-2025; matched counts and correlations use the primary screening (effective cloud fraction ≤ 0.2, 3 × 3 cell block) with scans inside the sampling window. Day-to-day correlations use deviations from site and calendar-month means. Median day-to-day r by site is computed over sites with at least 10 matched samples. Start hours are those covering most samples: 94 % of 24 h samples begin at 00 and the remainder at 23; 90 % of 8 h samples begin at 04, 12 or 20, the rest spread over nine other hours, chiefly at Rocky Flats, which changed schedule in mid-2025.",
       header: ["", "24 h", "8 h", "3 h"],
       widths: [3400, 1875, 1875, 1876],
       rows: [
         ["Sites (states)", "102 (30)", "40 (29)", "4 (2)"],
         ["Samples", "8730", "6972", "681"],
-        ["Window start hours (LST)", "00", "04, 12, 20", "05, 08, 12, 16, 23 (CA); 06 (CO)"],
+        ["Principal window start hours (LST)", "00", "04, 12, 20", "05, 08, 12, 16, 23 (CA); 06 (CO)"],
         ["Samples with a usable scan", "6106 (70 %)", "3509 (50 %)", "402 (59 %)"],
         ["Median usable scans per sample", "11", "6", "2"],
         ["Pearson r", "0.42", "0.33", "0.46"],

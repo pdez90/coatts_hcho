@@ -96,8 +96,41 @@ add_month_anomalies <- function(d, min_n) {
 # Strata of one cannot be permuted and are held fixed. add_month_anomalies()
 # already drops months below CFG$min_days_per_site_month, so this is a guard
 # rather than a common case.
-perm_anom_p <- function(d, nperm = 2000L) {
+# The seed is fixed INSIDE the function, and the caller's RNG state is restored
+# on exit. Each script sets seed 42 at the top, which makes a whole run
+# reproducible, but it does not make a single statistic reproducible: the same
+# data permuted at a different point in the stream gives a different p-value.
+# That showed up as Chatfield's +6 h anomaly carrying three different p-values
+# (0.261, 0.253, 0.272) in one run, because it is computed once in anomstats()
+# and twice more in the 2023 sensitivity, on identical rows. Seeding here makes
+# the p-value independent of where in the stream it is computed, the canonical
+# sort below makes it independent of row order, and restoring the state on exit
+# keeps the bootstrap draws elsewhere unchanged.
+perm_anom_p <- function(d, nperm = 2000L, seed = 42L) {
   if (!all(c("ym") %in% names(d))) return(NA_real_)
+  if (!is.null(seed)) {
+    if (exists(".Random.seed", envir = .GlobalEnv)) {
+      .old_seed <- get(".Random.seed", envir = .GlobalEnv)
+      on.exit(assign(".Random.seed", .old_seed, envir = .GlobalEnv), add = TRUE)
+    } else {
+      on.exit(suppressWarnings(rm(".Random.seed", envir = .GlobalEnv)), add = TRUE)
+    }
+    set.seed(seed)
+  }
+  # Canonical row order before permuting. Seeding alone makes the result
+  # independent of the global RNG stream, but not of row order: split() and the
+  # within-stratum shuffle both key off the order rows arrive in, so the same
+  # observations delivered differently sorted would pair differently and give a
+  # different p-value. Sorting here is what lets the p-value be called a
+  # function of the data alone. The anomalies are included in the key so that
+  # duplicate (site, month, date) rows, if any ever occur, still order stably.
+  ord_key <- if (all(c("site", "sample_date") %in% names(d)))
+               order(d$site, d$ym, d$sample_date, d$column_anom, d$surface_anom)
+             else if ("sample_date" %in% names(d))
+               order(d$ym, d$sample_date, d$column_anom, d$surface_anom)
+             else order(d$ym, d$column_anom, d$surface_anom)
+  d <- d[ord_key, , drop = FALSE]
+
   strat <- if ("site" %in% names(d)) paste(d$site, d$ym) else as.character(d$ym)
   idx <- split(seq_len(nrow(d)), strat)
   idx <- idx[lengths(idx) > 1L]
