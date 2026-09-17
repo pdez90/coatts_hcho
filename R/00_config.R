@@ -157,10 +157,15 @@ CFG <- list(
   # ---- smoke flags: NOAA Hazard Mapping System smoke polygons ----
   run_smoke_flags = TRUE,
   hms_base_url = "https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Smoke_Polygons/Shapefile",
-  # HMS polygon Start-End times are the imagery periods analysts used, which
-  # cluster around ~11-15 UTC and ~18-24 UTC. A strict overlap test therefore
-  # misses mid-morning MST windows (09-12 MST = 16-19 UTC) even on smoky days.
-  # Windows are widened by this many hours on each side before the test.
+  # HMS polygons are analyst delineations from discrete visible imagery, whose
+  # Start-End intervals cluster around ~11-15 UTC and ~18-24 UTC, so an hour not
+  # covered by a polygon is not thereby established as free of smoke. Windows are
+  # widened by this many hours on each side before the overlap test as a
+  # precaution. It makes almost no difference: strict overlap flags 39 of the 233
+  # 3 h windows against 41, and the 453 24 h windows identically
+  # (output/tables/smoke_pad_sensitivity.csv). An earlier comment here justified
+  # the padding by a 09-12 MST gap, which applied only while 09:00 was wrongly
+  # read as the sample START; the window is 06-09 MST = 13-16 UTC.
   hms_time_pad_hours = 3,
 
   # TEMPO formaldehyde Level 3, version 4 (0.02 deg, hourly scans)

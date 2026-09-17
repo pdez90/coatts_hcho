@@ -17,6 +17,7 @@
 #          fig10_threeh_lag_curve.png
 # =============================================================================
 source("R/00_config.R")
+source("R/helpers_screen.R")   # one definition of the TEMPO cell screen
 source("R/helpers_stats.R")
 set.seed(42)
 A3 <- arm_paths("threeh")
@@ -60,21 +61,23 @@ lag_label <- function(l) factor(l, levels = lag_levels,
                                                 vapply(lag_levels, lag_clock, character(1))))
 
 # ---- screening and scan-level values (as in step 04) -------------------------
+# The screen, the criterion availability and the gap report come from
+# helpers_screen.R, the same definition step 04 uses.
+.prep <- hcho_prepare_cells(cells)
+cells <- .prep$cells
+QC_ABSENT <- .prep$absent
+
 scan_values <- function(max_ecf, block) {
   cells |>
     filter(abs(di) <= block, abs(dj) <= block) |>
-    mutate(pass = !is.na(vertical_column) &
-             coalesce(main_data_quality_flag, 0) <= CFG$qc_max_quality_flag &
-             !is.na(eff_cloud_fraction) & eff_cloud_fraction <= max_ecf &
-             coalesce(solar_zenith_angle, 0) <= CFG$qc_max_sza &
-             coalesce(snow_ice_fraction, 0) <= CFG$qc_max_snow_ice) |>
+    mutate(pass = hcho_screen_pass(pick(everything()), max_ecf, QC_ABSENT)) |>
     group_by(granule, site) |>
     summarise(n_cells = n(), n_pass = sum(pass),
               vc  = if (any(pass)) mean(vertical_column[pass]) else NA_real_,
               pbl = if (any(pass)) mean(pbl_height[pass], na.rm = TRUE) else NA_real_,
               sp  = if (any(pass)) mean(surface_pressure[pass], na.rm = TRUE) else NA_real_,
               .groups = "drop") |>
-    mutate(valid = n_pass >= pmax(1, ceiling(CFG$qc_min_cell_fraction * n_cells))) |>
+    mutate(valid = hcho_scan_valid(n_pass, n_cells)) |>
     inner_join(manifest, by = "granule")
 }
 

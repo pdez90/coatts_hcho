@@ -11,11 +11,13 @@
 #   * the same by lag, so "when TEMPO looks relative to the sample" is measured
 #     on 44 sites instead of two
 # Scans are assigned by the hour containing their midpoint, as in steps 04 and 07;
-# sample windows start on the hour, so this is exact.
+# matching is hourly; nearly every sample window starts on the hour, and a
+# fractional start is binned into the hour it begins in and named in the log.
 # Outputs: data/processed/aqs_matched_*.csv.gz,
 #          output/tables/national_*.csv, output/figures/fig11-13_national_*.png
 # =============================================================================
 source("R/00_config.R")
+source("R/helpers_screen.R")   # one definition of the TEMPO cell screen
 source("R/helpers_stats.R")
 set.seed(42)
 
@@ -54,21 +56,23 @@ print(count(samples, duration_class, name = "samples"))
 # ---- 1. scan-level values (screening as in steps 04 and 07) -----------------
 hour_key <- function(t) as.integer(as.numeric(t) %/% 3600)      # UTC hour index
 
+# The screen, the criterion availability and the gap report come from
+# helpers_screen.R, the same definition step 04 uses.
+.prep <- hcho_prepare_cells(cells)
+cells <- .prep$cells
+QC_ABSENT <- .prep$absent
+
 scan_values <- function(max_ecf, block) {
   cells |>
     filter(abs(di) <= block, abs(dj) <= block) |>
-    mutate(pass = !is.na(vertical_column) &
-             coalesce(main_data_quality_flag, 0) <= CFG$qc_max_quality_flag &
-             !is.na(eff_cloud_fraction) & eff_cloud_fraction <= max_ecf &
-             coalesce(solar_zenith_angle, 0) <= CFG$qc_max_sza &
-             coalesce(snow_ice_fraction, 0) <= CFG$qc_max_snow_ice) |>
+    mutate(pass = hcho_screen_pass(pick(everything()), max_ecf, QC_ABSENT)) |>
     group_by(granule, site) |>
     summarise(n_cells = n(), n_pass = sum(pass),
               vc  = if (any(pass)) mean(vertical_column[pass]) else NA_real_,
               pbl = if (any(pass)) mean(pbl_height[pass], na.rm = TRUE) else NA_real_,
               sp  = if (any(pass)) mean(surface_pressure[pass], na.rm = TRUE) else NA_real_,
               .groups = "drop") |>
-    mutate(valid = n_pass >= pmax(1, ceiling(CFG$qc_min_cell_fraction * n_cells))) |>
+    mutate(valid = hcho_scan_valid(n_pass, n_cells)) |>
     inner_join(manifest, by = "granule") |>
     transmute(site, hour = hour_key(mid_utc), valid, vc, pbl, sp)
 }

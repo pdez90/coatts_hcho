@@ -103,7 +103,7 @@ To run one step of this arm by hand: `options(hcho.arm = "threeh"); source("R/03
 
 | Step | Script | What it does | Main output |
 |---|---|---|---|
-| 8 | `R/08_smoke_hms.R` | Downloads the daily HMS smoke polygon shapefiles for every sample day, finds polygons covering each site, and flags a sample when a covering polygon's Start–End time overlaps its sampling window (00–24 MST for 24-h; the 3-h window for each stamp convention), widened by `hms_time_pad_hours` (3 h) on each side because HMS times are the analysts' imagery periods, which cluster around 11–15 and 18–24 UTC and leave a 09–12 MST gap. `smoke_any_day` ignores times altogether. Density: none / light / medium-heavy. A day without an HMS file gets `hms_available = FALSE` and missing flags, not "no smoke". | `data/processed/smoke_flags.csv`, `output/tables/smoke_inventory.csv` |
+| 8 | `R/08_smoke_hms.R` | Downloads the daily HMS smoke polygon shapefiles for every sample day, finds polygons covering each site, and flags a sample when a covering polygon's Start–End time overlaps its sampling window (00–24 MST for 24-h; the 3-h window for each stamp convention), widened by `hms_time_pad_hours` (3 h) on each side because HMS polygons are analyst delineations from discrete visible imagery, so an hour with no covering polygon is not established as smoke-free. The widening changes two windows of 686 (`output/tables/smoke_pad_sensitivity.csv`). `smoke_any_day` ignores times altogether. Density: none / light / medium-heavy. A day without an HMS file gets `hms_available = FALSE` and missing flags, not "no smoke". | `data/processed/smoke_flags.csv`, `output/tables/smoke_inventory.csv` |
 
 Step 5 then adds `smoke_coverage.csv` (TEMPO data loss by smoke class), `smoke_by_season.csv`,
 `stats_by_smoke.csv`, `stats_within_month_anomalies_smoke_sensitivity.csv` and
@@ -220,12 +220,16 @@ Data provenance:
 ## Method notes and caveats
 
 - **Different quantities.** COATTS is a 24-h integrated surface concentration
-  (µg/m³, local conditions); TEMPO is a daytime tropospheric column. The daily
+  (µg/m³, reported at standard conditions, 25 °C and 1 atm); TEMPO is a daytime
+  tropospheric column. The daily
   TEMPO value is the mean of screened daytime scans, so the comparison tests
   day-to-day and seasonal covariation, not hour-level agreement.
 - **Effective mixing height.** `h_eff_km` = column ÷ surface number density.
-  Surface µg/m³ converts to molecules/cm³ without temperature or pressure.
-  Compared with TEMPO's `pbl_height` in `fig3`.
+  The reported µg/m³ is a standard-conditions mass concentration, so it is first
+  converted to a mixing ratio (χ = C × 24.45/M) and then to a number density at
+  the temperature and pressure of the sample, which is what makes `h_eff_km` a
+  height rather than a unit conversion. Compared with TEMPO's `pbl_height` in
+  `fig3`.
 - **Sampling.** COATTS is 1-in-6 days; Colorado Springs, Pueblo and Cañon City
   start mid-2025 and Wheat Ridge in October 2025, so their seasonal statistics are thin.
 - **Known TEMPO issues.** HCHO is provisional; published comparisons find it
@@ -250,11 +254,16 @@ Data provenance:
   whole-year correlations partly reflect the shared seasonal cycle.
   `stats_within_month_anomalies.csv` / `fig6` remove site-month means; the
   month-effects mixed model (`mixed_model_month_effects.csv`) does the same in a
-  regression. RMA slopes are left blank when the correlation is not significant.
-- **Reporting conditions.** Surface concentrations are assumed to be at local
-  temperature and pressure (the convention for AQS air toxics). If CDPHE reports
-  at standard conditions (25 °C, 1 atm), surface number densities are ~15 % too
-  high and `h_eff_km` ~15 % too low at Front Range elevations.
+  regression. RMA slopes and their intervals are reported for every group; the
+  figures draw a fitted line only where the correlation reaches p < 0.05, but the
+  tables withhold nothing. Anomaly p-values are within-site-month permutation
+  values, not the ordinary correlation test.
+- **Reporting conditions.** Settled, not assumed: CDPHE reports at standard
+  conditions (25 °C, 1 atm). Two independent checks agree - the packet value
+  against the AQS value for the same sample gives a ratio of 1.0019 over 438
+  pairs, and the 2023 precursor workbook against the analysis file gives 1.0020
+  over 25 days. Local-conditions reporting would have given ~0.88 at Platteville's
+  elevation, so the distinction is not subtle. The conversion in step 04 uses this.
 - **Coverage.** Every COATTS sample day appears in the matched tables; days with
   no TEMPO scan at all have `n_scans = 0`, days whose scans all failed screening
   have `usable = FALSE`.

@@ -51,13 +51,17 @@ main <- function() {
   map_fig   <- isTRUE(cfg_env$CFG$run_site_map)
   clear_sky <- isTRUE(cfg_env$CFG$run_clear_sky_bias)
   toc_fig   <- isTRUE(cfg_env$CFG$run_toc_graphic)
-  aqs_a   <- isTRUE(cfg_env$CFG$run_aqs_analysis) &&
-             file.exists(file.path("data", "processed", "aqs_tempo_site_cells.csv.gz"))
-  # Steps 12-16 all consume the national arm. Each is gated on its input either
-  # being produced by this run or already on disk from an earlier one, so a run
-  # without credentials skips them cleanly instead of failing on a missing file.
+  # Steps 12-16 all consume the national arm. Each is gated on its input being
+  # EITHER already on disk OR produced earlier in this same run, so that one
+  # invocation of run_all.R on a fresh clone schedules the whole chain. Gating
+  # only on file.exists() decided everything before any step executed, so step
+  # 12 could be scheduled to build the national cells while step 13 stayed off
+  # because those cells did not exist yet - and a second invocation was needed.
   aqs_t    <- aqs_t && (aqs_s ||
               file.exists(file.path("data", "processed", "aqs_hcho_samples.csv")))
+  aqs_a    <- isTRUE(cfg_env$CFG$run_aqs_analysis) &&
+              (aqs_t ||
+               file.exists(file.path("data", "processed", "aqs_tempo_site_cells.csv.gz")))
   nat_done <- aqs_a ||
               file.exists(file.path("data", "processed", "aqs_matched_primary.csv.gz"))
 

@@ -1,7 +1,7 @@
 // content_est_si.js - Supporting Information for the ES&T version.
 //
 // Everything moved out of the main text: the detailed data descriptions and
-// methods, the Colorado case-study results, and 14 figures and 5 tables.
+// methods, the Colorado case-study results, and 14 figures and 6 tables.
 // Numbering follows order of first citation in the main text:
 //   Figure S1        Methods, surface measurements
 //   Figures S2, S3   Methods, TEMPO matching (sensitivity)
@@ -15,7 +15,7 @@ module.exports = {
 
   authors: ["[[Author list to match the main text.]]"],
 
-  contents: "Contents: Supporting text S1-S7; Figures S1-S14; Tables S1-S5. 20 pages.",
+  contents: "Contents: Supporting text S1-S8; Figures S1-S14; Tables S1-S6. 20 pages.",
 
   sections: [
     { h1: "S1. Colorado case-study networks", p: [
