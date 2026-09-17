@@ -29,7 +29,10 @@ and figures — runs from R.
    # on another machine / later:
    renv::restore()
    ```
-   Without renv, `R/00_config.R` installs any missing packages from CRAN.
+   `renv.lock` is what actually pins the versions, so it belongs in the
+   repository — `renv::restore()` on another machine is only reproducible if the
+   lock file is committed. Without renv, `R/00_config.R` installs whatever CRAN
+   currently serves, which is convenient but not reproducible.
 
 ## Run
 
@@ -159,8 +162,9 @@ run step 3 at least once first.
 08 (smoke) → 05 → 07 (analyses) → 09 (diagnostics) → 10, 11 (national data).
 Turn parts off with `run_three_hour_arm`, `run_smoke_flags`, `run_diagnostics`,
 `run_aqs_inventory`, `run_aqs_samples` and `run_aqs_tempo` in `R/00_config.R`. Step 11 needs an
-AQS API key (`AQS_EMAIL`, `AQS_KEY` in `~/.Renviron`); without one it stops with
-instructions and the rest of the pipeline carries on.
+AQS API key (`AQS_EMAIL`, `AQS_KEY` in `~/.Renviron`); without one `run_all.R`
+reports that the national arm (steps 11-16) is being skipped and runs the
+Colorado case study (steps 01-09) normally.
 
 Every step caches what it has done. If step 3 is interrupted (it makes roughly
 one request per TEMPO scan, on the order of 2,000), run it again and it
@@ -171,7 +175,12 @@ the OPeNDAP server.
 
 All choices live in `CFG` in `R/00_config.R`:
 
-- `date_range` — fixed analysis period (default 2024-01-01 to 2025-12-31)
+- `date_range` — fixed analysis period (default 2023-08-01 to 2025-12-31, which
+  is when TEMPO granules begin). The 24-h and national analyses use 2024-2025;
+  only the 3-h arm reaches back to August 2023, and only at Platteville, which is
+  the one site that reported formaldehyde to AQS that year. Controlled by
+  `threeh_include_2023_aqs` / `threeh_aqs_year`; set the first to `FALSE` for a
+  strictly 2024-2025 run.
 - `coatts_refresh` — `FALSE` reuses downloaded packets; `TRUE` re-downloads and
   warns if CDPHE revised a file (checksums in `download_manifest.csv`)
 - `include_ozone_precursor_sites` — add the COOPs sites to the 24-h arm. Off by

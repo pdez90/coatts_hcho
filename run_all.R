@@ -23,17 +23,43 @@ main <- function() {
   note <- function(...) cat(paste0(...), "\n", sep = "", file = log_file, append = TRUE)
 
   cfg_env <- new.env(); source("R/00_config.R", local = cfg_env)
+
+  # Provenance is written now rather than after the last step: a run that stops
+  # early should still leave behind the configuration and session it was using.
+  jsonlite::write_json(cfg_env$CFG, file.path("logs", paste0("config_", stamp, ".json")),
+                       auto_unbox = TRUE, pretty = TRUE, digits = NA)
+  writeLines(capture.output(sessionInfo()), file.path("logs", paste0("sessionInfo_", stamp, ".txt")))
+
   three_h <- isTRUE(cfg_env$CFG$run_three_hour_arm)
   smoke   <- isTRUE(cfg_env$CFG$run_smoke_flags)
   diag    <- isTRUE(cfg_env$CFG$run_diagnostics)
   aqs     <- isTRUE(cfg_env$CFG$run_aqs_inventory)
   aqs_s   <- isTRUE(cfg_env$CFG$run_aqs_samples)
   aqs_t   <- isTRUE(cfg_env$CFG$run_aqs_tempo)
+
+  # Step 11 stops() without AQS credentials. That has to be decided here: the
+  # withCallingHandlers() below logs an error but does not catch it, so an
+  # uncredentialed step 11 would abort the whole run rather than be skipped.
+  has_aqs_key <- nzchar(Sys.getenv("AQS_EMAIL")) && nzchar(Sys.getenv("AQS_KEY"))
+  if (aqs_s && !has_aqs_key) {
+    message("\nAQS_EMAIL / AQS_KEY are not set, so the national arm (steps 11-16) is skipped.\n",
+            "  Sign up at https://aqs.epa.gov/data/api/signup and put both in ~/.Renviron.\n",
+            "  The Colorado case study (steps 01-09) runs normally.\n")
+    note("SKIPPED steps 11-16: no AQS credentials in the environment")
+    aqs_s <- FALSE
+  }
   map_fig   <- isTRUE(cfg_env$CFG$run_site_map)
   clear_sky <- isTRUE(cfg_env$CFG$run_clear_sky_bias)
   toc_fig   <- isTRUE(cfg_env$CFG$run_toc_graphic)
   aqs_a   <- isTRUE(cfg_env$CFG$run_aqs_analysis) &&
              file.exists(file.path("data", "processed", "aqs_tempo_site_cells.csv.gz"))
+  # Steps 12-16 all consume the national arm. Each is gated on its input either
+  # being produced by this run or already on disk from an earlier one, so a run
+  # without credentials skips them cleanly instead of failing on a missing file.
+  aqs_t    <- aqs_t && (aqs_s ||
+              file.exists(file.path("data", "processed", "aqs_hcho_samples.csv")))
+  nat_done <- aqs_a ||
+              file.exists(file.path("data", "processed", "aqs_matched_primary.csv.gz"))
 
   steps <- data.frame(script = character(), arm = character())
   add <- function(script, arm, when = TRUE) if (when) steps[nrow(steps) + 1, ] <<- list(script, arm)
@@ -52,9 +78,11 @@ main <- function() {
   add("R/11_aqs_samples.R",     "coatts", aqs_s)
   add("R/12_tempo_national.R",  "coatts", aqs_t)
   add("R/13_national_analysis.R", "coatts", aqs_a)
-  add("R/14_site_map.R",        "coatts", map_fig)
-  add("R/15_clear_sky_bias.R",  "coatts", clear_sky)
-  add("R/16_toc_graphic.R",     "coatts", toc_fig)
+  add("R/14_site_map.R",        "coatts", map_fig   && nat_done)
+  add("R/15_clear_sky_bias.R",  "coatts", clear_sky && nat_done)
+  add("R/16_toc_graphic.R",     "coatts", toc_fig   && nat_done)
+  if (!nat_done && (map_fig || clear_sky || toc_fig))
+    note("SKIPPED steps 14-16: the national arm has not been run")
 
   for (k in seq_len(nrow(steps))) {
     s <- steps$script[k]; arm <- steps$arm[k]
@@ -70,10 +98,7 @@ main <- function() {
     note("==== ", s, " finished in ", format(round(Sys.time() - t0, 1)), " ====")
   }
   options(hcho.arm = "coatts")
-
-  jsonlite::write_json(cfg_env$CFG, file.path("logs", paste0("config_", stamp, ".json")),
-                       auto_unbox = TRUE, pretty = TRUE, digits = NA)
-  writeLines(capture.output(sessionInfo()), file.path("logs", paste0("sessionInfo_", stamp, ".txt")))
-  message("\nAll steps complete. Log: ", log_file)
+  message("\nAll steps complete. Log: ", log_file,
+          "\nConfiguration and sessionInfo: logs/config_", stamp, ".json, logs/sessionInfo_", stamp, ".txt")
 }
 main()

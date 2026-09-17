@@ -142,7 +142,8 @@ print(coverage)
 # ---- relationship ------------------------------------------------------------------
 use <- filter(primary, usable)
 stats <- bind_rows(
-  use |> group_by(lag_h) |> group_modify(~ relstats(.x)) |> ungroup() |> mutate(site = "all sites"),
+  use |> group_by(lag_h) |> group_modify(~ relstats(.x, cluster = "site")) |> ungroup() |>
+    mutate(site = "all sites"),
   use |> group_by(lag_h, site) |> group_modify(~ relstats(.x)) |> ungroup()
 ) |>
   mutate(window = as.character(lag_label(lag_h))) |>
@@ -165,6 +166,40 @@ anom_stats <- map(lag_levels, function(l) {
   arrange(site, lag_h)
 data.table::fwrite(anom_stats, file.path(P$tables, "threeh_stats_within_month_anomalies.csv"))
 print(anom_stats)
+
+# ---- does 2023 create the site contrast, or sharpen one already there? --------
+# The 2023 extension is one-sided: it adds samples at Platteville and none at
+# Chatfield, and Platteville is the site whose result moved. A reader is
+# entitled to ask whether the difference between the two sites is an artefact of
+# the extra year. This recomputes both sites on 2024-2025 alone, so the answer
+# is in the record rather than in an assurance.
+if (isTRUE(CFG$threeh_include_2023_aqs)) {
+  since_2024 <- filter(use, sample_date >= as.Date("2024-01-01"))
+  period_stats <- function(d, label) {
+    whole <- d |> group_by(lag_h, site) |> group_modify(~ relstats(.x)) |> ungroup() |>
+      select(lag_h, site, n, pearson_r, pearson_p)
+    anom <- map(lag_levels, function(l) {
+      dd <- filter(d, lag_h == l)
+      if (nrow(dd) < 6) return(NULL)
+      an <- add_month_anomalies(dd, CFG$min_days_per_site_month)
+      if (!nrow(an)) return(NULL)
+      an |> group_by(site) |> group_modify(~ anomstats(.x)) |> ungroup() |> mutate(lag_h = l)
+    }) |> list_rbind()
+    if (!is.null(anom) && nrow(anom)) {
+      anom <- select(anom, lag_h, site, anom_n = n, anom_r = pearson_r,
+                     anom_p = pearson_p, anom_p_perm = pearson_p_perm)
+      whole <- left_join(whole, anom, by = c("lag_h", "site"))
+    }
+    mutate(whole, period = label, .before = 1)
+  }
+  sens_2023 <- bind_rows(period_stats(use, "2023-2025 (as analysed)"),
+                         period_stats(since_2024, "2024-2025 only")) |>
+    mutate(window = as.character(lag_label(lag_h)), .after = lag_h) |>
+    arrange(site, lag_h, period)
+  data.table::fwrite(sens_2023, file.path(P$tables, "threeh_2023_sensitivity.csv"))
+  log_msg("2023 sensitivity: both sites recomputed on 2024-2025 alone")
+  print(sens_2023)
+}
 
 # Pooled regression with site and month-of-year effects, per lag
 month_fx <- map(lag_levels, function(l) {
@@ -229,7 +264,7 @@ site_stats <- filter(stats, site != "all sites", !is.na(pearson_r)) |> mutate(wi
 if (nrow(use)) {
   p7 <- ggplot(mutate(use, window_f = lag_label(lag_h)), aes(tempo_vc_1e15, hcho_ugm3)) +
     geom_point(aes(colour = season), size = 1.5, alpha = 0.85) +
-    geom_abline(data = filter(site_stats, !is.na(rma_slope)),
+    geom_abline(data = filter(site_stats, !is.na(rma_slope), pearson_p < 0.05),
                 aes(slope = rma_slope, intercept = rma_intercept), linewidth = 0.6) +
     geom_text(data = site_stats, aes(x = -Inf, y = Inf,
               label = sprintf("n=%d  r=%.2f  %s=%.2f", n, pearson_r, U_RHO, spearman_rho)),
@@ -271,7 +306,10 @@ if (nrow(lag_curve)) {
                        labels = vapply(lag_levels, function(l) sub(":.*", "", lag_clock(l)), character(1))) +
     labs(x = paste0("Lag of the TEMPO window from the sampling window (0 = ", lag_clock(0), ")"),
          y = "Pearson r with 3-h surface HCHO", colour = NULL, shape = NULL,
-         title = "Agreement peaks three hours after the sample ends",
+         # Neutral by design: the figure should not assert where the maximum is.
+         # Where it falls is an empirical result that a screening change can move,
+         # and did - the 2023 extension split the two sites. The manuscript states it.
+         title = "TEMPO-surface agreement by lag from the 3-hour sampling window",
          subtitle = "Point labels are the number of matched samples") +
     theme(legend.position = "bottom")
   ggsave(file.path(P$figures, "fig10_threeh_lag_curve.png"), p10, width = 7, height = 4.6, dpi = 300)

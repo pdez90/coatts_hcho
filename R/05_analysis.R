@@ -35,9 +35,9 @@ print(coverage)
 
 # ---- 2. relationship by site, season, pooled ------------------------------------------
 by_site   <- use |> group_by(site, site_name) |> group_modify(~ relstats(.x)) |> ungroup()
-by_season <- use |> group_by(season) |> group_modify(~ relstats(.x)) |> ungroup()
+by_season <- use |> group_by(season) |> group_modify(~ relstats(.x, cluster = "site")) |> ungroup()
 by_site_season <- use |> group_by(site, season) |> group_modify(~ relstats(.x, nboot = 200)) |> ungroup()
-pooled    <- relstats(use) |> mutate(group = "all sites")
+pooled    <- relstats(use, cluster = "site") |> mutate(group = "all sites")
 data.table::fwrite(by_site, file.path(P$tables, "stats_by_site.csv"))
 data.table::fwrite(by_season, file.path(P$tables, "stats_by_season.csv"))
 data.table::fwrite(by_site_season, file.path(P$tables, "stats_by_site_season.csv"))
@@ -126,9 +126,10 @@ if (has_smoke) {
   print(smoke_season, n = Inf)
 
   smoke_stats <- bind_rows(
-    use_s |> group_by(smoke_class) |> group_modify(~ relstats(.x)) |> ungroup() |>
+    use_s |> group_by(smoke_class) |> group_modify(~ relstats(.x, cluster = "site")) |> ungroup() |>
       mutate(subset = "by smoke class"),
-    relstats(filter(use_s, smoke_any %in% FALSE)) |> mutate(subset = "all sites, smoke days excluded")
+    relstats(filter(use_s, smoke_any %in% FALSE), cluster = "site") |>
+      mutate(subset = "all sites, smoke days excluded")
   ) |> relocate(subset, smoke_class)
   data.table::fwrite(smoke_stats, file.path(P$tables, "stats_by_smoke.csv"))
   print(select(smoke_stats, subset, smoke_class, n, pearson_r, spearman_rho, median_h_eff_km))
@@ -173,7 +174,11 @@ p1 <- ggplot(ts, aes(sample_date, value)) +
 save_fig(p1, "fig1_timeseries.png", 3 + 2.2 * n_distinct(ts$site), 5)
 
 # 4b. scatter by site with RMA line
-rma_lines <- by_site |> filter(!is.na(rma_slope)) |> lab()
+# relstats() now returns every RMA slope; the figure still draws a line only
+# where the correlation supports reading one, because a slope at r ~ 0 is an
+# unstable sign rather than a relationship. The full set, with intervals, is in
+# stats_by_site.csv and the SI table.
+rma_lines <- by_site |> filter(!is.na(rma_slope), pearson_p < 0.05) |> lab()
 p2 <- ggplot(lab(use), aes(tempo_vc_1e15, hcho_ugm3)) +
   geom_point(aes(colour = season), size = 1.4, alpha = 0.8) +
   geom_abline(data = rma_lines, aes(slope = rma_slope, intercept = rma_intercept), linewidth = 0.6) +

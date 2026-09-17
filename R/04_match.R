@@ -39,11 +39,30 @@ if (length(dropped)) {
   coatts <- filter(coatts, site %in% sites_with_tempo)
 }
 
-# columns that may be missing depending on the collection version
-for (v in c("main_data_quality_flag", "eff_cloud_fraction", "snow_ice_fraction",
-            "solar_zenith_angle", "pbl_height", "vertical_column_uncertainty",
-            "surface_pressure")) {
+# Columns that may be missing depending on the collection version.
+#
+# Two different things look like a missing QC value, and they must not be
+# treated alike. If a collection does not carry a variable at all, it cannot be
+# screened on and the criterion has to be dropped - but loudly, because the
+# resulting screen is weaker than the one the methods describe. If a variable is
+# present but has no value for a particular cell, that is a gap in the ancillary
+# data, not evidence of good quality, and the cell must fail (see screen_pass).
+QC_VARS <- c("main_data_quality_flag", "eff_cloud_fraction",
+             "snow_ice_fraction", "solar_zenith_angle")
+for (v in c(QC_VARS, "pbl_height", "vertical_column_uncertainty", "surface_pressure")) {
   if (!v %in% names(cells)) cells[[v]] <- NA_real_
+}
+
+QC_ABSENT <- QC_VARS[vapply(QC_VARS, function(v) all(is.na(cells[[v]])), logical(1))]
+if (length(QC_ABSENT)) {
+  warning("QC variable(s) absent from this collection, NOT screened on: ",
+          paste(QC_ABSENT, collapse = ", "), call. = FALSE)
+  log_msg("*** The primary screen is WEAKER than documented: no value anywhere for ",
+          paste(QC_ABSENT, collapse = ", "), ". Report this with any result.")
+}
+for (v in setdiff(QC_VARS, QC_ABSENT)) {
+  n_gap <- sum(is.na(cells[[v]]) & !is.na(cells$vertical_column))
+  if (n_gap) log_msg("  ", v, ": ", n_gap, " cell(s) have a column but no QC value -> failed")
 }
 
 # Temperature for the number density: the packet's own met where the site and
@@ -61,12 +80,23 @@ variants <- expand_grid(max_ecf = c(0.1, 0.2, 0.3),
                         block = c(0L, 1L, 2L),         # 1x1, 3x3, 5x5
                         window = c("all_day", "midday"))
 
+# A cell passes only if every QC variable the collection provides is present and
+# within its limit. A missing value fails: the earlier coalesce(x, 0) turned an
+# absent quality flag into "good", an absent solar zenith angle into 0 deg and an
+# absent snow fraction into "no snow", all of which are the most permissive value
+# the criterion admits. Criteria in QC_ABSENT are skipped, having been reported
+# above, so that a collection lacking a variable degrades visibly rather than
+# rejecting every cell.
 screen_pass <- function(d, max_ecf) {
-  with(d, !is.na(vertical_column) &
-         coalesce(main_data_quality_flag, 0) <= CFG$qc_max_quality_flag &
-         !is.na(eff_cloud_fraction) & eff_cloud_fraction <= max_ecf &
-         coalesce(solar_zenith_angle, 0) <= CFG$qc_max_sza &
-         coalesce(snow_ice_fraction, 0) <= CFG$qc_max_snow_ice)
+  ok <- function(v, lim) {
+    if (v %in% QC_ABSENT) return(rep(TRUE, nrow(d)))
+    !is.na(d[[v]]) & d[[v]] <= lim
+  }
+  !is.na(d$vertical_column) &
+    ok("main_data_quality_flag", CFG$qc_max_quality_flag) &
+    ok("eff_cloud_fraction",     max_ecf) &
+    ok("solar_zenith_angle",     CFG$qc_max_sza) &
+    ok("snow_ice_fraction",      CFG$qc_max_snow_ice)
 }
 
 hourly_for <- function(max_ecf, block) {

@@ -123,7 +123,26 @@ matched <- pmap(variants, function(lag_h, max_ecf, block, block_label) {
          tempo_pbl_km = tempo_pbl_m / 1000,
          usable = !is.na(tempo_vc) & !is.na(hcho_ugm3),
          site = site_id,
-         window_start_hour = round(start_hour_local))
+         # Bin a sample by the clock hour its window begins in. floor(), not
+         # round(): the rule is declared rather than emergent, and it does not
+         # depend on R's round-half-to-even, which would send a 23:30 start to
+         # hour 24 and a 22:30 start to 22. The epsilon guards a whole hour
+         # stored as 11.999999.
+         window_start_hour = floor(start_hour_local + 1e-9))
+
+# Almost every AQS monitor reports whole-hour starts. Any that does not is named
+# in the log, so an off-schedule sample is binned visibly instead of silently.
+odd_hr <- with(matched, !is.na(start_hour_local) &
+                        abs(start_hour_local - round(start_hour_local)) > 1e-6)
+if (any(odd_hr)) {
+  od <- distinct(matched[odd_hr, c("site", "duration_class",
+                                   "start_hour_local", "window_start_hour")])
+  log_msg("  ", nrow(od), " site/start-hour combination(s) not on a whole hour, ",
+          "binned by the hour the window starts in:")
+  for (i in seq_len(nrow(od)))
+    log_msg("    ", od$site[i], " (", od$duration_class[i], "): ",
+            sprintf("%.2f -> %d", od$start_hour_local[i], od$window_start_hour[i]))
+}
 
 data.table::fwrite(matched, file.path(P$processed, "aqs_matched_variants.csv.gz"))
 primary <- filter(matched, max_ecf == CFG$qc_max_cloud_fraction, block == 1L)
@@ -158,7 +177,7 @@ anom_of <- function(d) {
 }
 stats_dl <- use |>
   group_by(duration_class, lag_h) |>
-  group_modify(~ relstats(.x)) |>
+  group_modify(~ relstats(.x, cluster = "site")) |>
   ungroup()
 anom_dl <- use |>
   group_by(duration_class, lag_h) |>
@@ -184,7 +203,7 @@ by_hour <- use |>
   filter(n() >= 12) |>
   group_modify(~ {
     an <- anom_of(.x)
-    bind_cols(relstats(.x),
+    bind_cols(relstats(.x, cluster = "site"),
               if (nrow(an) >= 6) rename_with(anomstats(an), ~ paste0("anom_", .x)) else tibble())
   }) |>
   ungroup() |>
