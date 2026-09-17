@@ -170,5 +170,58 @@ inv <- smoke |>
             smoke_any_day = sum(smoke_any_day, na.rm = TRUE),
             medium_heavy = sum(smoke_class == "medium/heavy", na.rm = TRUE), .groups = "drop")
 data.table::fwrite(inv, file.path(P$tables, "smoke_inventory.csv"))
+
+# ---- 4b. sensitivity: what a strict overlap test would have given ------------
+# Widening each window by hms_time_pad_hours is a choice forced by the gap
+# between the HMS imagery periods, not a neutral default. The strict test it
+# replaces is therefore reported rather than merely described, so a reader can
+# see how much the padding changes and judge it. This writes a table only; the
+# flags above, and every result that uses them, are unchanged.
+flag_with_pad <- function(pad_h) {
+  p_s <- pad_h * 3600
+  w <- windows |>
+    mutate(s_utc = win_start_utc - p_s, e_utc = win_end_utc + p_s,
+           day1 = as.Date(s_utc), day2 = as.Date(e_utc - 1),
+           hms_available = day1 %in% ok_days & day2 %in% ok_days,
+           wid = row_number())
+  ov <- w |>
+    select(wid, site, day1, day2, s_utc, e_utc) |>
+    inner_join(site_polys, by = "site", relationship = "many-to-many") |>
+    filter(hms_date >= day1, hms_date <= day2) |>
+    filter(is.na(start_utc) | is.na(end_utc) | (start_utc < e_utc & end_utc > s_utc)) |>
+    group_by(wid) |>
+    summarise(dens = if (all(is.na(density))) 1L else max(density, na.rm = TRUE),
+              .groups = "drop")
+  w |>
+    left_join(ov, by = "wid") |>
+    mutate(pad_hours = pad_h,
+           dens = ifelse(hms_available, coalesce(dens, 0L), NA_integer_),
+           flagged = dens > 0) |>
+    select(pad_hours, arm, site, sample_date, hms_available, flagged)
+}
+
+pad_levels <- sort(unique(c(0, CFG$hms_time_pad_hours)))
+pad_sens <- purrr::map(pad_levels, flag_with_pad) |> purrr::list_rbind()
+pad_summary <- pad_sens |>
+  group_by(arm, pad_hours) |>
+  # flagged_pct is computed BEFORE flagged is redefined as a count: summarise()
+  # evaluates its arguments in order and a later one sees the earlier result,
+  # so reusing the name here silently averaged the count instead of the column.
+  summarise(windows = n(), with_hms = sum(hms_available),
+            flagged_pct = round(100 * mean(flagged, na.rm = TRUE), 1),
+            flagged = sum(flagged, na.rm = TRUE), .groups = "drop") |>
+  relocate(flagged, .before = flagged_pct) |>
+  arrange(arm, pad_hours)
+data.table::fwrite(pad_summary, file.path(P$tables, "smoke_pad_sensitivity.csv"))
+log_msg("HMS time-padding sensitivity (0 h = strict overlap; the analysis uses ",
+        CFG$hms_time_pad_hours, " h):")
+print(pad_summary, n = Inf)
+pad_by_site <- pad_sens |>
+  group_by(arm, site, pad_hours) |>
+  summarise(flagged = sum(flagged, na.rm = TRUE), .groups = "drop") |>
+  tidyr::pivot_wider(names_from = pad_hours, values_from = flagged,
+                     names_prefix = "flagged_pad_")
+data.table::fwrite(pad_by_site, file.path(P$tables, "smoke_pad_sensitivity_by_site.csv"))
+print(pad_by_site, n = Inf)
 print(inv, n = Inf)
 log_msg("Wrote smoke flags for ", nrow(smoke), " sampling windows to ", file.path(P$processed, "smoke_flags.csv"))
