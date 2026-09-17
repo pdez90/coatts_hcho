@@ -230,17 +230,37 @@ by_site <- use |>
 by_site <- by_site |>
   mutate(pearson_q = p.adjust(pearson_p, method = "BH"),
          anom_pearson_q = if ("anom_pearson_p" %in% names(by_site))
-           p.adjust(anom_pearson_p, method = "BH") else NA_real_)
+           p.adjust(anom_pearson_p, method = "BH") else NA_real_,
+         # The anomaly p-values reported everywhere else are permutation values,
+         # so the false-discovery count has to be available on the same basis.
+         # Both are kept: the parametric pair is what earlier versions reported,
+         # and the difference between them is itself worth seeing.
+         anom_pearson_q_perm = if ("anom_pearson_p_perm" %in% names(by_site))
+           p.adjust(anom_pearson_p_perm, method = "BH") else NA_real_)
 data.table::fwrite(by_site, file.path(P$tables, "national_stats_by_site.csv"))
 log_msg("Sites with a significant whole-period correlation: ",
         sum(by_site$pearson_p < 0.05, na.rm = TRUE), " of ", nrow(by_site),
         " at nominal p < 0.05; ", sum(by_site$pearson_q < 0.05, na.rm = TRUE),
         " at Benjamini-Hochberg q < 0.05")
 if ("anom_pearson_p" %in% names(by_site)) {
-  log_msg("Sites with a significant day-to-day correlation: ",
-          sum(by_site$anom_pearson_p < 0.05, na.rm = TRUE), " of ",
-          sum(!is.na(by_site$anom_pearson_p)), " at nominal p < 0.05; ",
-          sum(by_site$anom_pearson_q < 0.05, na.rm = TRUE), " at BH q < 0.05")
+  log_msg("Sites with a significant day-to-day correlation, PERMUTATION p (the ",
+          "basis used throughout): ",
+          sum(by_site$anom_pearson_p_perm < 0.05, na.rm = TRUE), " of ",
+          sum(!is.na(by_site$anom_pearson_p_perm)), " at nominal p < 0.05; ",
+          sum(by_site$anom_pearson_q_perm < 0.05, na.rm = TRUE), " at BH q < 0.05")
+  log_msg("  the same counts on the ordinary Pearson p, for comparison only: ",
+          sum(by_site$anom_pearson_p < 0.05, na.rm = TRUE), " and ",
+          sum(by_site$anom_pearson_q < 0.05, na.rm = TRUE))
+  by_dur <- by_site |>
+    group_by(duration_class) |>
+    summarise(sites = n(),
+              perm_nominal = sum(anom_pearson_p_perm < 0.05, na.rm = TRUE),
+              perm_bh      = sum(anom_pearson_q_perm < 0.05, na.rm = TRUE),
+              param_nominal = sum(anom_pearson_p < 0.05, na.rm = TRUE),
+              param_bh      = sum(anom_pearson_q < 0.05, na.rm = TRUE),
+              .groups = "drop")
+  log_msg("  day-to-day significance counts by duration (Table S3):")
+  print(by_dur)
 }
 if ("anom_pearson_r" %in% names(by_site)) {
   log_msg("Median within-month anomaly r across sites: ",
