@@ -235,6 +235,47 @@ by_duration_lag <- left_join(stats_dl, anom_dl, by = c("duration_class", "lag_h"
   arrange(duration_class, lag_h)
 for (cn in c("anom_n", "anom_pearson_r")) if (!cn %in% names(by_duration_lag)) by_duration_lag[[cn]] <- NA_real_
 data.table::fwrite(by_duration_lag, file.path(P$tables, "national_stats_by_duration_lag.csv"))
+
+# ---- 3b. sensitivity: sub-daily anomalies stratified by sampling window -----
+# A site-month stratum pools every window a site samples, so for 8 h and 3 h
+# samples the anomaly also carries the systematic difference between windows
+# (the diurnal cycle), not only day-to-day variation. Stratifying by start hour
+# as well removes it, at the cost of many strata falling below
+# min_days_per_site_month. The SI reports both so the reader can see the cost.
+anom_of_window <- function(d) {
+  d <- mutate(d, ym = paste(floor_date(sample_date, "month"), window_start_hour))
+  d |>
+    group_by(site, ym) |>
+    filter(n() >= CFG$min_days_per_site_month) |>
+    mutate(surface_anom = hcho_ugm3 - mean(hcho_ugm3),
+           column_anom = tempo_vc_1e15 - mean(tempo_vc_1e15)) |>
+    ungroup()
+}
+anom_win <- use |>
+  filter(lag_h == 0, duration_class != "24 h") |>
+  group_by(duration_class) |>
+  group_modify(~ {
+    an <- anom_of_window(.x)
+    if (nrow(an) < 6) return(tibble(n = nrow(an)))
+    anomstats(an)
+  }) |>
+  ungroup()
+data.table::fwrite(anom_win, file.path(P$tables, "national_anomalies_window_stratified.csv"))
+print(anom_win)
+wk <- function(dc, col, fmt) {
+  v <- anom_win[[col]][anom_win$duration_class == dc]
+  if (length(v) != 1 || !is.finite(v)) stop("window-stratified anomaly missing for ", dc)
+  sprintf(fmt, v)
+}
+data.table::fwrite(
+  tibble(key = c("dd_win_r_8", "dd_win_n_8", "dd_win_strata_8", "dd_win_p_8",
+                 "dd_win_r_3", "dd_win_n_3", "dd_win_strata_3", "dd_win_p_3"),
+         value = c(wk("8 h", "pearson_r", "%.2f"), wk("8 h", "n", "%.0f"),
+                   wk("8 h", "site_months", "%.0f"), wk("8 h", "pearson_p_perm", "%.4f"),
+                   wk("3 h", "pearson_r", "%.2f"), wk("3 h", "n", "%.0f"),
+                   wk("3 h", "site_months", "%.0f"), wk("3 h", "pearson_p_perm", "%.4f")),
+         source = "R/13_national_analysis.R"),
+  file.path(P$tables, "manuscript_numbers_13_window.csv"))
 print(by_duration_lag |> select(duration_class, lag_h, n, pearson_r, spearman_rho,
                                 anom_n, anom_pearson_r, median_h_eff_km, median_tempo_pbl_km))
 

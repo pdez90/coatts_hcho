@@ -362,7 +362,7 @@ p <- ggplot(plot_d, aes(sky, anom, fill = sky)) +
   labs(x = NULL, y = expression("Surface HCHO anomaly ("*mu*g~m^{-3}*")"),
        title = "Are sampling days with a usable TEMPO observation representative?",
        subtitle = paste("Screened out = TEMPO returned granules but no scan passed; days with no granule are excluded.",
-                        "Deviations from the site and calendar-month mean; diamonds are means. Axes truncated near the 1st and 99th percentiles.",
+                        "Deviations from the site-month mean; diamonds are means. Axes truncated near the 1st and 99th percentiles.",
                         sep = "\n")) +
   theme_bw(base_size = 10) +
   theme(plot.subtitle = element_text(size = 8), panel.grid.minor = element_blank())
