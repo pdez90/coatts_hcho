@@ -94,7 +94,8 @@ sample_hours <- samples |>
 assign_scans <- function(sv) {
   sample_hours |>
     inner_join(sv, by = c("site", "hour"), relationship = "many-to-many") |>
-    mutate(local_hour = start_hour_local + as.numeric(difftime(mid_utc, start_utc, units = "hours")))
+    # local standard hour of the scan; %% 24 because 3 % of 24 h samples begin at 23:00 LST
+    mutate(local_hour = (start_hour_local + as.numeric(difftime(mid_utc, start_utc, units = "hours"))) %% 24)
 }
 
 blocks <- c(0L, 1L, 2L)
@@ -154,7 +155,10 @@ noise_rows <- map(blocks, function(b) {
 data.table::fwrite(noise_rows, file.path(P$tables, "national_noise_ceiling.csv"))
 
 nr <- function(bl, col) noise_rows[[col]][noise_rows$site == "all sites" & noise_rows$block_label == bl]
-scored <- noise_rows |> filter(site != "all sites", block_label == "3x3", is.finite(ceiling_empirical))
+# scored = a defined, positive ceiling. A site whose noise bound exceeds its anomaly
+# variance (ceiling forced to 0) is counted separately, not folded into the quantiles.
+scored_all <- noise_rows |> filter(site != "all sites", block_label == "3x3", is.finite(ceiling_empirical))
+scored <- filter(scored_all, ceiling_empirical > 0)
 # quantiles of the corrected r are over sites with a positive ceiling; the count of
 # sites where the noise bound exceeds the anomaly variance is reported alongside
 log_msg("National noise ceiling (3x3): pooled observed r ", round(nr("3x3", "anomaly_r_observed"), 2),
@@ -174,7 +178,7 @@ noise_keys <- tibble(
           "nat_sites_scored", "nat_site_ceiling_median", "nat_site_ceiling_q25", "nat_site_ceiling_q75",
           "nat_site_rcorr_median", "nat_site_rcorr_q25", "nat_site_rcorr_q75",
           "nat_sites_near_ceiling", "nat_sites_far_below", "nat_site_share_median_pct",
-          "nat_sites_ceiling_undefined"),
+          "nat_sites_ceiling_undefined", "nat_site_obs_min", "nat_site_obs_max"),
   value = c(sprintf("%.1f", nr("1x1", "scan_noise_sd_single_1e15")),
             sprintf("%.1f", nr("3x3", "noise_sd_empirical_1e15")),
             sprintf("%.0f", 100 * nr("3x3", "noise_share_empirical")),
@@ -192,7 +196,8 @@ noise_keys <- tibble(
             as.character(sum(scored$r_noise_corrected < 0.5, na.rm = TRUE)),
             sprintf("%.0f", 100 * median(scored$noise_share_empirical)),
             # noise variance >= anomaly variance: the upper-bound estimator overshoots, no ceiling
-            as.character(sum(scored$ceiling_empirical <= 0))))
+            as.character(sum(scored_all$ceiling_empirical <= 0)),
+            sprintf("%.2f", min(scored$anomaly_r_observed)), sprintf("%.2f", max(scored$anomaly_r_observed))))
 
 # Figure: observed day-to-day r against the ceiling at each 24 h site
 plot_sites <- filter(scored, ceiling_empirical > 0)   # a zero ceiling is "noise bound exceeds the variance", not a point
@@ -250,12 +255,13 @@ print(tod_out |> filter(site == "all sites") |>
 ta <- tod_out |> filter(site == "all sites", comparison == "within-month anomalies")
 tod_keys <- tibble(
   key = c("nat_tod_n", "nat_tod_r_0609", "nat_tod_r_0912", "nat_tod_p",
-          "nat_tod_sites", "nat_tod_sites_late_better", "nat_tod_sites_sig"),
+          "nat_tod_sites", "nat_tod_sites_late_better", "nat_tod_sites_sig", "nat_tod_sites_sig_lower"),
   value = c(as.character(ta$n), sprintf("%.2f", ta$r_06_09), sprintf("%.2f", ta$r_09_12),
             sprintf("%.3f", ta$williams_p),
             as.character(nrow(tod_site)),
             as.character(sum(tod_site$diff_09_12_minus_06_09 > 0, na.rm = TRUE)),
-            as.character(sum(tod_site$williams_p < 0.05, na.rm = TRUE))))
+            as.character(sum(tod_site$williams_p < 0.05 & tod_site$diff_09_12_minus_06_09 > 0, na.rm = TRUE)),
+            as.character(sum(tod_site$williams_p < 0.05 & tod_site$diff_09_12_minus_06_09 < 0, na.rm = TRUE))))
 log_msg("Time of day, all 24 h sites, anomalies (n = ", ta$n, "): r 06-09 ", round(ta$r_06_09, 2),
         " vs 09-12 ", round(ta$r_09_12, 2), ", Williams p = ", signif(ta$williams_p, 2), "; ",
         nrow(tod_site), " sites with >= ", TOD_MIN_PAIRS, " paired days, later window higher at ",
