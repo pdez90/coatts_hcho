@@ -1,16 +1,88 @@
 # =============================================================================
-# 01_coatts.R - find, download and parse CDPHE 24-h formaldehyde samples
+# 01_coatts.R - the Colorado 24-h formaldehyde record
 #
-# Scrapes the CDPHE Air Toxics repository page for annual data packets, keeps
-# COATTS (and optionally ozone-precursor) site files, downloads them, and
-# extracts formaldehyde from two layouts:
+# SOURCE OF RECORD: EPA AQS. Six of the seven COATTS sites report to AQS, and
+# the measurement comes from AQS, exactly as it does for the other 122 sites in
+# the national arm. That was not always so: this step used to read
+# all seven from CDPHE's annual data packets, which meant the Colorado results
+# and the national results were derived from different copies of the same
+# measurements and were never compared, and a reader can now reproduce the
+# whole paper from a single public source with a free AQS key.
+#
+# ALL SEVEN sites come from AQS, Wheat Ridge (JFCO) included. That one is easy
+# to miss, and was missed at first: AQS files it as 08-059-0015 "Peak
+# Expeditionary School", it carries only 15 samples, and 15 is below
+# CFG$aqs_min_samples, so step 10 never lists it as a candidate and it never
+# reaches aqs_hcho_samples.csv. It is in the raw state download all the same.
+# This step selects by site_id rather than by the candidate list, so it gets it.
+#
+# The consequence is worth stating rather than hiding: the Colorado case study
+# contains one site the national arm excludes, and it is excluded by a stated
+# minimum sample count, not by an accident of provenance.
+#
+# If a site ever genuinely leaves AQS, set its aqs_site_id to NA in the
+# crosswalk below; it falls back to the CDPHE packet and is labelled
+# source = "CDPHE packet". Nothing else needs to change.
+#
+# The packets are still downloaded and parsed for ONE reason: the per-sample
+# detection limit and the sampling temperature and pressure. AQS does not
+# publish those, and Colorado's effective mixing height is computed from the
+# measured temperature and pressure where they exist, which makes it a better
+# estimate than the national arm can produce. Step 04 also carries the national
+# convention alongside, so the difference between the two is measured rather
+# than assumed. Concentrations are never taken from the packets.
+#
+# Packet layouts parsed:
 #   * 2025+ "AQDxLite" long format  (sheet Carbonyls_data)
 #   * 2024  wide format             (sheet "Carbonyls Field Samples")
 # Output: data/processed/coatts_hcho.csv  (one row per site x sample day)
 # =============================================================================
 source("R/00_config.R")
+source("R/helpers_aqs.R")   # one definition of the AQS request and screen
 
-# ---- 1. discover files on the repository page -------------------------------
+# CDPHE site code <-> AQS site_id. site_name is CDPHE's, which is what the
+# manuscript and Figure S1 use; AQS's own name for the same station sometimes
+# differs (ADCO is "Birch Street" in AQS).
+COATTS_XWALK <- tibble::tribble(
+  ~site,  ~site_name,         ~aqs_site_id,
+  "ADCO", "Commerce City",    "08-001-0010",
+  "CNCO", "Canon City",       "08-043-0004",
+  "COCO", "Colorado Springs", "08-041-0017",
+  "GPCO", "Grand Junction",   "08-077-0018",
+  "JFCO", "Wheat Ridge",      "08-059-0015",   # AQS: "Peak Expeditionary School"
+  "LSCO", "La Salle",         "08-123-0015",
+  "POCO", "Pueblo",           "08-101-0017"
+)
+stopifnot(setequal(COATTS_XWALK$site, CFG$coatts_sites))
+
+# ---- 1. the AQS-sourced sites ----------------------------------------------
+aqs_sites <- COATTS_XWALK |> filter(!is.na(aqs_site_id))
+log_msg("Colorado 24-h record: ", nrow(aqs_sites), " sites from AQS, ",
+        sum(is.na(COATTS_XWALK$aqs_site_id)), " from the CDPHE packets")
+
+co_states <- sort(unique(substr(aqs_sites$aqs_site_id, 1, 2)))
+raw_aqs <- aqs_fetch_state_years(co_states, CFG$aqs_years,
+                                 file.path(P$raw_aqs, "samples"), CFG$aqs_refresh)
+if (!nrow(raw_aqs)) stop("AQS returned no formaldehyde for Colorado (state ",
+                         paste(co_states, collapse = ", "), ").")
+
+aqs_24h <- aqs_clean_samples(raw_aqs, keep_site_ids = aqs_sites$aqs_site_id) |>
+  filter(duration_class == "24 h",
+         sample_date_local >= CFG$date_range[1], sample_date_local <= CFG$date_range[2]) |>
+  left_join(select(aqs_sites, site, site_name, aqs_site_id), by = c("site_id" = "aqs_site_id"))
+
+missing_from_aqs <- setdiff(aqs_sites$site, aqs_24h$site)
+if (length(missing_from_aqs)) {
+  stop("These sites are in the crosswalk but returned no 24 h AQS formaldehyde: ",
+       paste(missing_from_aqs, collapse = ", "),
+       ".\n  Either the site_id is wrong or the site stopped reporting; do not ",
+       "silently fall back to the packet, which would reintroduce mixed provenance.")
+}
+log_msg("  AQS: ", nrow(aqs_24h), " site-days at ", n_distinct(aqs_24h$site), " sites")
+
+# aqs_qualifier_codes() lives in R/helpers_aqs.R, shared with step 06.
+
+# ---- 2. discover CDPHE packets on the repository page -----------------------
 log_msg("Reading repository page: ", CFG$coatts_repo_url)
 page  <- public_request(CFG$coatts_repo_url) |> httr2::req_perform() |> httr2::resp_body_html()
 a     <- xml2::xml_find_all(page, "//a[@href]")
@@ -43,7 +115,7 @@ if (any(coops_wide)) {
 if (!nrow(files)) stop("No annual data packets found - page layout may have changed.")
 log_msg("Found ", nrow(files), " annual packets: ", paste(files$file, collapse = ", "))
 
-# ---- 2. download (skips files already on disk unless coatts_refresh) --------
+# ---- 3. download (skips files already on disk unless coatts_refresh) --------
 files$path <- file.path(P$raw_coatts, files$file)
 manifest_path <- file.path(P$raw_coatts, "download_manifest.csv")
 old_manifest <- if (file.exists(manifest_path)) read_tbl(manifest_path, colClasses = "character") else NULL
@@ -79,7 +151,7 @@ if (!is.null(old_manifest)) {
 }
 data.table::fwrite(select(files, program, site, year, file, url, bytes, md5, file_mtime), manifest_path)
 
-# ---- 3. parsers ------------------------------------------------------------
+# ---- 4. parsers ------------------------------------------------------------
 # (date parsing, flag and QC helpers live in R/00_config.R)
 
 parse_aqdx <- function(path) {
@@ -144,7 +216,7 @@ parse_wide <- function(path) {
                  null_codes = null_qualifiers_of(path))
 }
 
-# ---- 4. parse all packets --------------------------------------------------
+# ---- 5. parse all packets --------------------------------------------------
 parsed <- pmap(select(files, file, site, program, path), function(file, site, program, path) {
   res <- tryCatch(
     if (str_detect(file, "AQDxLite")) parse_aqdx(path) else parse_wide(path),
@@ -160,57 +232,7 @@ for (col in c("temp_c", "press_hpa")) if (!col %in% names(parsed)) parsed[[col]]
 mean_or_na <- function(x) if (all(is.na(x))) NA_real_ else mean(x, na.rm = TRUE)
 max_or_na  <- function(x) if (all(is.na(x))) NA_real_ else max(x, na.rm = TRUE)
 
-# Site coordinates: from any AQDx data sheet of the site (covers sites whose
-# formaldehyde is only in the 2024 wide files), then the table below.
-aqdx_coords <- function(path) {
-  for (s in grep("_data$", readxl::excel_sheets(path), value = TRUE)) {
-    d <- tryCatch(readxl::read_excel(path, sheet = s, n_max = 50, col_types = "text"), error = function(e) NULL)
-    if (!is.null(d) && all(c("lat", "lon") %in% names(d))) {
-      xy <- tibble(lat = suppressWarnings(as.numeric(d$lat)), lon = suppressWarnings(as.numeric(d$lon))) |>
-        filter(!is.na(lat), !is.na(lon))
-      if (nrow(xy)) return(summarise(xy, lat = median(lat), lon = median(lon)))
-    }
-  }
-  NULL
-}
-xy_files <- files |> filter(str_detect(file, "AQDxLite"))
-aqdx_xy <- map2(xy_files$path, xy_files$site, function(p, s) {
-  xy <- aqdx_coords(p); if (is.null(xy)) NULL else mutate(xy, site = s)
-}) |> list_rbind()
-if (is.null(aqdx_xy) || !nrow(aqdx_xy)) aqdx_xy <- tibble(site = character(), lat = numeric(), lon = numeric())
-aqdx_xy <- aqdx_xy |> group_by(site) |> summarise(lat_x = median(lat), lon_x = median(lon), .groups = "drop")
-
-site_coords_fallback <- tribble(
-  ~site,  ~site_name,          ~lat,       ~lon,
-  "ADCO", "Commerce City",     39.828100, -104.936470,
-  "LSCO", "La Salle",          40.261400, -104.706450,
-  "GPCO", "Grand Junction",    39.064289, -108.561550,
-  "JFCO", "Wheat Ridge",       39.781069, -105.107621,
-  "COCO", "Colorado Springs",  38.848014, -104.828564,
-  "CNCO", "Canon City",        38.469492, -105.208334,
-  "POCO", "Pueblo",            38.236232, -104.581380,
-  "CHCO", "Littleton",         NA,         NA,
-  "PVCO", "Platteville",       NA,         NA,
-  "BFCO", "Brighton",          NA,         NA,
-  "MPCO", "Missile Park",      NA,         NA
-)
-coords <- parsed |>
-  filter(!is.na(lat), !is.na(lon)) |>
-  group_by(site) |>
-  summarise(lat = median(lat), lon = median(lon), .groups = "drop") |>
-  full_join(aqdx_xy, by = "site") |>
-  full_join(select(site_coords_fallback, site, site_name, lat_fb = lat, lon_fb = lon), by = "site") |>
-  mutate(lat = coalesce(lat, lat_x, lat_fb), lon = coalesce(lon, lon_x, lon_fb),
-         site_name = coalesce(site_name, site)) |>
-  select(site, site_name, lat, lon) |>
-  filter(site %in% unique(parsed$site))
-
-missing_xy <- coords$site[is.na(coords$lat)]
-if (length(missing_xy)) warning("No coordinates for: ", paste(missing_xy, collapse = ", "),
-                                " - add them to site_coords_fallback.")
-
-# ---- 5. one row per site x sample day ---------------------------------------
-coatts <- parsed |>
+packet_days <- parsed |>
   filter(!is.na(sample_date),
          sample_date >= CFG$date_range[1], sample_date <= CFG$date_range[2]) |>
   group_by(site, program, sample_date) |>
@@ -226,22 +248,80 @@ coatts <- parsed |>
     press_hpa   = mean_or_na(press_hpa),
     source_file = paste(unique(source_file), collapse = ";"),
     .groups = "drop"
-  ) |>
-  left_join(coords, by = "site") |>
+  )
+
+# ---- 6. (the sample-by-sample cross-check against the packets was removed;
+#          AQS is the source and the packets are not a second opinion on it)
+
+# ---- 7. assemble: AQS for the six, the packet for Wheat Ridge --------------
+# Detection limits and sampling temperature/pressure exist only in the packets,
+# so they are carried across onto the AQS rows. The measurement is AQS's.
+anc <- packet_days |> select(site, sample_date, dl_ugm3, temp_c, press_hpa)
+
+from_aqs <- aqs_24h |>
+  mutate(flags = aqs_qualifier_codes(qualifiers)) |>
+  transmute(site, program = "COATTS", sample_date = sample_date_local,
+            n_rows = n_poc, hcho_ugm3,
+            non_detect = has_flag(flags, "ND"),
+            below_mdl  = has_flag(flags, "MD"),
+            qc_codes = "",                       # AQS publishes ambient rows only
+            flags,
+            source_file = "AQS sampleData/byState",
+            source = "AQS",
+            lat, lon, site_name) |>
+  left_join(anc, by = c("site", "sample_date"))
+
+packet_only <- COATTS_XWALK$site[is.na(COATTS_XWALK$aqs_site_id)]
+from_packet <- packet_days |>
+  filter(site %in% packet_only) |>
+  mutate(source = "CDPHE packet") |>
+  left_join(select(COATTS_XWALK, site, site_name), by = "site") |>
+  left_join(parsed |> filter(!is.na(lat), !is.na(lon)) |> group_by(site) |>
+              summarise(lat = median(lat), lon = median(lon), .groups = "drop"),
+            by = "site")
+
+# Coordinates for any packet-only site the packets do not geolocate.
+site_coords_fallback <- tribble(
+  ~site,  ~lat,       ~lon,
+  "ADCO", 39.828100, -104.936470,
+  "LSCO", 40.261400, -104.706450,
+  "GPCO", 39.064289, -108.561550,
+  "JFCO", 39.781069, -105.107621,
+  "COCO", 38.848014, -104.828564,
+  "CNCO", 38.469492, -105.208334,
+  "POCO", 38.236232, -104.581380
+)
+from_packet <- from_packet |>
+  left_join(rename(site_coords_fallback, lat_fb = lat, lon_fb = lon), by = "site") |>
+  mutate(lat = coalesce(lat, lat_fb), lon = coalesce(lon, lon_fb)) |>
+  select(-lat_fb, -lon_fb)
+
+coatts <- bind_rows(from_aqs, from_packet) |>
   mutate(hcho_molec_cm3 = ugm3_to_molec_cm3(hcho_ugm3),
          hcho_ppb_local = ugm3_to_ppb(hcho_ugm3, temp_c, press_hpa),
          season = season_of(sample_date),
          year = year(sample_date)) |>
+  select(site, program, sample_date, n_rows, hcho_ugm3, dl_ugm3, non_detect, below_mdl,
+         qc_codes, flags, temp_c, press_hpa, source_file, source, site_name, lat, lon,
+         hcho_molec_cm3, hcho_ppb_local, season, year) |>
   arrange(site, sample_date)
+
+if (any(is.na(coatts$lat))) {
+  stop("No coordinates for: ",
+       paste(unique(coatts$site[is.na(coatts$lat)]), collapse = ", "),
+       " - add them to site_coords_fallback.")
+}
 
 data.table::fwrite(coatts, file.path(P$processed, "coatts_hcho.csv"))
 
 summary_tbl <- coatts |>
-  group_by(program, site, site_name, year) |>
+  group_by(program, source, site, site_name, year) |>
   summarise(sample_days = n(), with_value = sum(!is.na(hcho_ugm3)),
             first = min(sample_date), last = max(sample_date),
             median_ugm3 = round(median(hcho_ugm3, na.rm = TRUE), 2),
             .groups = "drop")
 data.table::fwrite(summary_tbl, file.path(P$tables, "coatts_hcho_inventory.csv"))
 print(summary_tbl, n = Inf)
-log_msg("Wrote ", nrow(coatts), " site-days to ", file.path(P$processed, "coatts_hcho.csv"))
+log_msg("Wrote ", nrow(coatts), " site-days to ", file.path(P$processed, "coatts_hcho.csv"),
+        " (", sum(coatts$source == "AQS"), " from AQS, ",
+        sum(coatts$source == "CDPHE packet"), " from the CDPHE packets)")

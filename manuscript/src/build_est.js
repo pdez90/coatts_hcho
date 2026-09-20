@@ -12,8 +12,9 @@ const {
   Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell,
   WidthType, BorderStyle, ImageRun, Footer, PageNumber, LineNumberRestartFormat, ShadingType, PageBreak
 } = require("docx");
-const C = require("./content_est.js");
-const SI = require("./content_est_si.js");
+const N = require("./numbers.js");   // resolves {{n:key}} from the pipeline
+const C = N.resolve(require("./content_est.js"));
+const SI = N.resolve(require("./content_est_si.js"));
 
 const FIG = process.env.HCHO_FIG || path.resolve(__dirname, "../../output/figures") + path.sep;
 const OUTDIR = process.env.HCHO_OUTDIR || path.resolve(__dirname, "..");

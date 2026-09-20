@@ -143,7 +143,11 @@ CFG <- list(
   aqs_years = c(2024L, 2025L),
   aqs_refresh = FALSE,                       # TRUE re-downloads the AirData files
   aqs_durations = c("24 h", "8 h", "3 h", "1 h"),
-  aqs_min_samples = 20L,                     # per site over aqs_years, to be a candidate
+  aqs_min_samples = 20L,
+  # A state needs this many 24 h sites before pooling within it means
+  # anything. Eleven states clear 4; Colorado is one of them, not the
+  # largest (California has 14, New York 13, Oregon 8).
+  min_sites_per_state = 4L,                     # per site over aqs_years, to be a candidate
   aqs_conus_bbox = c(-125, 24, -66, 50),     # lon_min, lat_min, lon_max, lat_max
   # Sample-level check of sampling clocks. AQS records the time each sample
   # BEGAN, in local standard time. The first pull (Sept 2026) returned
@@ -219,7 +223,24 @@ CFG <- list(
   hcho_reported_conditions = "standard",
   # Temperature used for the number density when no co-located measurement is
   # available. A 10 K error moves the number density (and H_eff) by about 3.5 %.
-  hcho_fallback_temp_c = 15
+  hcho_fallback_temp_c = 15,
+
+  # Illustrative corrections for the low bias of TEMPO HCHO against ground-based
+  # columns, applied to the Colorado median H_eff in the Results. Each entry is
+  # the FRACTION by which the retrieved column is taken to be low, so the
+  # corrected H_eff is H_eff / (1 - fraction). Confirmed 2026-09-20 against the
+  # published abstracts (both evaluate TEMPO V03, not the V04 used here):
+  #   * Rawat et al. 2026, JGR Atmos 131, e2025JD044788 (36 Pandonia sites):
+  #     "a small bias of -2 +/- 20% at lower HCHO (< 1.0e16 molecule cm-2)" and
+  #     "-22 +/- 5% at higher HCHO (> 1.5e16)". Colorado's median column is
+  #     3.5e15, in the low regime, so the network-wide correction is ~2 %.
+  #   * Ortega et al. 2026, JGR Atmos 131, e2026JD046497 (FTIR + Pandora at
+  #     Boulder, Mexico City, Toronto): "a consistent low bias of approximately
+  #     30% relative to ground-based observations at all three sites".
+  # An earlier draft quoted 1.3-1.5 km, implying 37-45 %; nothing in either
+  # abstract supports a range that wide, so it is not carried.
+  heff_bias_low_fraction = c(network_low_column = 0.02,
+                             ftir_pandora       = 0.30)
 )
 
 # ---- paths -----------------------------------------------------------------

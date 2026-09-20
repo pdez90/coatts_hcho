@@ -137,6 +137,16 @@ matched <- coatts |>
          h_eff_std_km = ifelse(tempo_vc > 0 & hcho_molec_cm3 > 0, tempo_vc / hcho_molec_cm3 / 1e5, NA_real_),
          h_eff_km = ifelse(tempo_vc > 0 & hcho_molec_cm3_local > 0,
                            tempo_vc / hcho_molec_cm3_local / 1e5, h_eff_std_km),
+         # The national arm has no co-located met, so step 13 computes the number
+         # density at CFG$hcho_fallback_temp_c and TEMPO's own surface pressure.
+         # Colorado keeps its measured T and P in h_eff_km - that is the better
+         # estimate and the one reported - and carries the national convention
+         # beside it, so what the national arm gives up can be measured on the
+         # one network where both are available instead of being assumed small.
+         hcho_molec_cm3_natconv = ppb_to_molec_cm3(hcho_ppb_std, CFG$hcho_fallback_temp_c,
+                                                   tempo_press_hpa),
+         h_eff_natconv_km = ifelse(tempo_vc > 0 & hcho_molec_cm3_natconv > 0,
+                                   tempo_vc / hcho_molec_cm3_natconv / 1e5, NA_real_),
          tempo_pbl_km = tempo_pbl_m / 1000,
          usable = !is.na(tempo_vc) & !is.na(hcho_ugm3))
 

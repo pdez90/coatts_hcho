@@ -349,7 +349,11 @@ noise_rows <- map(sort(unique(variants24$block)), function(b) {
            ceiling_reported_median_indep = ceil(nv_med_indep),
            ceiling_empirical = ceil(nv_emp),
            # observed r divided by the empirical ceiling: the agreement expected if the column had no random scan noise
-           r_noise_corrected = ifelse(ceil(nv_emp) > 0, cor(x$column_anom, x$surface_anom) / ceil(nv_emp), NA_real_))
+           r_noise_corrected = ifelse(ceil(nv_emp) > 0, cor(x$column_anom, x$surface_anom) / ceil(nv_emp), NA_real_),
+           # The single-scan noise that the daily-mean figure above is built from.
+           # It was computed but never written, which left the manuscript's
+           # "about 4 x 10^15 for one grid cell" traceable to nothing.
+           scan_noise_sd_single_1e15 = sqrt(scan_var) / 1e15)
   }
   per_site <- imap(split(an, an$site), function(x, s) {
     sv <- emp_site$scan_noise_var[emp_site$site == s]
@@ -361,6 +365,31 @@ noise_rows <- map(sort(unique(variants24$block)), function(b) {
     mutate(block_label = blabel, .after = site)
 }) |> list_rbind()
 out_tbl(noise_rows, "diag3_noise_ceiling.csv")
+
+# Numbers the main text quotes from this diagnostic, by name, so the text
+# derives them instead of transcribing them.
+nr <- function(blk, col) noise_rows[[col]][noise_rows$site == "all sites" & noise_rows$block_label == blk]
+ns <- function(st, col)  noise_rows[[col]][noise_rows$site == st & noise_rows$block_label == "3x3"]
+data.table::fwrite(
+  tibble(key = c("noise_single_scan_1x1_1e15", "noise_daily_3x3_1e15",
+                 "noise_share_3x3_pct", "noise_ceiling_3x3",
+                 "r_corrected_1x1", "r_corrected_3x3", "r_corrected_5x5",
+                 "r_corrected_LSCO", "r_corrected_CNCO", "r_corrected_ADCO", "r_corrected_GPCO",
+                 "anom_r_observed_3x3"),
+         value = c(sprintf("%.1f", nr("1x1", "scan_noise_sd_single_1e15")),
+                   sprintf("%.1f", nr("3x3", "noise_sd_empirical_1e15")),
+                   sprintf("%.0f", 100 * nr("3x3", "noise_share_empirical")),
+                   sprintf("%.2f", nr("3x3", "ceiling_empirical")),
+                   sprintf("%.2f", nr("1x1", "r_noise_corrected")),
+                   sprintf("%.2f", nr("3x3", "r_noise_corrected")),
+                   sprintf("%.2f", nr("5x5", "r_noise_corrected")),
+                   sprintf("%.2f", ns("LSCO", "r_noise_corrected")),
+                   sprintf("%.2f", ns("CNCO", "r_noise_corrected")),
+                   sprintf("%.2f", ns("ADCO", "r_noise_corrected")),
+                   sprintf("%.2f", ns("GPCO", "r_noise_corrected")),
+                   sprintf("%.2f", nr("3x3", "anomaly_r_observed"))),
+         source = "R/09_diagnostics.R"),
+  file.path(P$tables, "manuscript_numbers_09.csv"))
 print(noise_rows |> select(site, block_label, n_anomalies, anomaly_r_observed, sd_column_anomaly_1e15,
                            noise_sd_empirical_1e15, ceiling_empirical, r_noise_corrected,
                            ceiling_reported_median_corr, ceiling_reported_median_indep))

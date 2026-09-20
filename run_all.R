@@ -41,12 +41,13 @@ main <- function() {
   # withCallingHandlers() below logs an error but does not catch it, so an
   # uncredentialed step 11 would abort the whole run rather than be skipped.
   has_aqs_key <- nzchar(Sys.getenv("AQS_EMAIL")) && nzchar(Sys.getenv("AQS_KEY"))
-  if (aqs_s && !has_aqs_key) {
-    message("\nAQS_EMAIL / AQS_KEY are not set, so the national arm (steps 11-16) is skipped.\n",
-            "  Sign up at https://aqs.epa.gov/data/api/signup and put both in ~/.Renviron.\n",
-            "  The Colorado case study (steps 01-09) runs normally.\n")
-    note("SKIPPED steps 11-16: no AQS credentials in the environment")
-    aqs_s <- FALSE
+  # Colorado's 24-h record now comes from AQS as well (step 01), so credentials
+  # are no longer optional for any arm. Stopping here is kinder than letting
+  # step 01 fail after the TEMPO downloads have already started.
+  if (!has_aqs_key) {
+    stop("AQS_EMAIL and AQS_KEY are not set, and every arm now reads AQS.\n",
+         "  Sign up at https://aqs.epa.gov/data/api/signup, put both in ~/.Renviron,\n",
+         "  then restart R.")
   }
   map_fig   <- isTRUE(cfg_env$CFG$run_site_map)
   clear_sky <- isTRUE(cfg_env$CFG$run_clear_sky_bias)
@@ -80,6 +81,11 @@ main <- function() {
   add("R/09_diagnostics.R",     "coatts", diag)
   add("R/10_aqs_inventory.R",   "coatts", aqs)
   add("R/11_aqs_samples.R",     "coatts", aqs_s)
+  # Step 08 runs a second time once the national samples exist, so the smoke
+  # flags cover all three arms before step 13 reads them. The first run, before
+  # step 05, gives the Colorado arms the flags they need; HMS downloads are
+  # cached, so the repeat costs only the point-in-polygon pass.
+  add("R/08_smoke_hms.R",       "coatts", smoke && aqs_s)
   add("R/12_tempo_national.R",  "coatts", aqs_t)
   add("R/13_national_analysis.R", "coatts", aqs_a)
   add("R/14_site_map.R",        "coatts", map_fig   && nat_done)

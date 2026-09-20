@@ -15,6 +15,7 @@
 #   install.packages(c("elevatr", "terra"))
 # =============================================================================
 source("R/00_config.R")
+source("R/helpers_basemap.R")
 
 for (pkg in c("elevatr", "terra", "sf")) {
   if (!requireNamespace(pkg, quietly = TRUE)) {
@@ -74,26 +75,8 @@ nat <- read_tbl(file.path(P$tables, "aqs_samples_inventory.csv")) |>
 log_msg(nrow(nat), " national site-duration rows at ", dplyr::n_distinct(nat$site_id), " sites for the inset")
 
 # ---- 2. basemap: Census cartographic boundaries, cached ---------------------
-cb_get <- function(kind, res) {
-  for (yr in c(2023L, 2022L, 2021L)) {
-    f <- file.path(base_dir, sprintf("cb_%d_us_%s_%s.zip", yr, kind, res))
-    if (!file.exists(f) || file.size(f) < 1000) {
-      url <- sprintf("https://www2.census.gov/geo/tiger/GENZ%d/shp/cb_%d_us_%s_%s.zip",
-                     yr, yr, kind, res)
-      ok <- tryCatch({
-        resp <- httr2::req_perform(public_request(url), path = f)
-        httr2::resp_status(resp) < 400 && file.size(f) > 1000
-      }, error = function(e) FALSE)
-      if (!ok) { unlink(f); next }
-      log_msg("  downloaded ", basename(f))
-    }
-    d <- file.path(base_dir, tools::file_path_sans_ext(basename(f)))
-    if (!dir.exists(d)) utils::unzip(f, exdir = d)
-    shp <- list.files(d, pattern = "\\.shp$", full.names = TRUE)
-    if (length(shp)) return(sf::st_read(shp[1], quiet = TRUE))
-  }
-  stop("Could not obtain the Census ", kind, " boundary file.")
-}
+# cb_get() now lives in R/helpers_basemap.R, shared with step 13's Figure 1, so
+# the two maps cannot end up on different boundary vintages.
 
 counties <- cb_get("county", "500k")
 states   <- cb_get("state", "5m")

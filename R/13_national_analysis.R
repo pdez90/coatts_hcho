@@ -19,6 +19,7 @@
 source("R/00_config.R")
 source("R/helpers_screen.R")   # one definition of the TEMPO cell screen
 source("R/helpers_stats.R")
+source("R/helpers_basemap.R")  # US/state outlines for Figure 1
 set.seed(42)
 
 samples_path <- file.path(P$processed, "aqs_hcho_samples.csv")
@@ -244,6 +245,119 @@ by_site <- by_site |>
          anom_pearson_q_perm = if ("anom_pearson_p_perm" %in% names(by_site))
            p.adjust(anom_pearson_p_perm, method = "BH") else NA_real_)
 data.table::fwrite(by_site, file.path(P$tables, "national_stats_by_site.csv"))
+
+# ---- 5b. heterogeneity between states ----------------------------------------
+# A pooled correlation rewards any seasonal cycle the pooled sites share, so it
+# exceeds the day-to-day correlation by an amount that depends on how much
+# regional structure the pooling spans. Rather than explain that from one state,
+# compute it for every state with enough 24 h sites to pool: the gap becomes a
+# distribution with a spread, and any single state can be placed in it.
+big_states <- by_site |>
+  filter(duration_class == "24 h") |>
+  count(state, name = "n_sites") |>
+  filter(n_sites >= CFG$min_sites_per_state) |>
+  pull(state)
+
+if (length(big_states)) {
+  log_msg("States with >= ", CFG$min_sites_per_state, " sites sampling 24 h: ",
+          length(big_states), " (", paste(sort(big_states), collapse = ", "), ")")
+
+  state_pool <- use |>
+    filter(lag_h == 0, duration_class == "24 h", state %in% big_states) |>
+    group_by(state) |>
+    group_modify(~ {
+      an <- anom_of(.x)
+      rs <- relstats(.x, nboot = 200, cluster = "site")
+      as <- if (nrow(an) >= 6) anomstats(an) else tibble()
+      tibble(n_sites   = n_distinct(.x$site),
+             n         = nrow(.x),
+             pooled_r  = if (nrow(rs)) rs$pearson_r[1] else NA_real_,
+             anom_n    = nrow(an),
+             anom_r    = if (nrow(as)) as$pearson_r[1] else NA_real_,
+             anom_p_perm = if (nrow(as) && "pearson_p_perm" %in% names(as))
+                             as$pearson_p_perm[1] else NA_real_)
+    }) |>
+    ungroup() |>
+    mutate(pooling_gain = pooled_r - anom_r)
+
+  # the spread of site-level day-to-day skill inside each state
+  state_spread <- by_site |>
+    filter(duration_class == "24 h", state %in% big_states, !is.na(anom_pearson_r)) |>
+    group_by(state) |>
+    summarise(n_sites_scored   = n(),
+              median_site_r    = median(anom_pearson_r),
+              q25_site_r       = quantile(anom_pearson_r, 0.25),
+              q75_site_r       = quantile(anom_pearson_r, 0.75),
+              min_site_r       = min(anom_pearson_r),
+              max_site_r       = max(anom_pearson_r),
+              .groups = "drop")
+
+  by_state <- left_join(state_pool, state_spread, by = "state") |>
+    arrange(desc(pooling_gain))
+  data.table::fwrite(by_state, file.path(P$tables, "national_state_heterogeneity.csv"))
+  print(by_state |> select(state, n_sites, n, pooled_r, anom_r, pooling_gain,
+                           median_site_r, min_site_r, max_site_r), n = Inf)
+  log_msg("Pooling gain (pooled r minus day-to-day r) across ", nrow(by_state),
+          " states: median ", round(median(by_state$pooling_gain, na.rm = TRUE), 2),
+          ", range ", round(min(by_state$pooling_gain, na.rm = TRUE), 2), " to ",
+          round(max(by_state$pooling_gain, na.rm = TRUE), 2))
+  log_msg("Median site-level day-to-day r by state: ",
+          paste(by_state$state, round(by_state$median_site_r, 2), sep = " ", collapse = "; "))
+
+  # Figure: the within-state distribution of site-level day-to-day skill, with
+  # each state's pooled value marked, so the pooling gain is visible per state.
+  sd_pts <- by_site |>
+    filter(duration_class == "24 h", state %in% big_states, !is.na(anom_pearson_r)) |>
+    left_join(select(by_state, state, median_site_r, pooled_r, anom_r), by = "state") |>
+    mutate(state = reorder(state, median_site_r))
+  # How much of the spread between monitors is geography? Decompose the
+  # site-level day-to-day correlation into a between-state and a within-state
+  # part. The answer is the point of the figure, so it is computed rather than
+  # asserted in the caption.
+  grand <- mean(sd_pts$anom_pearson_r)
+  ss_total <- sum((sd_pts$anom_pearson_r - grand)^2)
+  ss_between <- sd_pts |>
+    group_by(state) |>
+    summarise(k = n(), m = mean(anom_pearson_r), .groups = "drop") |>
+    summarise(v = sum(k * (m - grand)^2)) |> pull(v)
+  pct_between <- 100 * ss_between / ss_total
+  log_msg("Site-level day-to-day agreement: ", round(pct_between), " % of the variance ",
+          "lies BETWEEN states, ", round(100 - pct_between), " % within them ",
+          "(between-state SD of medians ", round(sd(by_state$median_site_r), 3),
+          ", mean within-state SD ",
+          round(mean(tapply(sd_pts$anom_pearson_r, sd_pts$state, sd), na.rm = TRUE), 3), ")")
+
+  # Numbers the manuscript quotes are written out by name, so the text can refer
+  # to them instead of transcribing them. Transcription is how "12 %" reached
+  # three places in the manuscript when the pipeline said 14: a decomposition
+  # centred on state medians rather than state means. A number that is derived
+  # cannot drift from the run that produced it.
+  data.table::fwrite(
+    tibble(key = c("pct_between_states", "pct_within_states", "n_multi_site_states",
+                   "pooling_gain_median", "pooling_gain_min", "pooling_gain_max"),
+           value = c(sprintf("%.0f", pct_between),
+                     sprintf("%.0f", 100 - pct_between),
+                     as.character(length(big_states)),
+                     sprintf("%.2f", median(by_state$pooling_gain, na.rm = TRUE)),
+                     sprintf("%.2f", min(by_state$pooling_gain, na.rm = TRUE)),
+                     sprintf("%.2f", max(by_state$pooling_gain, na.rm = TRUE))),
+           source = "R/13_national_analysis.R"),
+    file.path(P$tables, "manuscript_numbers_13.csv"))
+
+  p_state <- ggplot(sd_pts, aes(anom_pearson_r, state)) +
+    geom_vline(xintercept = 0, colour = "grey70") +
+    geom_point(aes(size = anom_n), alpha = 0.55, colour = "#1f78b4") +
+    geom_point(aes(x = anom_r), shape = 124, size = 5, colour = "#b2182b") +
+    scale_size_continuous(range = c(1.2, 4), name = "n") +
+    labs(x = "Day-to-day correlation (within-month anomalies)", y = NULL,
+         title = "Most variation in day-to-day agreement lies within states, not between them",
+         subtitle = sprintf(paste("Each point a 24 h monitor, red bar the state's pooled value;",
+                                  "only %.0f %% of the variance between monitors is between-state"),
+                            pct_between))
+  ggsave(file.path(P$figures, "fig15_state_heterogeneity.png"), p_state,
+         width = 7.5, height = 4.8, dpi = 300)
+  log_msg("  figure: fig15_state_heterogeneity.png")
+}
 log_msg("Sites with a significant whole-period correlation: ",
         sum(by_site$pearson_p < 0.05, na.rm = TRUE), " of ", nrow(by_site),
         " at nominal p < 0.05; ", sum(by_site$pearson_q < 0.05, na.rm = TRUE),
@@ -298,6 +412,134 @@ sens <- matched |>
             .groups = "drop")
 data.table::fwrite(sens, file.path(P$tables, "national_sensitivity.csv"))
 
+# Screening sensitivity, nationally. The equivalent Colorado figure rested on
+# seven monitors; this one rests on every site in the comparison, so the choice
+# of a 0.2 cloud threshold and a 3 x 3 block is defended on the network the
+# paper is actually about. The national grid has no midday/all-day split - the
+# sub-daily arms are defined by their own sampling windows - so the axes are the
+# cloud threshold and the averaging block only.
+# ---- smoke, across the whole network ----------------------------------------
+# Smoke used to be characterised at nine Colorado sites, which is too narrow to
+# say whether the effect generalises. Step 08 now flags the national windows
+# too, so the same question can be asked of every site in the comparison.
+sm_path <- file.path(P$processed, "smoke_flags.csv")
+if (file.exists(sm_path)) {
+  sm <- read_tbl(sm_path, colClasses = list(character = c("site", "smoke_class", "convention"))) |>
+    filter(arm == "national")
+  if (nrow(sm)) {
+    # Key on the WINDOW, not the day. An 8 h site runs three windows on the same
+    # date with the same duration_class, so (site, date, duration) matches three
+    # smoke rows and three sample rows and the join fans out to nine - which is
+    # how a first attempt reported 17 607 flagged samples from 16 383 windows
+    # and computed every correlation on duplicated data. start_utc is unique per
+    # window and is what step 08 recorded.
+    sm <- sm |>
+      transmute(site_id = site,
+                start_utc = as.POSIXct(win_start_utc, tz = "UTC"),
+                hms_available,
+                smoke_any,
+                smoke_class = factor(smoke_class, levels = c("none", "light", "medium/heavy")))
+    stopifnot(!anyDuplicated(sm[, c("site_id", "start_utc")]))
+    n_before <- sum(use$lag_h == 0)
+    su <- use |>
+      filter(lag_h == 0) |>
+      mutate(start_utc = as.POSIXct(start_utc, tz = "UTC")) |>
+      inner_join(sm, by = c("site_id", "start_utc"))
+    if (nrow(su) > n_before) {
+      stop("The smoke join added rows (", n_before, " -> ", nrow(su),
+           "); the key is not unique and every statistic below would be wrong.")
+    }
+    log_msg("National smoke: ", nrow(su), " matched samples carry an HMS flag at ",
+            n_distinct(su$site_id), " sites; ", sum(su$smoke_any %in% TRUE),
+            " smoke-affected")
+    if (nrow(su) >= 20) {
+      nat_smoke <- su |>
+        filter(!is.na(smoke_class)) |>
+        group_by(duration_class, smoke_class) |>
+        group_modify(~ relstats(.x, nboot = 200, cluster = "site")) |>
+        ungroup()
+      data.table::fwrite(nat_smoke, file.path(P$tables, "national_smoke.csv"))
+      print(nat_smoke |> select(any_of(c("duration_class", "smoke_class", "n", "pearson_r",
+                                         "median_surface_ugm3", "median_tempo_1e15"))), n = Inf)
+
+      # does removing smoke days change day-to-day agreement, as it does in Colorado?
+      nat_smoke_sens <- bind_rows(
+          mutate(su, subset = "all days"),
+          mutate(filter(su, !smoke_any %in% TRUE), subset = "smoke days excluded")) |>
+        group_by(duration_class, subset) |>
+        group_modify(~ { an <- anom_of(.x)
+                         if (nrow(an) >= 6) anomstats(an) else tibble(n = nrow(an)) }) |>
+        ungroup()
+      data.table::fwrite(nat_smoke_sens, file.path(P$tables, "national_smoke_sensitivity.csv"))
+
+      # Figure: agreement by smoke class, every duration, so the smoke result has
+      # a display item of its own rather than borrowing the Colorado one.
+      ns_plot <- nat_smoke |>
+        filter(duration_class %in% c("24 h", "8 h", "3 h")) |>
+        mutate(duration_class = factor(duration_class, levels = c("24 h", "8 h", "3 h")),
+               smoke_class = factor(smoke_class, levels = c("none", "light", "medium/heavy")))
+      p_smoke <- ggplot(ns_plot, aes(smoke_class, pearson_r, group = duration_class)) +
+        geom_hline(yintercept = 0, colour = "grey70") +
+        geom_line(colour = "grey55", linewidth = 0.6) +
+        geom_point(aes(size = n), colour = "#b2182b") +
+        geom_text(aes(label = n), vjust = -1.1, size = 2.7) +
+        scale_size_continuous(range = c(1.5, 5), guide = "none") +
+        scale_y_continuous(expand = expansion(mult = c(0.1, 0.2))) +
+        facet_wrap(~ duration_class) +
+        labs(x = "HMS smoke class over the site during the sampling window",
+             y = "Pearson r, surface HCHO vs TEMPO column",
+             title = "Agreement rises with smoke, at every duration with enough samples",
+             subtitle = "Labels are matched samples; the 3 h medium/heavy class has too few to interpret")
+      ggsave(file.path(P$figures, "fig17_national_smoke.png"), p_smoke, width = 8, height = 3.8, dpi = 300)
+      log_msg("  figure: fig17_national_smoke.png")
+
+      # Numbers the smoke paragraphs quote, by name.
+      g <- function(dc, sc, col) nat_smoke[[col]][nat_smoke$duration_class == dc & nat_smoke$smoke_class == sc]
+      dd <- function(dc, sub) nat_smoke_sens$pearson_r[nat_smoke_sens$duration_class == dc & nat_smoke_sens$subset == sub]
+      data.table::fwrite(
+        tibble(key = c("smoke_n_flagged", "smoke_n_affected",
+                       "smoke_r_24_none", "smoke_r_24_light", "smoke_r_24_heavy",
+                       "smoke_r_8_none",  "smoke_r_8_light",  "smoke_r_8_heavy",
+                       "smoke_dd_24_all", "smoke_dd_24_nosmoke", "smoke_dd_8_all", "smoke_dd_8_nosmoke",
+                       "smoke_col_24_none", "smoke_col_24_light",
+                       "smoke_n_3_none", "smoke_n_3_light", "smoke_n_3_heavy"),
+               value = c(nrow(su), sum(su$smoke_any %in% TRUE),
+                         sprintf("%.2f", g("24 h", "none", "pearson_r")), sprintf("%.2f", g("24 h", "light", "pearson_r")), sprintf("%.2f", g("24 h", "medium/heavy", "pearson_r")),
+                         sprintf("%.2f", g("8 h", "none", "pearson_r")),  sprintf("%.2f", g("8 h", "light", "pearson_r")),  sprintf("%.2f", g("8 h", "medium/heavy", "pearson_r")),
+                         sprintf("%.2f", dd("24 h", "all days")), sprintf("%.2f", dd("24 h", "smoke days excluded")),
+                         sprintf("%.2f", dd("8 h", "all days")),  sprintf("%.2f", dd("8 h", "smoke days excluded")),
+                         sprintf("%.2f", g("24 h", "none", "median_tempo_1e15")), sprintf("%.2f", g("24 h", "light", "median_tempo_1e15")),
+                         g("3 h", "none", "n"), g("3 h", "light", "n"), g("3 h", "medium/heavy", "n")),
+               source = "R/13_national_analysis.R"),
+        file.path(P$tables, "manuscript_numbers_13_smoke.csv"))
+      print(nat_smoke_sens |> select(any_of(c("duration_class", "subset", "n", "site_months",
+                                              "pearson_r", "pearson_p_perm"))), n = Inf)
+    } else {
+      log_msg("  too few flagged national samples for a smoke breakdown")
+    }
+  } else {
+    log_msg("Smoke flags contain no national arm - re-run step 08 after step 11")
+  }
+}
+
+sens0 <- filter(sens, lag_h == 0)
+if (nrow(sens0)) {
+  p_sens <- ggplot(sens0, aes(max_ecf, spearman_rho, colour = block_label)) +
+    geom_line(linewidth = 0.7) +
+    geom_point(aes(size = n)) +
+    scale_x_continuous(breaks = sort(unique(sens0$max_ecf))) +
+    scale_size_continuous(range = c(1.2, 4), name = "matched\nsamples") +
+    facet_wrap(~ duration_class, scales = "free_y") +
+    labs(x = "Maximum effective cloud fraction", y = "Pooled Spearman correlation",
+         colour = "Averaging block",
+         title = "Screening choices and the pooled correlation, all sites",
+         subtitle = "Scans inside the sampling window; the primary screening is 0.2 with a 3 x 3 block") +
+    theme(legend.position = "right")
+  ggsave(file.path(P$figures, "fig16_national_screening_sensitivity.png"), p_sens,
+         width = 8, height = 4.4, dpi = 300)
+  log_msg("  figure: fig16_national_screening_sensitivity.png")
+}
+
 # ---- 8. figures --------------------------------------------------------------
 theme_set(theme_bw(base_size = 11) + theme(strip.background = element_rect(fill = "grey92")))
 
@@ -346,18 +588,26 @@ if (nrow(by_hour)) {
 
 if (nrow(by_site) && "anom_pearson_r" %in% names(by_site) && any(!is.na(by_site$anom_pearson_r))) {
   dur_order <- intersect(c("24 h", "8 h", "3 h", "1 h"), unique(by_site$duration_class))
-  p13 <- by_site |>
-    mutate(duration_class = factor(duration_class, levels = dur_order)) |>
-    ggplot(aes(lon, lat, colour = anom_pearson_r, size = anom_n)) +
-    geom_point(alpha = 0.9) +
+  # US and state boundaries under the points. us_conus_states() returns NULL if
+  # sf or the Census download is unavailable, in which case the figure is drawn
+  # exactly as it was before rather than the step failing over a basemap.
+  conus <- us_conus_states()
+  p13 <- ggplot()
+  if (!is.null(conus)) {
+    p13 <- p13 + geom_sf(data = conus, fill = "grey97", colour = "grey75", linewidth = 0.15)
+  }
+  p13 <- p13 +
+    geom_point(data = mutate(by_site, duration_class = factor(duration_class, levels = dur_order)),
+               aes(lon, lat, colour = anom_pearson_r, size = anom_n), alpha = 0.9) +
     scale_colour_gradient2(low = "#b2182b", mid = "grey85", high = "#2166ac", midpoint = 0,
                            limits = c(-0.8, 0.8), oob = scales::squish) +
     scale_size_continuous(range = c(1.5, 5)) +
     facet_wrap(~ duration_class, ncol = 1) +
     labs(x = "Longitude", y = "Latitude", colour = "Day-to-day r", size = "n",
          title = "Day-to-day agreement, TEMPO vs surface HCHO",
-         subtitle = "Within-month anomalies; scans inside the sampling window") +
-    coord_quickmap()
+         subtitle = "Within-month anomalies; scans inside the sampling window")
+  p13 <- p13 + (if (is.null(conus)) coord_quickmap()
+                else coord_sf(xlim = CONUS_XLIM, ylim = CONUS_YLIM, expand = FALSE, crs = 4326))
   ggsave(file.path(P$figures, "fig13_national_site_map.png"), p13, width = 5.5, height = 8.8, dpi = 300)
   log_msg("  figure: fig13_national_site_map.png")
 }

@@ -18,8 +18,9 @@
 const fs   = require("fs");
 const path = require("path");
 const V19  = require("./content_v19.js");
-const C    = require("./content_est.js");
-const SI   = require("./content_est_si.js");
+const N    = require("./numbers.js");   // resolves {{n:key}} from the pipeline
+const C    = N.resolve(require("./content_est.js"));
+const SI   = N.resolve(require("./content_est_si.js"));
 
 const norm = s => s
   .replace(/[   ]/g, " ")      // thin / non-breaking spaces
@@ -50,14 +51,22 @@ const TABLE_DIR = process.env.HCHO_TABLES ||
 let tableFiles = [];
 try { tableFiles = fs.readdirSync(TABLE_DIR).filter(f => f.endsWith(".csv")); }
 catch (e) { console.warn("  note: cannot read " + TABLE_DIR + " - checking against the AMT draft only"); }
-const tableText = tableFiles.map(f =>
+// One rounded text per table, kept separate so a match can be attributed to the
+// table(s) it came from. A token that matches many tables is barely verified:
+// "0.42" is in a dozen files and would pass whatever it was meant to be.
+const perTable = tableFiles.map(f => [f,
   // round every number to the precision the manuscript might quote, so
   // "0.4904742" in the CSV matches "0.49" in the text
   fs.readFileSync(path.join(TABLE_DIR, f), "utf8").replace(/-?\d+\.\d+/g, m => {
     const v = Number(m);
     return [v.toFixed(0), v.toFixed(1), v.toFixed(2), v.toFixed(3), v.toFixed(4), m].join(" ");
-  })
-).join("  ");
+  })]);
+const tableText = perTable.map(x => x[1]).join("  ");
+const tablesWith = tok => perTable.filter(x => x[1].includes(tok)).map(x => x[0]);
+// A literal that matches this many tables is treated as unverified by this
+// check, not as verified. Values the text derives by {{n:...}} are exempt: they
+// come from a named cell and cannot be wrong in this way.
+const WEAK_TABLES = 5;
 console.log("  reading " + tableFiles.length + " output tables from " + TABLE_DIR);
 
 const draftText = harvest(V19).join("  ");
@@ -77,22 +86,41 @@ const ALLOW = new Set([
   "1000"    // RMA bootstrap resamples
 ]);
 
+// Tokens that arrived through a {{n:key}} marker are derived, not transcribed;
+// they are recorded before resolution so the collision report can skip them.
+const derivedTokens = new Set();
+(function collect() {
+  const raw = [require("./content_est.js"), require("./content_est_si.js")];
+  const map = N.load();
+  raw.forEach(doc => harvest(doc).forEach(t => {
+    for (const m of t.matchAll(/\{\{n:([A-Za-z0-9_]+)\}\}/g)) if (map.has(m[1])) derivedTokens.add(map.get(m[1]));
+  }));
+})();
+
 function check(doc, label) {
-  const misses = [], stale = [];
+  const misses = [], stale = [], weak = [];
   harvest(doc).forEach(t => {
     (t.match(NUM) || []).forEach(tok => {
       if (ALLOW.has(tok)) return;
       const ctx = t.slice(Math.max(0, t.indexOf(tok) - 70), t.indexOf(tok) + 70);
-      if (tableText.includes(tok)) return;
+      if (tableText.includes(tok)) {
+        if (!derivedTokens.has(tok) && /\./.test(tok)) {
+          const hits = tablesWith(tok);
+          if (hits.length >= WEAK_TABLES) weak.push({ tok, ctx, n: hits.length });
+        }
+        return;
+      }
       (draftText.includes(tok) ? stale : misses).push({ tok, ctx });
     });
   });
   const uniq = a => { const seen = new Set(); return a.filter(x => seen.has(x.tok) ? false : (seen.add(x.tok), true)); };
-  const m = uniq(misses), s = uniq(stale);
+  const m = uniq(misses), s = uniq(stale), w = uniq(weak);
   console.log("\n" + label + ": " + m.length + " token(s) in no source, " +
-              s.length + " token(s) only in the AMT draft");
+              s.length + " token(s) only in the AMT draft, " +
+              w.length + " literal decimal(s) matching " + WEAK_TABLES + "+ tables (weakly verified)");
   m.forEach(x => console.log("   MISSING  " + x.tok + "   ...(" + x.ctx.trim() + ")..."));
   s.forEach(x => console.log("   REVIEW   " + x.tok + "   ...(" + x.ctx.trim() + ")..."));
+  if (process.env.HCHO_SHOW_WEAK) w.forEach(x => console.log("   WEAK(" + x.n + ")  " + x.tok + "   ...(" + x.ctx.trim() + ")..."));
   return m.length;
 }
 
@@ -124,4 +152,5 @@ console.log("\nSI cross-references: " + siFigs + " figures, " + siTabs + " table
   (overF.length + overT.length ? " CITED BUT ABSENT: " + overF.concat(overT).join(",") : " no dangling citations"));
 
 if (bad) { console.log("\nMISSING tokens appear in no source at all. Fix before submitting."); process.exit(1); }
-console.log("\nEvery number traces to a pipeline table, or is listed above for review.");
+console.log("\nEvery number traces to a pipeline table, or is listed above for review.\n" +
+            "Weakly verified literals are counted above; set HCHO_SHOW_WEAK=1 to list them, or derive them with {{n:...}}.");

@@ -42,6 +42,67 @@ data.table::fwrite(by_site, file.path(P$tables, "stats_by_site.csv"))
 data.table::fwrite(by_season, file.path(P$tables, "stats_by_season.csv"))
 data.table::fwrite(by_site_season, file.path(P$tables, "stats_by_site_season.csv"))
 data.table::fwrite(pooled, file.path(P$tables, "stats_pooled.csv"))
+
+# ---- H_eff under illustrative bias corrections ------------------------------
+# H_eff = column / surface number density, so a column biased low by a fraction
+# b has H_eff too low by the same factor and the corrected value is H_eff/(1-b).
+# The fractions are CFG$heff_bias_low_fraction (see the note there).
+h0 <- pooled$median_h_eff_km[1]
+bf <- CFG$heff_bias_low_fraction
+heff_scen <- tibble(scenario = names(bf), low_fraction = unname(bf),
+                    median_h_eff_km = h0, corrected_h_eff_km = h0 / (1 - unname(bf)))
+data.table::fwrite(heff_scen, file.path(P$tables, "heff_bias_scenarios.csv"))
+log_msg("H_eff bias scenarios: base ", round(h0, 2), " km -> ",
+        paste(sprintf("%s %.2f km", heff_scen$scenario, heff_scen$corrected_h_eff_km), collapse = "; "))
+data.table::fwrite(
+  tibble(key = c("heff_median_co", "heff_pbl_median_co",
+                 "heff_corr_network", "heff_corr_ftir",
+                 "seasonal_amp_column", "seasonal_amp_surface", "r_version"),
+         value = c(sprintf("%.2f", h0),
+                   sprintf("%.2f", pooled$median_tempo_pbl_km[1]),
+                   sprintf("%.2f", h0 / (1 - bf[["network_low_column"]])),
+                   sprintf("%.2f", h0 / (1 - bf[["ftir_pandora"]])),
+                   sprintf("%.1f", by_season$median_tempo_1e15[by_season$season == "JJA"] /
+                                   by_season$median_tempo_1e15[by_season$season == "DJF"]),
+                   sprintf("%.1f", by_season$median_surface_ugm3[by_season$season == "JJA"] /
+                                   by_season$median_surface_ugm3[by_season$season == "DJF"]),
+                   paste(R.version$major, R.version$minor, sep = ".")),
+         source = "R/05_analysis.R"),
+  file.path(P$tables, "manuscript_numbers_05.csv"))
+
+# ---- effective mixing height: measured met vs the national convention -------
+# Colorado is the only arm with co-located temperature and pressure. h_eff_km
+# uses them and is the value reported everywhere in the paper; h_eff_natconv_km
+# repeats the same calculation the way step 13 is forced to do it nationally, at
+# CFG$hcho_fallback_temp_c and TEMPO's own surface pressure. The gap between
+# them is what the national H_eff values give up, measured on the one network
+# where both can be computed rather than assumed to be small.
+if (all(c("h_eff_km", "h_eff_natconv_km") %in% names(use))) {
+  hh <- filter(use, is.finite(h_eff_km), is.finite(h_eff_natconv_km))
+  heff_summary <- function(d, ...) {
+    summarise(d, ...,
+              n = n(),
+              n_measured_temp = sum(!is.na(temp_c)),
+              n_measured_press = sum(!is.na(press_hpa)),
+              median_h_eff_km = median(h_eff_km),
+              median_h_eff_natconv_km = median(h_eff_natconv_km),
+              median_pct_diff = 100 * median((h_eff_natconv_km - h_eff_km) / h_eff_km),
+              median_abs_pct_diff = 100 * median(abs(h_eff_natconv_km - h_eff_km) / h_eff_km),
+              max_abs_pct_diff = 100 * max(abs(h_eff_natconv_km - h_eff_km) / h_eff_km))
+  }
+  heff_conv <- bind_rows(
+    hh |> group_by(site, site_name) |> heff_summary(.groups = "drop"),
+    hh |> heff_summary(site = "all sites", site_name = "")
+  )
+  data.table::fwrite(heff_conv, file.path(P$tables, "heff_convention.csv"))
+  rr <- filter(heff_conv, site == "all sites")
+  log_msg("H_eff convention: median ", round(rr$median_h_eff_km, 2),
+          " km with measured T/P vs ", round(rr$median_h_eff_natconv_km, 2),
+          " km under the national convention (", sprintf("%+.1f", rr$median_pct_diff),
+          " %; median |difference| ", round(rr$median_abs_pct_diff, 1),
+          " %, largest ", round(rr$max_abs_pct_diff, 1), " %); measured temperature on ",
+          rr$n_measured_temp, " of ", rr$n, " matched days")
+}
 print(by_site |> select(site, n, pearson_r, spearman_rho, rma_slope, median_h_eff_km))
 
 # Mixed model: surface ~ column + season, random intercept by site

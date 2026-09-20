@@ -7,9 +7,11 @@
 # began, in local standard time, and also gives the GMT date and time, so the
 # sampling window needs no time-zone assumption.
 #
-# Requests go state by state (one call per state and year, cached on disk), which
-# is far fewer calls than one per site. Needs AQS_EMAIL and AQS_KEY in
-# ~/.Renviron; see the README.
+# The request, the on-disk cache and the screen (units, null qualifiers, POC
+# averaging) are defined once in R/helpers_aqs.R and shared with steps 01 and 06,
+# so the national arm and the Colorado record cannot be screened differently.
+# Requests go state by state (one call per state and year, cached on disk).
+# Needs AQS_EMAIL and AQS_KEY in ~/.Renviron; see the README.
 # Outputs: data/processed/aqs_hcho_samples.csv        (one row per sample)
 #          output/tables/aqs_sample_clocks.csv        (start hours by site)
 #          output/tables/aqs_samples_inventory.csv    (site x duration summary)
@@ -17,13 +19,8 @@
 # =============================================================================
 source("R/00_config.R")
 
-aqs_email <- Sys.getenv("AQS_EMAIL")
-aqs_key   <- Sys.getenv("AQS_KEY")
-if (!nzchar(aqs_email) || !nzchar(aqs_key)) {
-  stop("AQS_EMAIL and AQS_KEY are not set. Sign up once with\n",
-       "  browseURL(\"https://aqs.epa.gov/data/api/signup?email=YOUR@EMAIL\")\n",
-       "then put AQS_EMAIL and AQS_KEY in ~/.Renviron and restart R.")
-}
+source("R/helpers_aqs.R")   # one definition of the AQS request and screen
+invisible(aqs_credentials()) # fail here, before any work, if the keys are missing
 cand_path <- file.path(P$processed, "aqs_candidate_sites.csv")
 if (!file.exists(cand_path)) stop("Run R/10_aqs_inventory.R first (no ", cand_path, ")")
 
@@ -37,108 +34,15 @@ log_msg(nrow(cand), " candidate monitors at ", n_distinct(cand$site_id), " sites
         length(states), " states; ", length(states) * length(CFG$aqs_years), " AQS requests at most")
 
 # ---- 1. one request per state and year, cached --------------------------------
-aqs_api <- function(service, ...) {
-  req <- public_request(paste0("https://aqs.epa.gov/data/api/", service)) |>
-    httr2::req_url_query(email = aqs_email, key = aqs_key, ...) |>
-    httr2::req_timeout(300)
-  resp <- httr2::req_perform(req)
-  Sys.sleep(CFG$aqs_api_pause_s)
-  j <- httr2::resp_body_json(resp, simplifyVector = TRUE)
-  status <- if (is.null(j$Header$status)) "unknown" else j$Header$status[1]
-  list(status = status,
-       data = if (is.null(j$Data) || !length(j$Data)) tibble() else tibble::as_tibble(j$Data))
-}
-
-raw <- map(states, function(st) {
-  map(CFG$aqs_years, function(y) {
-    f <- file.path(sample_dir, sprintf("sample_%s_%d.csv.gz", st, y))
-    if (file.exists(f) && !CFG$aqs_refresh) return(read_tbl(f, colClasses = "character"))
-    res <- tryCatch(aqs_api("sampleData/byState", param = CFG$aqs_param_hcho,
-                            bdate = sprintf("%d0101", y), edate = sprintf("%d1231", y), state = st),
-                    error = function(e) { log_msg("  request failed for state ", st, " ", y, ": ",
-                                                  conditionMessage(e)); list(status = "error", data = tibble()) })
-    if (!identical(res$status, "Success") && !nrow(res$data)) {
-      log_msg("  state ", st, " ", y, ": ", res$status)
-      return(NULL)
-    }
-    d <- mutate(res$data, across(everything(), as.character))
-    data.table::fwrite(d, f)
-    log_msg("  state ", st, " ", y, ": ", nrow(d), " sample rows")
-    d
-  }) |> list_rbind()
-}) |> list_rbind()
+raw <- aqs_fetch_state_years(states, CFG$aqs_years, sample_dir, CFG$aqs_refresh)
 if (!nrow(raw)) stop("AQS returned no sample-level formaldehyde data.")
 log_msg(nrow(raw), " raw sample rows downloaded or cached")
 
 # ---- 2. clean --------------------------------------------------------------------
-need <- c("state_code", "county_code", "site_number", "poc", "latitude", "longitude",
-          "date_local", "time_local", "date_gmt", "time_gmt", "sample_measurement",
-          "units_of_measure", "sample_duration", "qualifier", "method", "sample_frequency")
-miss <- setdiff(need, names(raw))
-if (length(miss)) stop("AQS sample records lack: ", paste(miss, collapse = ", "),
-                       "\n  fields present: ", paste(names(raw), collapse = ", "))
-
-# "24 HOUR", "3 HOURS", "8 HOUR" -> hours
-duration_hours <- function(x) {
-  n <- suppressWarnings(as.numeric(str_extract(x, "\\d+(\\.\\d+)?")))
-  ifelse(str_detect(x, regex("minute", ignore_case = TRUE)), n / 60, n)
-}
-null_codes <- CFG$aqs_null_qualifiers_fallback
-
-samples <- raw |>
-  mutate(site_id = paste(state_code, county_code, site_number, sep = "-"),
-         value_raw = suppressWarnings(as.numeric(sample_measurement)),
-         lat = suppressWarnings(as.numeric(latitude)),
-         lon = suppressWarnings(as.numeric(longitude)),
-         duration_h = duration_hours(sample_duration),
-         start_utc = suppressWarnings(ymd_hm(paste(date_gmt, time_gmt), tz = "UTC")),
-         sample_date_local = suppressWarnings(as.Date(date_local)),
-         start_hour_local = suppressWarnings(as.numeric(substr(time_local, 1, 2)) +
-                                             as.numeric(substr(time_local, 4, 5)) / 60),
-         qualifier = coalesce(qualifier, "")) |>
-  filter(site_id %in% cand$site_id,
-         !is.na(value_raw), !is.na(start_utc), !is.na(duration_h), duration_h > 0)
-
-# units: AQS reports carbonyls in ug/m3, occasionally in ppb
-unit_tbl <- count(samples, units_of_measure, name = "rows")
-log_msg("Units: ", paste(unit_tbl$units_of_measure, unit_tbl$rows, sep = " = ", collapse = "; "))
-samples <- samples |>
-  mutate(is_ppb = str_detect(units_of_measure, regex("billion", ignore_case = TRUE)),
-         hcho_ugm3 = if_else(is_ppb, value_raw * CFG$hcho_molar_mass / 24.45, value_raw))
-if (any(samples$is_ppb)) log_msg("  ", sum(samples$is_ppb),
-                                 " rows reported in ppb were converted at 25 C and 1 atm")
-
-# drop rows carrying an AQS null data qualifier (invalid or QC/QA values)
-has_null_q <- function(q) {
-  codes <- str_split(q, "[,;]\\s*")
-  vapply(codes, function(cc) any(str_trim(str_extract(cc, "^[A-Z0-9]+")) %in% null_codes), logical(1))
-}
-bad <- has_null_q(samples$qualifier)
-if (any(bad)) log_msg("Dropped ", sum(bad), " samples carrying a null data qualifier")
-samples <- samples[!bad, , drop = FALSE]
-
-# average duplicate POCs / repeated records of the same window
-samples <- samples |>
-  group_by(site_id, start_utc, duration_h) |>
-  summarise(hcho_ugm3 = mean(hcho_ugm3),
-            n_poc = n_distinct(poc),
-            lat = median(lat), lon = median(lon),
-            sample_date_local = first(sample_date_local),
-            start_hour_local = first(start_hour_local),
-            units = first(units_of_measure),
-            method = first(method),
-            sample_frequency = first(sample_frequency),
-            qualifiers = paste(sort(unique(qualifier[nzchar(qualifier)])), collapse = "; "),
-            .groups = "drop") |>
-  mutate(end_utc = start_utc + duration_h * 3600,
-         duration_class = case_when(abs(duration_h - 1) < 0.01 ~ "1 h",
-                                    abs(duration_h - 3) < 0.01 ~ "3 h",
-                                    abs(duration_h - 8) < 0.01 ~ "8 h",
-                                    abs(duration_h - 24) < 0.01 ~ "24 h",
-                                    TRUE ~ paste0(duration_h, " h")),
-         season = season_of(sample_date_local),
-         year = year(sample_date_local),
-         hcho_molec_cm3 = ugm3_to_molec_cm3(hcho_ugm3)) |>
+# aqs_clean_samples() types the columns, converts ppb to ug/m3, drops null-
+# qualifier rows and averages duplicate POCs. Only the duration and date filters
+# and the site metadata join are specific to this step.
+samples <- aqs_clean_samples(raw, keep_site_ids = cand$site_id) |>
   filter(duration_class %in% CFG$aqs_durations,
          sample_date_local >= CFG$date_range[1], sample_date_local <= CFG$date_range[2]) |>
   left_join(cand |> group_by(site_id) |>

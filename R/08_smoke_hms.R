@@ -47,6 +47,34 @@ if (isTRUE(CFG$run_three_hour_arm) && file.exists(th_path)) {
     select(-stamp, -win_start_local)
   windows <- bind_rows(windows, w3)
 }
+# The national arm. Its windows come from AQS, which records start_utc and
+# end_utc directly, so unlike the Colorado arms it needs no CFG$utc_offset_hours
+# assumption - and must not use one, because 123 sites span four time zones and
+# a single MST offset would mis-place every window outside Colorado by hours.
+#
+# This file does not exist until step 11 has run, so step 08 is scheduled twice:
+# once before the Colorado analyses, which need only their own flags, and again
+# after step 11 so the national arm is included before step 13 reads them.
+nat_path <- file.path(P$processed, "aqs_hcho_samples.csv")
+if (file.exists(nat_path)) {
+  nat <- read_tbl(nat_path, colClasses = list(character = "site_id")) |>
+    filter(!is.na(hcho_ugm3), !is.na(lat), !is.na(start_utc), !is.na(end_utc))
+  wn <- nat |>
+    transmute(site = site_id, lat, lon,
+              sample_date = as.Date(sample_date_local),
+              arm = "national",
+              convention = duration_class,
+              stamp_local = NA_character_,
+              win_start_utc = as.POSIXct(start_utc, tz = "UTC"),
+              win_end_utc   = as.POSIXct(end_utc,   tz = "UTC")) |>
+    distinct()
+  windows <- bind_rows(windows, wn)
+  log_msg("  national arm: ", nrow(wn), " sampling windows at ",
+          n_distinct(wn$site), " sites")
+} else {
+  log_msg("  national samples not yet built (step 11); smoke flags cover the Colorado arms only")
+}
+
 pad <- CFG$hms_time_pad_hours * 3600
 windows <- mutate(windows, pad_start_utc = win_start_utc - pad, pad_end_utc = win_end_utc + pad)
 log_msg(nrow(windows), " sampling windows (", paste(unique(windows$arm), collapse = ", "),
