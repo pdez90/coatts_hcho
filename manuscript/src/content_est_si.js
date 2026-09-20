@@ -144,6 +144,7 @@ module.exports = {
 
     { table: {
       caption: "Table S4. Agreement between surface HCHO and the TEMPO column by HMS smoke class over the site during the sampling window, for every duration in the national comparison, at the primary screening with scans inside the sampling window. Medians are over matched samples. The 3 h medium–heavy class holds too few samples to interpret.",
+      widths: [900, 1400, 1200, 1000, 1500, 1600, 1426],
       header: ["Duration", "Smoke class", "Matched samples", "Pearson r", "Surface HCHO (µg m^{-3})", "Column (10^{15} molecules cm^{-2})", "H_{eff} (km)"],
       rows: [
         ["24 h", "none", "3950", "0.29", "2.09", "4.07", "0.93"],

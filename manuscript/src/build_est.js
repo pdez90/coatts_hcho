@@ -100,6 +100,8 @@ function figure(file, caption) {
 
 const border = { style: BorderStyle.SINGLE, size: 4, color: "808080" };
 function table(t) {
+  // A table without widths gets equal columns rather than a crash at build time.
+  if (!t.widths) t.widths = t.header.map(() => Math.floor(9026 / t.header.length));
   const total = t.widths.reduce((a, b) => a + b, 0);
   const cell = (txt, i, isHead) => new TableCell({
     width: { size: t.widths[i], type: WidthType.DXA },
