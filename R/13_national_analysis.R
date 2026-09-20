@@ -474,8 +474,8 @@ if (length(big_states)) {
     scale_size_continuous(range = c(1.2, 4), name = "n") +
     labs(x = "Day-to-day correlation (within-month anomalies)", y = NULL,
          title = "Most variation in day-to-day agreement lies within states, not between them",
-         subtitle = sprintf(paste("Each point a 24 h monitor, red bar the state's pooled value;",
-                                  "only %.0f %% of the variance between monitors is between-state"),
+         subtitle = sprintf(paste("Each point a 24 h monitor; red bar the state's pooled day-to-day correlation.",
+                                  "\nOnly %.0f %% of the variance between monitors lies between states."),
                             pct_between))
   ggsave(file.path(P$figures, "fig15_state_heterogeneity.png"), p_state,
          width = 7.5, height = 4.8, dpi = 300)
@@ -690,9 +690,13 @@ if (nrow(lag_curve)) {
 
 if (nrow(by_hour)) {
   if (!"anom_pearson_r" %in% names(by_hour)) by_hour$anom_pearson_r <- NA_real_
-  ph <- by_hour |>
-    transmute(duration_class, window_start_hour, n, whole = pearson_r, anomalies = anom_pearson_r) |>
-    pivot_longer(c(whole, anomalies), names_to = "kind", values_to = "r")
+  if (!"anom_n" %in% names(by_hour)) by_hour$anom_n <- NA_real_
+  # Each series carries its own n: the anomaly correlation uses fewer samples
+  # (site-months with < 3 samples are dropped), so labelling it with the
+  # whole-period n overstated it.
+  ph <- bind_rows(
+    by_hour |> transmute(duration_class, window_start_hour, n, r = pearson_r, kind = "whole"),
+    by_hour |> transmute(duration_class, window_start_hour, n = anom_n, r = anom_pearson_r, kind = "anomalies"))
   p12 <- ggplot(ph, aes(window_start_hour, r, colour = kind, shape = kind)) +
     geom_hline(yintercept = 0, colour = "grey70") +
     geom_line(linewidth = 0.7) + geom_point(size = 2.6) +
