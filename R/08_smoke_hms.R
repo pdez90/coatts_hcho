@@ -114,6 +114,11 @@ status <- map(seq_along(hms_days), function(k) {
          md5 = ifelse(status == "ok", unname(tools::md5sum(hms_file(date))), NA_character_))
 data.table::fwrite(status, status_path)
 log_msg("HMS files: ", paste(names(table(status$status)), table(status$status), sep = " = ", collapse = "; "))
+data.table::fwrite(                     # SI S6 quotes these; the second pass (all arms) overwrites
+  tibble(key = c("hms_days_needed", "hms_days_missing"),
+         value = as.character(c(nrow(status), sum(status$status != "ok"))),
+         source = "R/08_smoke_hms.R"),
+  file.path(P$tables, "manuscript_numbers_08.csv"))
 
 # ---- 3. polygons covering each site ----------------------------------------------------
 sites <- windows |> distinct(site, lat, lon)

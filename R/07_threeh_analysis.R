@@ -37,6 +37,15 @@ if (CFG$threeh_exclude_unusual_stamps && "stamp_time_unusual" %in% names(samples
 manifest <- read_tbl(A3$manifest) |>
   mutate(mid_utc = as.POSIXct(mid_utc, tz = "UTC")) |>
   distinct(granule, mid_utc)
+# Manifest size for SI S3, from the manifest itself rather than a run log.
+man_raw <- read_tbl(A3$manifest) |> mutate(sample_date = as.Date(sample_date))
+th_dates <- n_distinct(samples$sample_date)
+th_gdates <- n_distinct(man_raw$sample_date[man_raw$sample_date %in% samples$sample_date])
+data.table::fwrite(
+  tibble(key = c("th_granules", "th_granule_dates", "th_sampling_dates"),
+         value = as.character(c(n_distinct(man_raw$granule), th_gdates, th_dates)),
+         source = "R/07_threeh_analysis.R"),
+  file.path(P$tables, "manuscript_numbers_07.csv"))
 cells <- read_tbl(A3$cells, colClasses = list(character = c("granule", "scan_start_utc", "site")))
 for (col in setdiff(names(cells), c("granule", "scan_start_utc", "site"))) {
   x <- cells[[col]]

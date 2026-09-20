@@ -55,6 +55,42 @@ data.table::fwrite(samples, file.path(P$processed, "aqs_hcho_samples.csv"))
 log_msg("Wrote ", nrow(samples), " samples at ", n_distinct(samples$site_id), " sites to ",
         file.path(P$processed, "aqs_hcho_samples.csv"))
 
+# ---- 2b. the sampling method, as AQS records it -----------------------------------
+# Compendium Method TO-11A in three variants: a DNPH cartridge behind a potassium
+# iodide ozone scrubber, a bare cartridge, and a heated ozone denuder. Classified
+# by keyword and refused if a method string matches none, so a new variant cannot
+# be folded silently into one of these. The shares are what the Methods quote.
+method_class <- case_when(
+  str_detect(samples$method, regex("denuder", ignore_case = TRUE))              ~ "heated ozone denuder",
+  str_detect(samples$method, regex("\\bKI\\b|potassium iodide|O3 SCRUB",
+                                   ignore_case = TRUE))                          ~ "KI ozone scrubber",
+  str_detect(samples$method, regex("DNPH", ignore_case = TRUE))                 ~ "bare DNPH cartridge",
+  TRUE ~ NA_character_)
+if (anyNA(method_class)) {
+  stop("Unclassified AQS method string(s): ",
+       paste(unique(samples$method[is.na(method_class)]), collapse = "; "))
+}
+methods_tbl <- tibble(method_class = method_class, method = samples$method) |>
+  count(method_class, method, name = "samples") |>
+  mutate(pct = round(100 * samples / sum(samples), 1)) |>
+  arrange(desc(samples))
+data.table::fwrite(methods_tbl, file.path(P$tables, "aqs_sample_methods.csv"))
+print(methods_tbl)
+n_total <- nrow(samples)          # outside the pipe: inside it, `samples` is the count column
+pct_class <- methods_tbl |>
+  group_by(method_class) |>
+  summarise(pct = 100 * sum(samples) / n_total, .groups = "drop")
+pc <- function(k) {
+  v <- pct_class$pct[match(k, pct_class$method_class)]
+  if (length(v) != 1 || !is.finite(v)) stop("No share for method class '", k, "'")
+  sprintf("%.0f", v)
+}
+data.table::fwrite(
+  tibble(key = c("pct_method_ki", "pct_method_bare", "pct_method_denuder"),
+         value = c(pc("KI ozone scrubber"), pc("bare DNPH cartridge"), pc("heated ozone denuder")),
+         source = "R/11_aqs_samples.R"),
+  file.path(P$tables, "manuscript_numbers_11.csv"))
+
 # ---- 3. what clock does each site sample on? -------------------------------------
 clocks <- samples |>
   count(site_id, site_name, state, duration_class, start_hour_local, name = "samples") |>
@@ -91,13 +127,12 @@ print(inv |> group_by(duration_class) |> slice_head(n = 5) |>
 #
 # It is an estimate either way: step 12 drops sites without coordinates or
 # without granules, and counts the scans it actually retrieves rather than
-# aqs_scans_per_day_guess. The realised extraction was 50 clusters and 88,622
-# cluster-scans against the 58 and ~85,000 estimated here.
+# aqs_scans_per_day_guess. What the extraction actually contained is counted by
+# step 13 from the cells file (manuscript_numbers_13_extraction.csv).
 clus <- samples |>
   filter(duration_class %in% CFG$aqs_arm_durations) |>
   distinct(site_id, lat, lon, duration_class, sample_date_local) |>
-  mutate(cluster = paste0("c", round(lat / CFG$aqs_cluster_deg_lat), "_",
-                          round(lon / CFG$aqs_cluster_deg_lon)))
+  mutate(cluster = cluster_of(lat, lon))   # the rule step 12 uses (R/00_config.R)
 cost <- clus |>
   group_by(cluster) |>
   summarise(sites = n_distinct(site_id), dates = n_distinct(sample_date_local), .groups = "drop")

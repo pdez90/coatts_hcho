@@ -37,9 +37,7 @@ samples <- read_tbl(samples_path, colClasses = list(character = c("site_id", "qu
   filter(duration_class %in% CFG$aqs_arm_durations, !is.na(lat), !is.na(lon), !is.na(start_utc))
 if (!nrow(samples)) stop("No samples with durations ", paste(CFG$aqs_arm_durations, collapse = ", "))
 
-cluster_of <- function(lat, lon) sprintf("lat%+03d_lon%+04d",
-                                         round(lat / CFG$aqs_cluster_deg_lat),
-                                         round(lon / CFG$aqs_cluster_deg_lon))
+# cluster_of() is defined in R/00_config.R, shared with steps 11 and 13
 sites <- samples |>
   group_by(site_id) |>
   summarise(lat = median(lat), lon = median(lon), site_name = first(site_name),

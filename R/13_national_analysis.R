@@ -56,6 +56,29 @@ log_msg(nrow(samples), " samples at ", n_distinct(samples$site_id), " sites with
         nrow(cells), " cell rows")
 print(count(samples, duration_class, name = "samples"))
 
+# ---- 0. what the extraction contained ---------------------------------------
+# The SI describes the extraction by its size. Counted from the cells file with
+# the same cluster rule step 12 used, so the figures follow the data rather than
+# a run log.
+site_ll <- samples |>
+  group_by(site_id) |>
+  summarise(lat = median(lat), lon = median(lon), .groups = "drop")
+extraction <- cells |>
+  distinct(granule, site) |>
+  inner_join(site_ll, by = c(site = "site_id")) |>
+  mutate(cluster = cluster_of(lat, lon))
+data.table::fwrite(
+  tibble(key = c("n_clusters", "n_cluster_scans", "n_cell_records_million"),
+         value = c(as.character(n_distinct(cluster_of(site_ll$lat, site_ll$lon))),
+                   format(n_distinct(paste(extraction$cluster, extraction$granule)), big.mark = " "),
+                   sprintf("%.2f", nrow(cells) / 1e6)),
+         source = "R/13_national_analysis.R"),
+  file.path(P$tables, "manuscript_numbers_13_extraction.csv"))
+log_msg("Extraction: ", n_distinct(cluster_of(site_ll$lat, site_ll$lon)), " clusters, ",
+        n_distinct(paste(extraction$cluster, extraction$granule)), " cluster-scans with cells, ",
+        nrow(cells), " cell records")
+rm(extraction)
+
 # ---- 1. scan-level values (screening as in steps 04 and 07) -----------------
 hour_key <- function(t) as.integer(as.numeric(t) %/% 3600)      # UTC hour index
 
@@ -161,9 +184,22 @@ coverage <- primary |>
   group_by(duration_class, lag_h, site, site_name, state) |>
   summarise(samples = n(), with_any_scan = sum(n_scans > 0), n_usable = sum(usable),
             usable_pct = round(100 * mean(usable), 1),
-            median_scans = median(n_scans), .groups = "drop") |>
+            median_scans = median(n_scans),                       # scans with a granule
+            median_valid_scans = median(n_valid_scans[usable]),   # scans passing the screen, usable days
+            .groups = "drop") |>
   arrange(duration_class, lag_h, desc(n_usable))
 data.table::fwrite(coverage, file.path(P$tables, "national_coverage.csv"))
+# Table 1 quotes the median number of USABLE scans per sample: computed over
+# usable samples, pooled across sites, not the median of scans with a granule.
+scans_usable <- primary |>
+  filter(lag_h == 0, usable) |>
+  group_by(duration_class) |>
+  summarise(median_valid_scans = median(n_valid_scans), .groups = "drop")
+data.table::fwrite(
+  tibble(key = paste0("scans_usable_median_", sub(" h", "", scans_usable$duration_class)),
+         value = sprintf("%.0f", scans_usable$median_valid_scans),
+         source = "R/13_national_analysis.R"),
+  file.path(P$tables, "manuscript_numbers_13_coverage.csv"))
 print(coverage |> group_by(duration_class, lag_h) |>
         summarise(sites = n(), samples = sum(samples), usable = sum(n_usable),
                   usable_pct = round(100 * sum(n_usable) / sum(samples), 1), .groups = "drop"))
@@ -245,6 +281,52 @@ by_site <- by_site |>
          anom_pearson_q_perm = if ("anom_pearson_p_perm" %in% names(by_site))
            p.adjust(anom_pearson_p_perm, method = "BH") else NA_real_)
 data.table::fwrite(by_site, file.path(P$tables, "national_stats_by_site.csv"))
+
+# ---- 5a. the site-level distribution, as the numbers the text quotes ----------
+# Median and quartiles of the whole-period and day-to-day correlations by
+# duration (Table 1, Results, abstract), their extremes, and the day-to-day
+# correlation by thirds of each site's median surface concentration - the
+# concentration dependence a fixed retrieval noise predicts. Written by name so
+# the text cannot carry a quartile from an earlier run.
+if (!"anom_pearson_r" %in% names(by_site)) stop("by_site lacks anom_pearson_r")
+site_summary_keys <- function(d, tag) {
+  q <- function(x, p) sprintf("%.2f", quantile(x, p, na.rm = TRUE))
+  tibble(key = paste0(c("n_sites_", "site_r_median_", "site_r_q25_", "site_r_q75_",
+                        "site_dd_median_", "site_dd_q25_", "site_dd_q75_",
+                        "site_dd_min_", "site_dd_max_"), tag),
+         value = c(as.character(nrow(d)),
+                   q(d$pearson_r, 0.5), q(d$pearson_r, 0.25), q(d$pearson_r, 0.75),
+                   q(d$anom_pearson_r, 0.5), q(d$anom_pearson_r, 0.25), q(d$anom_pearson_r, 0.75),
+                   q(d$anom_pearson_r, 0), q(d$anom_pearson_r, 1)))
+}
+site_keys <- bind_rows(
+  site_summary_keys(filter(by_site, duration_class == "24 h"), "24"),
+  site_summary_keys(filter(by_site, duration_class == "8 h"),  "8"),
+  site_summary_keys(filter(by_site, duration_class == "3 h"),  "3"))
+
+# Thirds are cut at the tertiles of the site medians, not by ntile(): several
+# sites share the same median (AQS reports to 0.1 ppbC), and ntile() would split
+# a tie across two groups by row order, making the result depend on sort order.
+thirds <- by_site |>
+  filter(duration_class == "24 h", !is.na(anom_pearson_r)) |>
+  mutate(third = as.integer(cut(median_surface_ugm3,
+                                breaks = quantile(median_surface_ugm3, c(0, 1/3, 2/3, 1)),
+                                include.lowest = TRUE, labels = FALSE))) |>
+  group_by(third) |>
+  summarise(n_sites = n(), median_dd_r = median(anom_pearson_r),
+            conc_lo = min(median_surface_ugm3), conc_hi = max(median_surface_ugm3),
+            .groups = "drop")
+data.table::fwrite(thirds, file.path(P$tables, "national_site_conc_thirds.csv"))
+print(thirds)
+third_keys <- tibble(
+  key = c("tert_low_r", "tert_mid_r", "tert_high_r", "tert_low_lo", "tert_low_hi"),
+  value = c(sprintf("%.2f", thirds$median_dd_r[thirds$third == 1]),
+            sprintf("%.2f", thirds$median_dd_r[thirds$third == 2]),
+            sprintf("%.2f", thirds$median_dd_r[thirds$third == 3]),
+            sprintf("%.1f", thirds$conc_lo[thirds$third == 1]),
+            sprintf("%.1f", thirds$conc_hi[thirds$third == 1])))
+data.table::fwrite(bind_rows(site_keys, third_keys) |> mutate(source = "R/13_national_analysis.R"),
+                   file.path(P$tables, "manuscript_numbers_13_sites.csv"))
 
 # ---- 5b. heterogeneity between states ----------------------------------------
 # A pooled correlation rewards any seasonal cycle the pooled sites share, so it

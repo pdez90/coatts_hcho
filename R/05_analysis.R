@@ -32,6 +32,23 @@ coverage <- primary |>
             .groups = "drop")
 data.table::fwrite(coverage, file.path(P$tables, "coverage_by_site.csv"))
 print(coverage)
+coverage_season <- primary |>
+  group_by(season) |>
+  summarise(coatts_days = n(), days_with_screened_tempo = sum(usable),
+            usable_pct = round(100 * mean(usable), 1), .groups = "drop")
+data.table::fwrite(coverage_season, file.path(P$tables, "coverage_by_season.csv"))
+print(coverage_season)
+# How many granules the Colorado 24 h manifest holds and how many sampling dates
+# they cover (SI S3), read from the manifest rather than copied from a run log.
+man_co <- read_tbl(file.path(P$processed, "tempo_manifest.csv")) |>
+  mutate(sample_date = as.Date(sample_date))
+co_dates <- n_distinct(primary$sample_date)
+co_gdates <- n_distinct(man_co$sample_date[man_co$sample_date %in% primary$sample_date])
+data.table::fwrite(
+  tibble(key = c("co_granules", "co_granule_dates", "co_sampling_dates", "co_nogranule_dates"),
+         value = as.character(c(n_distinct(man_co$granule), co_gdates, co_dates, co_dates - co_gdates)),
+         source = "R/05_analysis.R"),
+  file.path(P$tables, "manuscript_numbers_05_manifest.csv"))
 
 # ---- 2. relationship by site, season, pooled ------------------------------------------
 by_site   <- use |> group_by(site, site_name) |> group_modify(~ relstats(.x)) |> ungroup()
@@ -57,7 +74,8 @@ log_msg("H_eff bias scenarios: base ", round(h0, 2), " km -> ",
 data.table::fwrite(
   tibble(key = c("heff_median_co", "heff_pbl_median_co",
                  "heff_corr_network", "heff_corr_ftir",
-                 "seasonal_amp_column", "seasonal_amp_surface", "r_version"),
+                 "seasonal_amp_column", "seasonal_amp_surface", "r_version",
+                 "cov_DJF", "cov_MAM", "cov_JJA", "cov_SON"),
          value = c(sprintf("%.2f", h0),
                    sprintf("%.2f", pooled$median_tempo_pbl_km[1]),
                    sprintf("%.2f", h0 / (1 - bf[["network_low_column"]])),
@@ -66,7 +84,11 @@ data.table::fwrite(
                                    by_season$median_tempo_1e15[by_season$season == "DJF"]),
                    sprintf("%.1f", by_season$median_surface_ugm3[by_season$season == "JJA"] /
                                    by_season$median_surface_ugm3[by_season$season == "DJF"]),
-                   paste(R.version$major, R.version$minor, sep = ".")),
+                   paste(R.version$major, R.version$minor, sep = "."),
+                   sprintf("%.1f", coverage_season$usable_pct[coverage_season$season == "DJF"]),
+                   sprintf("%.1f", coverage_season$usable_pct[coverage_season$season == "MAM"]),
+                   sprintf("%.1f", coverage_season$usable_pct[coverage_season$season == "JJA"]),
+                   sprintf("%.1f", coverage_season$usable_pct[coverage_season$season == "SON"])),
          source = "R/05_analysis.R"),
   file.path(P$tables, "manuscript_numbers_05.csv"))
 

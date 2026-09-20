@@ -28,7 +28,11 @@ function load() {
     if (ki < 0 || vi < 0) continue;
     for (const ln of lines) {
       const cells = ln.split(",").map(s => s.trim().replace(/^"|"$/g, ""));
-      if (cells[ki]) map.set(cells[ki], cells[vi]);
+      // A key whose value is NA, NaN, Inf or empty is not a number the text
+      // may quote: leave it out, so the marker stays unresolved and the build
+      // refuses, instead of printing "NA" into the manuscript.
+      if (cells[ki] && cells[vi] !== undefined &&
+          !/^(NA|NaN|-?Inf|)$/.test(cells[vi].trim())) map.set(cells[ki], cells[vi]);
     }
   }
   return map;

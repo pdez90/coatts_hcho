@@ -137,7 +137,14 @@ CFG <- list(
   run_site_map = TRUE,
   run_clear_sky_bias = TRUE,
   run_toc_graphic = TRUE,                     # step 16: the ES&T TOC/abstract graphic
-  aqs_lags_h = c(-3, 0, 3, 6),
+  # Lags the national arm can evaluate. Step 12 retrieves only aqs_lag_pad_h
+  # (3 h) either side of each sub-daily window, so a +6 h window has scans only
+  # where another sample's padded window happens to cover it - complete for the
+  # 8 h sites, whose three blocks tile the day, absent for the Colorado 3 h
+  # sites. A lag evaluated on a systematically incomplete scan set is not a
+  # lag result, so the national set stops at the padding; +6 and +9 h are
+  # examined only in the Colorado 3 h arm, whose extraction covers 03-19 MST.
+  aqs_lags_h = c(-3, 0, 3),
   aqs_base_url = "https://aqs.epa.gov/aqsweb/airdata/",
   aqs_param_hcho = "43502",                  # AQS parameter code for formaldehyde
   aqs_years = c(2024L, 2025L),
@@ -429,6 +436,13 @@ season_of <- function(d) {
 ugm3_to_molec_cm3 <- function(c_ugm3, M = CFG$hcho_molar_mass) {
   c_ugm3 * 6.02214076e23 * 1e-12 / M
 }
+
+# The box a site falls in for the national TEMPO extraction: step 12 makes one
+# OPeNDAP request per box and scan, step 11 estimates that cost, step 13 reports
+# the extraction's size. One rule, so the three cannot count different boxes.
+cluster_of <- function(lat, lon) sprintf("lat%+03d_lon%+04d",
+                                         round(lat / CFG$aqs_cluster_deg_lat),
+                                         round(lon / CFG$aqs_cluster_deg_lon))
 # Reported ug/m3 at standard conditions -> mixing ratio (exact), then the number
 # density at the site's own temperature and pressure.
 ugm3_std_to_ppb <- function(c_ugm3, M = CFG$hcho_molar_mass) c_ugm3 * 24.45 / M
