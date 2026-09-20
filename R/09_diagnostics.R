@@ -20,6 +20,13 @@
 #      control needed to read the 3-h window-versus-lag contrast (test 2)
 # Outputs: output/tables/diag1_* ... diag6_*, output/figures/figS3_*, figS4_*
 # =============================================================================
+# Scope. Tests 3 (noise ceiling) and 6 (time of day) are also run at every 24 h
+# site by R/17_national_diagnostics.R, with the same shared screen, anomaly
+# definition and Williams' test; the manuscript quotes the national versions.
+# This step keeps the Colorado versions for what only the Colorado extraction
+# carries: the reported-uncertainty ceilings (Test 3), the terrain index (Test
+# 4) and the 3 h window diagnostics (Tests 1-2). SI S8 cross-checks that the
+# two implementations give the same ceilings at the Colorado sites.
 source("R/00_config.R")
 source("R/helpers_screen.R")   # one definition of the TEMPO cell screen
 source("R/helpers_stats.R")
