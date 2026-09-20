@@ -180,9 +180,11 @@ CFG <- list(
   # Start-End intervals cluster around ~11-15 UTC and ~18-24 UTC, so an hour not
   # covered by a polygon is not thereby established as free of smoke. Windows are
   # widened by this many hours on each side before the overlap test as a
-  # precaution. It makes almost no difference: strict overlap flags 39 of the 233
-  # 3 h windows against 41, and the 453 24 h windows identically
-  # (output/tables/smoke_pad_sensitivity.csv). An earlier comment here justified
+  # precaution. For the Colorado arms it makes almost no difference: strict
+  # overlap flags 39 of the 234 3 h windows against 41, and the 453 24 h windows
+  # identically. Nationally it matters more - 29.9 % of windows flagged strictly
+  # against 38.3 % padded (output/tables/smoke_pad_sensitivity.csv) - and the
+  # SI reports both. An earlier comment here justified
   # the padding by a 09-12 MST gap, which applied only while 09:00 was wrongly
   # read as the sample START; the window is 06-09 MST = 13-16 UTC.
   hms_time_pad_hours = 3,
