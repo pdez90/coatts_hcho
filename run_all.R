@@ -88,6 +88,7 @@ main <- function() {
   add("R/08_smoke_hms.R",       "coatts", smoke && aqs_s)
   add("R/12_tempo_national.R",  "coatts", aqs_t)
   add("R/13_national_analysis.R", "coatts", aqs_a)
+  add("R/17_national_diagnostics.R", "coatts", diag && nat_done)   # noise ceiling and time of day at every 24 h site
   add("R/14_site_map.R",        "coatts", map_fig   && nat_done)
   add("R/15_clear_sky_bias.R",  "coatts", clear_sky && nat_done)
   add("R/16_toc_graphic.R",     "coatts", toc_fig   && nat_done)

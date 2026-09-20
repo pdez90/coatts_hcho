@@ -95,24 +95,8 @@ scan_level <- function(cells, block, max_ecf = CFG$qc_max_cloud_fraction) {
     mutate(valid = n_pass >= pmax(1, ceiling(CFG$qc_min_cell_fraction * n_cells)),
            u_rms = nan_to_na(u_rms), ecf = nan_to_na(ecf), sza = nan_to_na(sza))
 }
-# Williams' t for two dependent correlations sharing y: cor(y, x1) vs cor(y, x2)
-# (Steiger 1980, eq. 7), with a paired bootstrap CI for the difference
-dep_cor_test <- function(y, x1, x2) {
-  ok <- is.finite(y) & is.finite(x1) & is.finite(x2)
-  y <- y[ok]; x1 <- x1[ok]; x2 <- x2[ok]; n <- length(y)
-  if (n < 8) return(tibble(n = n))
-  r12 <- cor(y, x1); r13 <- cor(y, x2); r23 <- cor(x1, x2)
-  detR <- 1 - r12^2 - r13^2 - r23^2 + 2 * r12 * r13 * r23
-  rbar <- (r12 + r13) / 2
-  t <- (r12 - r13) * sqrt((n - 1) * (1 + r23) / (2 * ((n - 1) / (n - 3)) * detR + rbar^2 * (1 - r23)^3))
-  bt <- replicate(nboot, {
-    k <- sample.int(n, n, replace = TRUE)
-    suppressWarnings(cor(y[k], x1[k]) - cor(y[k], x2[k]))
-  })
-  tibble(n = n, r_start = r12, r_end = r13, r_between_window_columns = r23, diff_start_minus_end = r12 - r13,
-         diff_ci_lo = quantile(bt, 0.025, na.rm = TRUE)[[1]], diff_ci_hi = quantile(bt, 0.975, na.rm = TRUE)[[1]],
-         williams_t = t, df = n - 3, williams_p = 2 * pt(-abs(t), df = n - 3))
-}
+# dep_cor_test() (Williams' t with a paired bootstrap CI) lives in
+# R/helpers_stats.R, shared with step 17; nboot above is its default.
 
 summary_lines <- character()
 note <- function(...) { line <- paste0(...); summary_lines <<- c(summary_lines, line); log_msg(line) }

@@ -153,6 +153,26 @@ perm_anom_p <- function(d, nperm = 2000L, seed = 42L) {
   (ge + 1) / (nperm + 1)
 }
 
+# Williams' t for two dependent correlations sharing y: cor(y, x1) vs cor(y, x2)
+# (Steiger 1980, eq. 7), with a paired bootstrap CI for the difference. Used by
+# step 09 (Colorado 3 h windows, 24 h time of day) and step 17 (every 24 h site).
+dep_cor_test <- function(y, x1, x2, nboot = 2000L) {
+  ok <- is.finite(y) & is.finite(x1) & is.finite(x2)
+  y <- y[ok]; x1 <- x1[ok]; x2 <- x2[ok]; n <- length(y)
+  if (n < 8) return(tibble(n = n))
+  r12 <- cor(y, x1); r13 <- cor(y, x2); r23 <- cor(x1, x2)
+  detR <- 1 - r12^2 - r13^2 - r23^2 + 2 * r12 * r13 * r23
+  rbar <- (r12 + r13) / 2
+  t <- (r12 - r13) * sqrt((n - 1) * (1 + r23) / (2 * ((n - 1) / (n - 3)) * detR + rbar^2 * (1 - r23)^3))
+  bt <- replicate(nboot, {
+    k <- sample.int(n, n, replace = TRUE)
+    suppressWarnings(cor(y[k], x1[k]) - cor(y[k], x2[k]))
+  })
+  tibble(n = n, r_start = r12, r_end = r13, r_between_window_columns = r23, diff_start_minus_end = r12 - r13,
+         diff_ci_lo = quantile(bt, 0.025, na.rm = TRUE)[[1]], diff_ci_hi = quantile(bt, 0.975, na.rm = TRUE)[[1]],
+         williams_t = t, df = n - 3, williams_p = 2 * pt(-abs(t), df = n - 3))
+}
+
 # Correlation of anomalies. pearson_p is the ordinary test and is optimistic for
 # the reason given above; pearson_p_perm is the within-site-month permutation
 # p-value and is the one to quote.
