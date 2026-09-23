@@ -94,7 +94,12 @@ hourly_for <- function(max_ecf, block) {
     group_by(granule, site) |>
     summarise(n_cells = n(), n_pass = sum(pass),
               vc  = if (any(pass)) mean(vertical_column[pass]) else NA_real_,
-              vcu = if (any(pass)) sqrt(mean(vertical_column_uncertainty[pass]^2)) else NA_real_,
+              # A passing cell may carry a column but no uncertainty. Without the
+              # finiteness filter one such cell turned the whole scan's VCU into NA
+              # even though its column mean was sound.
+              vcu = if (any(pass & is.finite(vertical_column_uncertainty)))
+                      sqrt(mean(vertical_column_uncertainty[pass & is.finite(vertical_column_uncertainty)]^2))
+                    else NA_real_,
               pbl = if (any(pass)) mean(pbl_height[pass], na.rm = TRUE) else NA_real_,
               sp  = if (any(pass)) mean(surface_pressure[pass], na.rm = TRUE) else NA_real_,
               ecf = mean(eff_cloud_fraction, na.rm = TRUE),
@@ -159,8 +164,14 @@ matched <- coatts |>
          hcho_ppb_std = ugm3_std_to_ppb(hcho_ugm3),
          hcho_molec_cm3_local = ppb_to_molec_cm3(hcho_ppb_std, temp_c_used, press_hpa_used),
          h_eff_std_km = ifelse(tempo_vc > 0 & hcho_molec_cm3 > 0, tempo_vc / hcho_molec_cm3 / 1e5, NA_real_),
+         # One basis only. This used to fall back to h_eff_std_km when local T
+         # and p were missing, which let a single column mix two denominators;
+         # the fallback never fired (0 of 18,810 matched rows across the three
+         # arms), and the comment above always said it should not exist.
          h_eff_km = ifelse(tempo_vc > 0 & hcho_molec_cm3_local > 0,
-                           tempo_vc / hcho_molec_cm3_local / 1e5, h_eff_std_km),
+                           tempo_vc / hcho_molec_cm3_local / 1e5, NA_real_),
+         h_eff_basis = ifelse(tempo_vc > 0 & hcho_molec_cm3_local > 0,
+                              "local (HRRR T and p)", NA_character_),
          # The convention every arm used before HRRR: a fixed temperature
          # (CFG$hcho_fallback_temp_c) and TEMPO's own surface pressure. Kept as
          # an audit column so the size of the Sept 2026 change is visible in the
@@ -185,6 +196,11 @@ log_msg("Number density: ", sum(!is.na(prim_chk$temp_c_hrrr)), " of ", nrow(prim
         "median H_eff ", round(median(prim_chk$h_eff_km, na.rm = TRUE), 2), " km at HRRR conditions vs ",
         round(median(prim_chk$h_eff_std_km, na.rm = TRUE), 2), " km at standard conditions, ",
         round(median(prim_chk$h_eff_natconv_km, na.rm = TRUE), 2), " km at the pre-HRRR convention")
+log_msg("H_eff basis: ", sum(!is.na(prim_chk$h_eff_km)), " of ", nrow(prim_chk),
+        " usable matched days have a local-condition H_eff; ",
+        sum(prim_chk$tempo_vc > 0 & is.na(prim_chk$h_eff_km), na.rm = TRUE),
+        " have a positive column but no HRRR density and are left missing ",
+        "(these took the standard-condition fallback before Sept 2026)")
 log_msg("Primary variant (ECF <= ", CFG$qc_max_cloud_fraction, ", 3x3, all day): ",
         sum(primary$usable), " usable site-days of ", nrow(primary), " COATTS sample days (",
         sum(primary$n_scans == 0), " with no TEMPO scan at all)")

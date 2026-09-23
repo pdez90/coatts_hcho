@@ -188,6 +188,9 @@ CFG <- list(
   # the padding by a 09-12 MST gap, which applied only while 09:00 was wrongly
   # read as the sample START; the window is 06-09 MST = 13-16 UTC.
   hms_time_pad_hours = 3,
+  # A date recorded as not_found is not retried, so a transient outage would
+  # otherwise be cached for good. Set TRUE to re-attempt those dates.
+  hms_retry_not_found = FALSE,
 
   # TEMPO formaldehyde Level 3, version 4 (0.02 deg, hourly scans)
   tempo_collection = "C3685897141-LARC_CLOUD",   # TEMPO_HCHO_L3 V04

@@ -17,7 +17,6 @@
 // the draft alone is listed for review.
 const fs   = require("fs");
 const path = require("path");
-const V19  = require("./content_v19.js");
 const N    = require("./numbers.js");   // resolves {{n:key}} from the pipeline
 const C    = N.resolve(require("./content_est.js"));
 const SI   = N.resolve(require("./content_est_si.js"));
@@ -69,7 +68,13 @@ const tablesWith = tok => perTable.filter(x => x[1].includes(tok)).map(x => x[0]
 const WEAK_TABLES = 5;
 console.log("  reading " + tableFiles.length + " output tables from " + TABLE_DIR);
 
-const draftText = harvest(V19).join("  ");
+// The AMT-length draft (content_v19.js) used to serve as a secondary source,
+// so a number found there but in no pipeline table was reported as REVIEW
+// rather than MISSING. The legacy drafts were removed from the repository on
+// 2026-09-23; the three constants that relied on it are now allow-listed
+// below, which is more honest - they are physical constants and a DOI, not
+// quantities any pipeline table could confirm.
+const draftText = "";
 
 // Decimals, and integers of two digits or more. Two-digit integers matter:
 // Table S1 carried "92 samples, 42 matched" for Platteville through the 2023
@@ -83,7 +88,10 @@ const ALLOW = new Set([
   "200",
   "2000",   // bootstrap replicates / permutations, phrased differently in v19
   "2001",   // the permutation p-value denominator
-  "1000"    // RMA bootstrap resamples
+  "1000",   // RMA bootstrap resamples
+  "24.45",  // molar volume of an ideal gas at 25 C and 1 atm, L/mol
+  "30.026", // molar mass of HCHO, g/mol
+  "10.5067" // DOI prefix of the TEMPO L3 product
 ]);
 
 // Tokens that arrived through a {{n:key}} marker are derived, not transcribed;

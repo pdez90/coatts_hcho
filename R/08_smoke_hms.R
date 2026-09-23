@@ -99,7 +99,8 @@ status <- map(seq_along(hms_days), function(k) {
   if (k %% 50 == 0) log_msg("  HMS ", k, "/", length(hms_days))
   if (is_zip(f)) return(tibble(date = d, status = "ok"))
   prev <- if (!is.null(old_status)) old_status$status[old_status$date == as.character(d)] else character()
-  if (length(prev) && prev[1] == "not_found") return(tibble(date = d, status = "not_found"))
+  if (length(prev) && prev[1] == "not_found" && !isTRUE(CFG$hms_retry_not_found))
+    return(tibble(date = d, status = "not_found"))
   tmp <- tempfile(fileext = ".zip")
   resp <- tryCatch(public_request(hms_url(d)) |> httr2::req_error(is_error = function(r) FALSE) |>
                      httr2::req_perform(path = tmp), error = function(e) NULL)
