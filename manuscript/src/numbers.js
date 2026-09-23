@@ -44,8 +44,19 @@ const MARK = /\{\{n:([A-Za-z0-9_]+)\}\}/g;
 function resolve(doc, opts) {
   const map = (opts && opts.map) || load();
   const missing = new Set();
-  const sub = s => s.replace(MARK, (m, k) => {
-    if (map.has(k)) return map.get(k);
+  // ES&T style: a comma every three digits from five digits up; four-digit
+// integers take no separator. The pipeline writes some counts with a space
+// separator and some bare, so normalise here rather than in the R step.
+function thousands(v) {
+  const t = String(v).replace(/[\u0020\u2009\u00a0](?=\d{3}\b)/g, "");
+  if (!/^-?\d+$/.test(t)) return v;
+  const digits = t.replace("-", "");
+  if (digits.length < 5) return t;
+  return t.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+const sub = s => s.replace(MARK, (m, k) => {
+    if (map.has(k)) return thousands(map.get(k));
     missing.add(k);
     return m;
   });
