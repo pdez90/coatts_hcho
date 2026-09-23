@@ -82,17 +82,28 @@ const draftText = "";
 // Years and section numbers are the cost, and they land in the review list.
 const NUM = /-?\d+\.\d+|\b\d{2,}\b/g;
 
-const ALLOW = new Set([
-  "7000",   // the ES&T word limit, quoted in the drafting notes
-  "150",    // ES&T abstract limits, drafting notes
-  "200",
-  "2000",   // bootstrap replicates / permutations, phrased differently in v19
-  "2001",   // the permutation p-value denominator
-  "1000",   // RMA bootstrap resamples
-  "24.45",  // molar volume of an ideal gas at 25 C and 1 atm, L/mol
-  "30.026", // molar mass of HCHO, g/mol
-  "10.5067" // DOI prefix of the TEMPO L3 product
+// A number is exempt only where its own paragraph identifies it. Keying the
+// exemption to the value alone would let that number pass ANYWHERE it appeared,
+// which is exactly the failure this manuscript has had: a correct value
+// attached to the wrong claim (four cases on 2026-09-22, among them an R^{2}
+// that had become a citation). The anchor is what makes the allowance a
+// statement about a named quantity rather than about a digit string.
+const ALLOW = new Map([
+  ["7000",    /word limit|ES&T Research Article/i],   // the ES&T length limit, in the drafting notes
+  ["150",     /abstract/i],                            // ES&T abstract limits, drafting notes
+  ["200",     /abstract/i],
+  ["2000",    /permutation|bootstrap|replicate/i],     // permutations / bootstrap replicates
+  ["2001",    /permutation/i],                         // the permutation p-value denominator
+  ["1000",    /bootstrap|resample/i],                  // RMA bootstrap resamples
+  // Physical constants and an identifier. No pipeline table generates these,
+  // so they cannot be traced the way a result can; each is pinned to the
+  // sentence that defines it.
+  ["24.45",   /mixing ratio|molar volume/i],           // L/mol at 25 C and 1 atm
+  ["30.026",  /g mol|molar mass/i],                    // HCHO molar mass
+  ["10.5067", /doi\.org|Science Data Center/i],        // DOI prefix of the TEMPO L3 product
 ]);
+// Exempt only when the value appears in a paragraph that names it.
+const allowed = (tok, para) => ALLOW.has(tok) && ALLOW.get(tok).test(para);
 
 // Tokens that arrived through a {{n:key}} marker are derived, not transcribed;
 // they are recorded before resolution so the collision report can skip them.
@@ -109,7 +120,7 @@ function check(doc, label) {
   const misses = [], stale = [], weak = [];
   harvest(doc).forEach(t => {
     (t.match(NUM) || []).forEach(tok => {
-      if (ALLOW.has(tok)) return;
+      if (allowed(tok, t)) return;
       const ctx = t.slice(Math.max(0, t.indexOf(tok) - 70), t.indexOf(tok) + 70);
       if (tableText.includes(tok)) {
         if (!derivedTokens.has(tok) && /\./.test(tok)) {
