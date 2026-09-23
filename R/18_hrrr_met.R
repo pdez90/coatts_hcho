@@ -280,6 +280,18 @@ for (.f in c("temp_c", "press_hpa", "pbl_m")) {
           " (", round(min(met[[.f]], na.rm = TRUE), 1), " to ",
           round(max(met[[.f]], na.rm = TRUE), 1), ")")
 }
+# Numbers the manuscript quotes about this step, so that check_est.js can trace
+# them to a table rather than to a line in a run log.
+data.table::fwrite(
+  tibble(key = c("hrrr_temp_min", "hrrr_temp_max", "hrrr_site_hours", "hrrr_sites", "hrrr_hours"),
+         value = c(sprintf("%.1f", min(met$temp_c, na.rm = TRUE)),
+                   sprintf("%.1f", max(met$temp_c, na.rm = TRUE)),
+                   format(nrow(met), scientific = FALSE),
+                   format(n_distinct(met$met_site_id), scientific = FALSE),
+                   format(n_distinct(met$hour), scientific = FALSE)),
+         source = "R/18_hrrr_met.R"),
+  file.path(P$tables, "manuscript_numbers_18.csv"))
+
 mw <- met_window_means(windows, met)
 log_msg("Windows fully usable: ", sum(!is.na(mw$temp_c_hrrr)), " of ", nrow(mw))
 log_msg("HRRR meteorology done.")

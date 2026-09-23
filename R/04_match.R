@@ -49,8 +49,10 @@ if (length(dropped)) {
 cells <- .prep$cells
 QC_ABSENT <- .prep$absent
 
-# Temperature for the number density: the packet's own met where the site and
-# month have it, otherwise the site median, otherwise CFG$hcho_fallback_temp_c.
+# The packets' own temperature, summarised by site-month and by site. Since
+# Sept 2026 the number density uses HRRR instead (see below and helpers_met.R);
+# these are carried only so that step 19 can check HRRR against a co-located
+# thermometer, and so that h_eff_natconv_km can reproduce the old convention.
 met_month <- coatts |>
   filter(!is.na(temp_c)) |>
   group_by(site, month = month(sample_date)) |>

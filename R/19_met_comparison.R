@@ -176,10 +176,15 @@ print(keys, n = Inf)
 
 # ---- figure ------------------------------------------------------------------
 dir.create(P$figures, recursive = TRUE, showWarnings = FALSE)
-panel <- function(d, a, b, lab_a, lab_b, title) {
+# colour_by_arm = FALSE for a panel drawn from a single arm: with guides =
+# "collect" patchwork would otherwise gather a second, one-entry colour legend
+# and the combined legend would list that arm twice.
+panel <- function(d, a, b, lab_a, lab_b, title, colour_by_arm = TRUE) {
   d <- filter(d, is.finite(.data[[a]]), is.finite(.data[[b]]))
   if (!nrow(d)) return(NULL)
-  ggplot(d, aes(.data[[a]], .data[[b]], colour = arm)) +
+  mapping <- if (colour_by_arm) aes(.data[[a]], .data[[b]], colour = arm)
+             else aes(.data[[a]], .data[[b]])
+  ggplot(d, mapping) +
     geom_abline(slope = 1, intercept = 0, linewidth = 0.3, colour = "grey50") +
     geom_point(alpha = 0.25, size = 0.7) +
     labs(x = lab_a, y = lab_b, title = title, colour = NULL) +
@@ -193,7 +198,8 @@ ps <- compact(list(
         "TEMPO PBL height (m)", "b  Boundary-layer depth"),
   if (nrow(co) && "temp_c" %in% names(co))
     panel(co, "temp_c_hrrr", "temp_c", "HRRR 2 m temperature (C)",
-          "CDPHE packet temperature (C)", "c  Temperature, Colorado")))
+          "CDPHE packet temperature (C)", "c  Temperature, Colorado",
+          colour_by_arm = FALSE)))
 if (length(ps)) {
   fig <- if (requireNamespace("patchwork", quietly = TRUE)) {
     Reduce(`+`, ps) + patchwork::plot_layout(nrow = 1, guides = "collect") &

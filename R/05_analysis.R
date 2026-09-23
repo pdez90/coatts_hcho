@@ -92,13 +92,13 @@ data.table::fwrite(
          source = "R/05_analysis.R"),
   file.path(P$tables, "manuscript_numbers_05.csv"))
 
-# ---- effective mixing height: measured met vs the national convention -------
-# Colorado is the only arm with co-located temperature and pressure. h_eff_km
-# uses them and is the value reported everywhere in the paper; h_eff_natconv_km
-# repeats the same calculation the way step 13 is forced to do it nationally, at
-# CFG$hcho_fallback_temp_c and TEMPO's own surface pressure. The gap between
-# them is what the national H_eff values give up, measured on the one network
-# where both can be computed rather than assumed to be small.
+# ---- effective mixing height: HRRR against the pre-HRRR convention ----------
+# Every arm now takes its temperature and pressure from HRRR over the sample's
+# own window (helpers_met.R), so h_eff_km is on one footing everywhere and is
+# the value reported in the paper. h_eff_natconv_km repeats the calculation the
+# way every arm did it before Sept 2026 - a fixed CFG$hcho_fallback_temp_c and
+# TEMPO's surface pressure - so the size of that change is measured here rather
+# than asserted.
 if (all(c("h_eff_km", "h_eff_natconv_km") %in% names(use))) {
   hh <- filter(use, is.finite(h_eff_km), is.finite(h_eff_natconv_km))
   heff_summary <- function(d, ...) {
