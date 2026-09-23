@@ -2,18 +2,22 @@
 # 19_met_comparison.R - HRRR against TEMPO's meteorology, and against the
 # CDPHE packets' own sensors. No downloads; reads steps 04, 07, 13 and 18.
 #
-# Three comparisons, and each answers a question the paper had to assume:
+# Three comparisons are computed. Two of them reach the manuscript:
 #
 #  1. Surface pressure. TEMPO's support_data carries a surface pressure that
 #     every arm used for the number density. HRRR resolves terrain at 3 km.
 #     Where they disagree, the model terrain height (step 18) says why.
+#     -> Figure S4a, Table S3, and the Methods statement that the two agree.
 #  2. PBL height. TEMPO's pbl_height and HRRR's HPBL are different models at
-#     very different resolutions. Sect. 4 compares the median H_eff with the
-#     median PBL, so a bias here moves a statement in the Results.
-#  3. Temperature, Colorado only. The CDPHE packets carry a temperature sensor
-#     at six sites. It is the one independent check on HRRR's 2 m temperature
-#     anywhere in this study, and it is also what tells the packets' ambient
-#     Temperature apart from their non-ambient Pressure (R/helpers_met.R).
+#     very different resolutions, and TEMPO's runs the deeper of the two at
+#     the hours it observes, which the Limitations report.
+#     -> Figure S4b, Table S3.
+#  3. Temperature and pressure against the CDPHE packet sensors, Colorado
+#     only. As of 2026-09-23 this no longer appears in the paper: the author
+#     dropped the packet sensors as a data source. It is still computed and
+#     still written to met_hrrr_vs_measured_colorado.csv and the met_co_*
+#     manuscript numbers, so the result stays in the pipeline record, but
+#     nothing in the manuscript cites it and it is not drawn.
 #
 # Outputs: output/tables/met_hrrr_vs_tempo_pressure.csv
 #          output/tables/met_hrrr_vs_tempo_pbl.csv
@@ -176,9 +180,10 @@ print(keys, n = Inf)
 
 # ---- figure ------------------------------------------------------------------
 dir.create(P$figures, recursive = TRUE, showWarnings = FALSE)
-# colour_by_arm = FALSE for a panel drawn from a single arm: with guides =
+# colour_by_arm = FALSE is for a panel drawn from a single arm: with guides =
 # "collect" patchwork would otherwise gather a second, one-entry colour legend
-# and the combined legend would list that arm twice.
+# and the combined legend would list that arm twice. No panel needs it since
+# the Colorado packet panel was dropped; it is kept for whoever restores one.
 panel <- function(d, a, b, lab_a, lab_b, title, colour_by_arm = TRUE) {
   d <- filter(d, is.finite(.data[[a]]), is.finite(.data[[b]]))
   if (!nrow(d)) return(NULL)
@@ -195,13 +200,9 @@ ps <- compact(list(
   panel(d, "press_hpa_hrrr_scan", "tempo_press_hpa", "HRRR surface pressure (hPa)",
         "TEMPO surface pressure (hPa)", "a  Surface pressure"),
   panel(d, "pbl_m_hrrr_scan", "tempo_pbl_m", "HRRR PBL height (m)",
-        "TEMPO PBL height (m)", "b  Boundary-layer depth"),
-  NULL))
-# The CDPHE packet temperature/pressure panel was dropped from the figure: the
-# packet sensors are no longer used anywhere in the manuscript. The comparison
-# above still runs and is still written to
-# output/tables/met_hrrr_vs_measured_colorado.csv, so the finding stays in the
-# pipeline record; it simply no longer appears in Figure S4.
+        "TEMPO PBL height (m)", "b  Boundary-layer depth")))
+# A third panel drew HRRR against the CDPHE packet temperature until 2026-09-23;
+# see comparison 3 in the header for why it went and what still computes it.
 if (length(ps)) {
   fig <- if (requireNamespace("patchwork", quietly = TRUE)) {
     Reduce(`+`, ps) + patchwork::plot_layout(nrow = 1, guides = "collect") &

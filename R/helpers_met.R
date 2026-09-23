@@ -26,13 +26,18 @@
 # (step 19 reports HRRR against it) and their Pressure is no longer used for
 # the number density at all.
 #
+# 2026-09-23: the author dropped the packet sensors as a data source, so that
+# cross-check no longer appears in the manuscript. Step 19 still computes and
+# writes it; nothing in the paper cites it. The paragraph above is kept as the
+# record of why the number density reads HRRR rather than the packets.
+#
 # Nothing here touches hcho_ugm3, which is what every correlation, slope,
 # anomaly and permutation test in the paper actually uses. This file only
 # affects H_eff and the meteorology comparisons.
 # =============================================================================
 
 # One site key for the three arms, which label the same monitor differently
-# (ADCO / 08-001-3001) but agree on where it is. 4 dp is ~11 m, far inside
+# (ADCO / 08-001-0010) but agree on where it is. 4 dp is ~11 m, far inside
 # HRRR's 3 km cell, so this never merges two real sites.
 met_site_id <- function(lat, lon) sprintf("%+09.4f%+010.4f", lat, lon)
 
