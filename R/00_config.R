@@ -230,9 +230,27 @@ CFG <- list(
   # 1 atm to within 0.2 % at every Colorado site (checked in step 11), so the
   # reported mass concentrations are at standard conditions, not local ones.
   hcho_reported_conditions = "standard",
-  # Temperature used for the number density when no co-located measurement is
-  # available. A 10 K error moves the number density (and H_eff) by about 3.5 %.
+  # Retained only to reproduce the PRE-HRRR number density in the audit columns
+  # (h_eff_natconv_km in step 04). Since Sept 2026 the temperature and pressure
+  # behind every H_eff come from HRRR, per sample window - see R/helpers_met.R.
+  # A 10 K error moves the number density (and H_eff) by about 3.5 %.
   hcho_fallback_temp_c = 15,
+
+  # ---- NOAA HRRR near-surface meteorology (steps 18, 19) --------------------
+  # 3 km hourly analysis on the CONUS grid. Only the three GRIB2 messages that
+  # are needed get downloaded, by byte range off each file's .idx: TMP 2 m,
+  # PRES surface, HPBL surface (plus HGT surface once, for the model terrain).
+  run_hrrr_met = TRUE,
+  run_met_comparison = TRUE,
+  hrrr_base_url = "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/",
+  hrrr_product = "wrfsfcf00",   # the f00 surface analysis
+  hrrr_n_parallel = 8L,         # concurrent range requests
+  hrrr_refresh = FALSE,         # TRUE re-downloads days already cached
+  hrrr_max_days = NA,           # e.g. 5 for a quick test of step 18; NA = all
+  # A sample window whose HRRR hours are less complete than this yields no
+  # temperature, pressure or PBL - and so no H_eff - rather than a mean over a
+  # handful of hours that happened to survive.
+  hrrr_min_window_coverage = 0.5,
 
   # Illustrative corrections for the low bias of TEMPO HCHO against ground-based
   # columns, applied to the Colorado median H_eff in the Results. Each entry is
@@ -258,6 +276,7 @@ P <- list(
   raw_tempo    = "data/raw/tempo_subsets",
   raw_hms      = "data/raw/hms_smoke",
   raw_aqs      = "data/raw/aqs",
+  raw_hrrr     = "data/raw/hrrr",
   interim      = "data/interim",
   tempo_cells  = "data/interim/tempo_cells",
   processed    = "data/processed",

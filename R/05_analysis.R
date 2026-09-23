@@ -119,7 +119,7 @@ if (all(c("h_eff_km", "h_eff_natconv_km") %in% names(use))) {
   data.table::fwrite(heff_conv, file.path(P$tables, "heff_convention.csv"))
   rr <- filter(heff_conv, site == "all sites")
   log_msg("H_eff convention: median ", round(rr$median_h_eff_km, 2),
-          " km with measured T/P vs ", round(rr$median_h_eff_natconv_km, 2),
+          " km with HRRR T/P vs ", round(rr$median_h_eff_natconv_km, 2),
           " km under the national convention (", sprintf("%+.1f", rr$median_pct_diff),
           " %; median |difference| ", round(rr$median_abs_pct_diff, 1),
           " %, largest ", round(rr$max_abs_pct_diff, 1), " %); measured temperature on ",

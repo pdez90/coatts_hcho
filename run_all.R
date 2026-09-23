@@ -12,6 +12,8 @@
 #   analyses          05 (24-h) -> 07 (3-h)
 #   diagnostics       09 (tests of explanations; no downloads)
 #   national data     10 (AQS inventory) -> 11 (samples) -> 12 (TEMPO) -> 13 (analysis)
+#   meteorology       18 (NOAA HRRR at every monitor; runs after 01, 06 and 11)
+#                     19 (HRRR vs TEMPO vs the CDPHE sensors; after 13)
 # =============================================================================
 main <- function() {
   if (!file.exists("R/00_config.R")) stop("Set the working directory to the project root (~/HCHO).")
@@ -52,6 +54,8 @@ main <- function() {
   map_fig   <- isTRUE(cfg_env$CFG$run_site_map)
   clear_sky <- isTRUE(cfg_env$CFG$run_clear_sky_bias)
   toc_fig   <- isTRUE(cfg_env$CFG$run_toc_graphic)
+  hrrr      <- isTRUE(cfg_env$CFG$run_hrrr_met)
+  met_cmp   <- isTRUE(cfg_env$CFG$run_met_comparison)
   # Steps 12-16 all consume the national arm. Each is gated on its input being
   # EITHER already on disk OR produced earlier in this same run, so that one
   # invocation of run_all.R on a fresh clone schedules the whole chain. Gating
@@ -69,10 +73,16 @@ main <- function() {
   steps <- data.frame(script = character(), arm = character())
   add <- function(script, arm, when = TRUE) if (when) steps[nrow(steps) + 1, ] <<- list(script, arm)
   add("R/01_coatts.R",          "coatts")
+  # Step 18 runs wherever a new set of sample windows has just appeared, as
+  # step 08 does: after 01 it can see only the Colorado 24 h windows, after 06
+  # the 3 h windows, after 11 the national ones. Days already downloaded are
+  # skipped, so the second and third passes cost a directory listing.
+  add("R/18_hrrr_met.R",        "coatts", hrrr)
   add("R/02_tempo_manifest.R",  "coatts")
   add("R/03_tempo_extract.R",   "coatts")
   add("R/04_match.R",           "coatts")
   add("R/06_threeh_samples.R",  "threeh", three_h)
+  add("R/18_hrrr_met.R",        "coatts", hrrr && three_h)
   add("R/02_tempo_manifest.R",  "threeh", three_h)
   add("R/03_tempo_extract.R",   "threeh", three_h)
   add("R/08_smoke_hms.R",       "coatts", smoke)
@@ -81,6 +91,7 @@ main <- function() {
   add("R/09_diagnostics.R",     "coatts", diag)
   add("R/10_aqs_inventory.R",   "coatts", aqs)
   add("R/11_aqs_samples.R",     "coatts", aqs_s)
+  add("R/18_hrrr_met.R",        "coatts", hrrr && aqs_s)
   # Step 08 runs a second time once the national samples exist, so the smoke
   # flags cover all three arms before step 13 reads them. The first run, before
   # step 05, gives the Colorado arms the flags they need; HMS downloads are
@@ -92,6 +103,7 @@ main <- function() {
   add("R/14_site_map.R",        "coatts", map_fig   && nat_done)
   add("R/15_clear_sky_bias.R",  "coatts", clear_sky && nat_done)
   add("R/16_toc_graphic.R",     "coatts", toc_fig   && nat_done)
+  add("R/19_met_comparison.R",  "coatts", met_cmp   && hrrr)
   if (!nat_done && (map_fig || clear_sky || toc_fig))
     note("SKIPPED steps 14-16: the national arm has not been run")
 

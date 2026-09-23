@@ -20,6 +20,7 @@ source("R/00_config.R")
 source("R/helpers_screen.R")   # one definition of the TEMPO cell screen
 source("R/helpers_stats.R")
 source("R/helpers_basemap.R")  # US/state outlines for Figure 1
+source("R/helpers_met.R")      # one definition of the near-surface meteorology
 set.seed(42)
 
 samples_path <- file.path(P$processed, "aqs_hcho_samples.csv")
@@ -34,7 +35,8 @@ samples <- read_tbl(samples_path, colClasses = list(character = c("site_id", "qu
          end_utc = as.POSIXct(end_utc, tz = "UTC"),
          sample_date = as.Date(sample_date_local),
          season = factor(season, levels = c("DJF", "MAM", "JJA", "SON"))) |>
-  filter(!is.na(hcho_ugm3), !is.na(start_utc))
+  filter(!is.na(hcho_ugm3), !is.na(start_utc)) |>
+  met_attach(what = "national")
 
 cells <- read_tbl(cells_path, colClasses = list(character = c("granule", "scan_start_utc", "site")))
 for (col in setdiff(names(cells), c("granule", "scan_start_utc", "site"))) {
@@ -136,6 +138,7 @@ matched <- pmap(variants, function(lag_h, max_ecf, block, block_label) {
               tempo_vc = if (any(valid)) mean(vc[valid]) else NA_real_,
               tempo_pbl_m = if (any(valid)) mean(pbl[valid], na.rm = TRUE) else NA_real_,
               tempo_press_hpa = if (any(valid)) mean(sp[valid], na.rm = TRUE) else NA_real_,
+              scan_hours = paste(hour[valid], collapse = " "),
               .groups = "drop")
   base <- if (lag_h == 0) samples else filter(samples, duration_class != "24 h")
   base |>
@@ -145,9 +148,12 @@ matched <- pmap(variants, function(lag_h, max_ecf, block, block_label) {
 }) |> list_rbind() |>
   mutate(tempo_vc_1e15 = tempo_vc / 1e15,
          # reported values are at 25 C and 1 atm (Sect. 2.1): convert to a mixing
-         # ratio, then to number density at TEMPO's surface pressure
+         # ratio, then to number density at HRRR's temperature and pressure over
+         # the sample window. Before Sept 2026 this line used a single fixed
+         # temperature for all 123 sites and both years, which compressed the
+         # seasonal cycle in H_eff by about 19 points.
          hcho_ppb_std = ugm3_std_to_ppb(hcho_ugm3),
-         hcho_molec_cm3_local = ppb_to_molec_cm3(hcho_ppb_std, CFG$hcho_fallback_temp_c, tempo_press_hpa),
+         hcho_molec_cm3_local = ppb_to_molec_cm3(hcho_ppb_std, temp_c_hrrr, press_hpa_hrrr),
          h_eff_km = ifelse(tempo_vc > 0 & hcho_molec_cm3_local > 0,
                            tempo_vc / hcho_molec_cm3_local / 1e5, NA_real_),
          tempo_pbl_km = tempo_pbl_m / 1000,

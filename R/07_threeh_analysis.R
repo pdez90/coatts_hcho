@@ -19,6 +19,7 @@
 source("R/00_config.R")
 source("R/helpers_screen.R")   # one definition of the TEMPO cell screen
 source("R/helpers_stats.R")
+source("R/helpers_met.R")      # one definition of the near-surface meteorology
 set.seed(42)
 A3 <- arm_paths("threeh")
 
@@ -34,6 +35,16 @@ if (CFG$threeh_exclude_unusual_stamps && "stamp_time_unusual" %in% names(samples
                         paste(samples$site[odd], format(samples$stamp_local[odd], "%Y-%m-%d %H:%M"), collapse = "; "))
   samples <- samples[!odd, , drop = FALSE]
 }
+
+# Near-surface meteorology for the number density, over the sample's own 3 h
+# window - [stamp_local - 3 h, stamp_local), which is what sample_windows()
+# below builds at lag 0. The number density belongs to the SAMPLE, so it is not
+# recomputed for the lagged TEMPO windows. One definition in R/helpers_met.R.
+samples <- samples |>
+  mutate(start_utc = stamp_local - CFG$threeh_duration_s - CFG$utc_offset_hours * 3600,
+         duration_h = CFG$threeh_duration_s / 3600) |>
+  met_attach(what = "Colorado 3 h")
+
 manifest <- read_tbl(A3$manifest) |>
   mutate(mid_utc = as.POSIXct(mid_utc, tz = "UTC")) |>
   distinct(granule, mid_utc)
@@ -119,6 +130,7 @@ matched <- pmap(variants, function(lag_h, max_ecf, block, block_label) {
               tempo_vc = if (any(valid)) mean(vc[valid]) else NA_real_,
               tempo_pbl_m = if (any(valid)) mean(pbl[valid], na.rm = TRUE) else NA_real_,
               tempo_press_hpa = if (any(valid)) mean(sp[valid], na.rm = TRUE) else NA_real_,
+              scan_hours = paste(met_hour_key(mid_utc[valid]), collapse = " "),
               .groups = "drop")
   w |>
     left_join(per_sample, by = c("site", "stamp_local")) |>
@@ -126,11 +138,12 @@ matched <- pmap(variants, function(lag_h, max_ecf, block, block_label) {
            n_scans = coalesce(n_scans, 0L), n_valid_scans = coalesce(n_valid_scans, 0L))
 }) |> list_rbind() |>
   mutate(tempo_vc_1e15 = tempo_vc / 1e15,
-         # as in step 04: reported values are at 25 C and 1 atm; these packets carry
-         # no met, so the number density uses TEMPO's surface pressure and a fixed
-         # temperature (CFG$hcho_fallback_temp_c)
+         # as in step 04: reported values are at 25 C and 1 atm, and the number
+         # density uses HRRR's temperature and pressure over the sample window.
+         # Before Sept 2026 this line used one fixed temperature for every
+         # sample and TEMPO's surface pressure.
          hcho_ppb_std = ugm3_std_to_ppb(hcho_ugm3),
-         hcho_molec_cm3_local = ppb_to_molec_cm3(hcho_ppb_std, CFG$hcho_fallback_temp_c, tempo_press_hpa),
+         hcho_molec_cm3_local = ppb_to_molec_cm3(hcho_ppb_std, temp_c_hrrr, press_hpa_hrrr),
          h_eff_std_km = ifelse(tempo_vc > 0 & hcho_molec_cm3 > 0, tempo_vc / hcho_molec_cm3 / 1e5, NA_real_),
          h_eff_km = ifelse(tempo_vc > 0 & hcho_molec_cm3_local > 0,
                            tempo_vc / hcho_molec_cm3_local / 1e5, h_eff_std_km),

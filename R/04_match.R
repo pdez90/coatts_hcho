@@ -11,12 +11,14 @@
 # =============================================================================
 source("R/00_config.R")
 source("R/helpers_screen.R")   # one definition of the TEMPO cell screen
+source("R/helpers_met.R")      # one definition of the near-surface meteorology
 
 coatts <- read_tbl(file.path(P$processed, "coatts_hcho.csv")) |>
   mutate(sample_date = as.Date(sample_date), season = factor(season, levels = c("DJF", "MAM", "JJA", "SON")))
 manifest <- read_tbl(file.path(P$processed, "tempo_manifest.csv")) |>
   mutate(sample_date = as.Date(sample_date)) |>
-  select(granule, sample_date, local_hour)
+  mutate(mid_utc = as.POSIXct(mid_utc, tz = "UTC")) |>
+  select(granule, sample_date, local_hour, mid_utc)
 cells <- read_tbl(file.path(P$processed, "tempo_site_cells.csv.gz"),
                   colClasses = list(character = c("granule", "scan_start_utc", "site")))
 value_cols <- setdiff(names(cells), c("granule", "scan_start_utc", "site"))
@@ -57,6 +59,17 @@ met_site <- coatts |>
   filter(!is.na(temp_c)) |>
   group_by(site) |>
   summarise(temp_c_site = median(temp_c), .groups = "drop")
+
+# The temperature and pressure that actually go into the number density come
+# from HRRR, averaged over this sample's own 24 h MST window. The packets'
+# Temperature is kept beside it and checked against HRRR in step 19; their
+# Pressure is no longer used at all - it is 45-60 hPa below ambient at every
+# site, which is the note at the top of R/helpers_met.R.
+coatts <- coatts |>
+  mutate(start_utc = as.POSIXct(paste0(as.Date(sample_date), " 00:00:00"), tz = "UTC") -
+                     CFG$utc_offset_hours * 3600,
+         duration_h = 24) |>
+  met_attach(what = "Colorado 24 h")
 
 variants <- expand_grid(max_ecf = c(0.1, 0.2, 0.3),
                         block = c(0L, 1L, 2L),         # 1x1, 3x3, 5x5
@@ -102,6 +115,10 @@ daily_for <- function(h, window) {
               tempo_pbl_m = if (any(valid)) mean(pbl[valid], na.rm = TRUE) else NA_real_,
               tempo_press_hpa = if (any(valid)) mean(sp[valid], na.rm = TRUE) else NA_real_,
               mean_ecf = mean(ecf, na.rm = TRUE),
+              # the UTC hours the valid scans fell in, so step 19 can average
+              # HRRR over the same hours TEMPO actually saw rather than over
+              # the whole 24 h window, half of which is night
+              scan_hours = paste(met_hour_key(mid_utc[valid]), collapse = " "),
               .groups = "drop")
 }
 
@@ -120,7 +137,9 @@ matched <- coatts |>
   mutate(month = month(sample_date)) |>
   select(site, site_name, program, lat, lon, sample_date, month, season, year,
          hcho_ugm3, hcho_molec_cm3, hcho_ppb_local, non_detect, below_mdl, flags,
-         temp_c, press_hpa) |>
+         temp_c, press_hpa,
+         start_utc, duration_h, met_site_id, met_coverage,
+         temp_c_hrrr, press_hpa_hrrr, pbl_m_hrrr) |>
   cross_join(variants) |>
   left_join(daily, by = c("site", "sample_date", "max_ecf", "block", "block_label", "window")) |>
   left_join(met_month, by = c("site", "month" = "month")) |>
@@ -129,20 +148,21 @@ matched <- coatts |>
          n_valid_scans = coalesce(n_valid_scans, 0L),
          tempo_vc_1e15 = tempo_vc / 1e15,
          # reported concentrations are at 25 C and 1 atm, so convert to a mixing
-         # ratio and then to the number density at the site's own T and P
-         temp_c_used = coalesce(temp_c, temp_c_month, temp_c_site, CFG$hcho_fallback_temp_c),
-         press_hpa_used = coalesce(press_hpa, tempo_press_hpa),
+         # ratio and then to the number density at the site's own T and P.
+         # Both now come from HRRR over the sample window; no fallback, because
+         # a window HRRR could not cover should show as a missing H_eff rather
+         # than as one computed at an assumed temperature.
+         temp_c_used = temp_c_hrrr,
+         press_hpa_used = press_hpa_hrrr,
          hcho_ppb_std = ugm3_std_to_ppb(hcho_ugm3),
          hcho_molec_cm3_local = ppb_to_molec_cm3(hcho_ppb_std, temp_c_used, press_hpa_used),
          h_eff_std_km = ifelse(tempo_vc > 0 & hcho_molec_cm3 > 0, tempo_vc / hcho_molec_cm3 / 1e5, NA_real_),
          h_eff_km = ifelse(tempo_vc > 0 & hcho_molec_cm3_local > 0,
                            tempo_vc / hcho_molec_cm3_local / 1e5, h_eff_std_km),
-         # The national arm has no co-located met, so step 13 computes the number
-         # density at CFG$hcho_fallback_temp_c and TEMPO's own surface pressure.
-         # Colorado keeps its measured T and P in h_eff_km - that is the better
-         # estimate and the one reported - and carries the national convention
-         # beside it, so what the national arm gives up can be measured on the
-         # one network where both are available instead of being assumed small.
+         # The convention every arm used before HRRR: a fixed temperature
+         # (CFG$hcho_fallback_temp_c) and TEMPO's own surface pressure. Kept as
+         # an audit column so the size of the Sept 2026 change is visible in the
+         # output rather than asserted - step 05 reports the two side by side.
          hcho_molec_cm3_natconv = ppb_to_molec_cm3(hcho_ppb_std, CFG$hcho_fallback_temp_c,
                                                    tempo_press_hpa),
          h_eff_natconv_km = ifelse(tempo_vc > 0 & hcho_molec_cm3_natconv > 0,
@@ -157,11 +177,12 @@ primary <- matched |>
 data.table::fwrite(primary, file.path(P$processed, "matched_primary.csv"))
 
 prim_chk <- filter(matched, max_ecf == CFG$qc_max_cloud_fraction, block == 1L, window == "all_day", usable)
-log_msg("Number density: ", sum(!is.na(prim_chk$temp_c)), " of ", nrow(prim_chk),
-        " matched days used measured temperature, ",
-        sum(!is.na(prim_chk$press_hpa)), " measured pressure (others: site-month median T, TEMPO surface pressure); ",
-        "median H_eff ", round(median(prim_chk$h_eff_km, na.rm = TRUE), 2), " km at local conditions vs ",
-        round(median(prim_chk$h_eff_std_km, na.rm = TRUE), 2), " km at standard conditions")
+log_msg("Number density: ", sum(!is.na(prim_chk$temp_c_hrrr)), " of ", nrow(prim_chk),
+        " matched days carry HRRR temperature and pressure; ",
+        sum(!is.na(prim_chk$temp_c)), " also carry the packets' own thermometer (step 19 compares them); ",
+        "median H_eff ", round(median(prim_chk$h_eff_km, na.rm = TRUE), 2), " km at HRRR conditions vs ",
+        round(median(prim_chk$h_eff_std_km, na.rm = TRUE), 2), " km at standard conditions, ",
+        round(median(prim_chk$h_eff_natconv_km, na.rm = TRUE), 2), " km at the pre-HRRR convention")
 log_msg("Primary variant (ECF <= ", CFG$qc_max_cloud_fraction, ", 3x3, all day): ",
         sum(primary$usable), " usable site-days of ", nrow(primary), " COATTS sample days (",
         sum(primary$n_scans == 0), " with no TEMPO scan at all)")
