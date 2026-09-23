@@ -196,10 +196,12 @@ ps <- compact(list(
         "TEMPO surface pressure (hPa)", "a  Surface pressure"),
   panel(d, "pbl_m_hrrr_scan", "tempo_pbl_m", "HRRR PBL height (m)",
         "TEMPO PBL height (m)", "b  Boundary-layer depth"),
-  if (nrow(co) && "temp_c" %in% names(co))
-    panel(co, "temp_c_hrrr", "temp_c", "HRRR 2 m temperature (C)",
-          "CDPHE packet temperature (C)", "c  Temperature, Colorado",
-          colour_by_arm = FALSE)))
+  NULL))
+# The CDPHE packet temperature/pressure panel was dropped from the figure: the
+# packet sensors are no longer used anywhere in the manuscript. The comparison
+# above still runs and is still written to
+# output/tables/met_hrrr_vs_measured_colorado.csv, so the finding stays in the
+# pipeline record; it simply no longer appears in Figure S4.
 if (length(ps)) {
   fig <- if (requireNamespace("patchwork", quietly = TRUE)) {
     Reduce(`+`, ps) + patchwork::plot_layout(nrow = 1, guides = "collect") &
