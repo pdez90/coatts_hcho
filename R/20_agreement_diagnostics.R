@@ -668,7 +668,7 @@ if (HAS_GG) {
   # AQS site name) with overlap suppression, so the cluster near 0.6 stays legible.
   st_abbr <- setNames(c(state.abb, "DC"), c(state.name, "District Of Columbia"))
   lab20 <- both |>
-    mutate(lab = paste0(st_abbr[state], ": ", str_to_title(word(str_replace_all(tolower(site_name), "[-_]", " "), 1))))
+    mutate(lab = paste0(st_abbr[state], ": ", str_to_title(str_squish(word(str_replace_all(tolower(site_name), "[-_]", " "), 1, 2)))))
   HAS_REPEL <- requireNamespace("ggrepel", quietly = TRUE)
   p20 <- ggplot(lab20, aes(anom_r_24h, anom_r_8h)) +
     annotate("rect", xmin = -0.35, xmax = 1, ymin = -0.35, ymax = 1, fill = NA, colour = NA) +
