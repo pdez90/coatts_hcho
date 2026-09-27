@@ -498,6 +498,10 @@ pc4 <- filter(paired, startsWith(quantity, "anomaly r, 24 h sample vs 04-12"))
 m2 <- filter(models, startsWith(model, "M2")); m1 <- filter(models, startsWith(model, "M1"))
 t33 <- filter(ta, block == "3x3"); t11 <- filter(ta, block == "1x1"); t55 <- filter(ta, block == "5x5")
 tr <- function(h, st, what) { x <- filter(tert, sample == h, stratification == st); x[[what]][1] }
+# Two decimals, but never "-0.00": a value that rounds to zero from below is shown
+# at three decimals, so an interval bound that excludes zero cannot read as touching it.
+r2 <- function(x) { s <- sprintf("%.2f", x); s3 <- sprintf("%.3f", x)
+  ifelse(s == "-0.00", ifelse(s3 == "-0.000", "0.00", s3), s) }
 nums <- tibble(
   key = c("dd_sites_total", "dd_sites_paired", "dd_median_r_24", "dd_median_r_8", "dd_diff_median", "dd_diff_lo", "dd_diff_hi",
           "dd_diff_positive", "dd_diff_p", "dd_diff12_median", "dd_diff12_lo", "dd_diff12_hi", "dd_diff12_p",
@@ -524,16 +528,16 @@ nums <- tibble(
           "pbl_8h4_sf_r_low", "pbl_8h4_sf_r_high", "pbl_8h4_sf_diff", "pbl_8h4_sf_lo", "pbl_8h4_sf_hi", "pbl_8h4_sf_n",
           "pbl_8h12_sf_r_low", "pbl_8h12_sf_r_high", "pbl_8h12_sf_diff", "pbl_8h12_sf_lo", "pbl_8h12_sf_hi", "pbl_8h12_sf_n",
           "pbl_8h4_sdcol_low", "pbl_8h4_sdcol_high", "pbl_8h12_sdcol_low", "pbl_8h12_sdcol_high"),
-  value = c(length(dual_sites), nrow(both), sprintf("%.2f", median(both$anom_r_24h)), sprintf("%.2f", median(both$anom_r_8h)),
-            sprintf("%.2f", p1$median_diff), sprintf("%.2f", p1$mean_ci_lo), sprintf("%.2f", p1$mean_ci_hi),
-            p1$n_positive, sprintf("%.2f", p1$wilcoxon_p),
-            sprintf("%.2f", p12$median_diff), sprintf("%.2f", p12$mean_ci_lo), sprintf("%.2f", p12$mean_ci_hi), sprintf("%.2f", p12$wilcoxon_p),
-            sprintf("%.2f", p4$median_diff), sprintf("%.2f", p4$mean_ci_lo), sprintf("%.2f", p4$mean_ci_hi), sprintf("%.2f", p4$wilcoxon_p),
-            sprintf("%.2f", pc12$median_diff), sprintf("%.2f", pc12$mean_ci_lo), sprintf("%.2f", pc12$mean_ci_hi),
-            sprintf("%.2f", pc4$median_diff), sprintf("%.2f", pc4$mean_ci_lo), sprintf("%.2f", pc4$mean_ci_hi),
+  value = c(length(dual_sites), nrow(both), r2(median(both$anom_r_24h)), r2(median(both$anom_r_8h)),
+            r2(p1$median_diff), r2(p1$mean_ci_lo), r2(p1$mean_ci_hi),
+            p1$n_positive, r2(p1$wilcoxon_p),
+            r2(p12$median_diff), r2(p12$mean_ci_lo), r2(p12$mean_ci_hi), r2(p12$wilcoxon_p),
+            r2(p4$median_diff), r2(p4$mean_ci_lo), r2(p4$mean_ci_hi), r2(p4$wilcoxon_p),
+            r2(pc12$median_diff), r2(pc12$mean_ci_lo), r2(pc12$mean_ci_hi),
+            r2(pc4$median_diff), r2(pc4$mean_ci_lo), r2(pc4$mean_ci_hi),
             sprintf("%.0f", paired$median_diff[3]), sprintf("%.0f", paired$median_diff[4]),
-            nrow(gap), sprintf("%.2f", median(gap$efficiency)), sprintf("%.2f", quantile(gap$efficiency, 0.25)[[1]]), sprintf("%.2f", quantile(gap$efficiency, 0.75)[[1]]),
-            sprintf("%.2f", m1$r2[1]), sprintf("%.2f", m2$r2[1]), m2$n_sites[1],
+            nrow(gap), r2(median(gap$efficiency)), r2(quantile(gap$efficiency, 0.25)[[1]]), r2(quantile(gap$efficiency, 0.75)[[1]]),
+            r2(m1$r2[1]), r2(m2$r2[1]), m2$n_sites[1],
             sprintf("%+.2f", m2$estimate_per_sd[m2$term == "log_surface"]), sprintf("%.3f", m2$p[m2$term == "log_surface"]),
             sprintf("%+.2f", m2$estimate_per_sd[m2$term == "log_snr"]), sprintf("%.3f", m2$p[m2$term == "log_snr"]),
             sprintf("%+.2f", m2$estimate_per_sd[m2$term == "pbl_hrrr_km"]), sprintf("%.3f", m2$p[m2$term == "pbl_hrrr_km"]),
@@ -542,88 +546,88 @@ nums <- tibble(
             sprintf("%+.2f", m2$estimate_per_sd[m2$term == "log_scans"]), sprintf("%.3f", m2$p[m2$term == "log_scans"]),
             sprintf("%+.2f", m1$estimate_per_sd[m1$term == "log_snr"]), sprintf("%.3f", m1$p[m1$term == "log_snr"]),
             sprintf("%+.2f", m1$estimate_per_sd[m1$term == "log_surface"]), sprintf("%.3f", m1$p[m1$term == "log_surface"]),
-            sprintf("%.2f", uni$spearman_rho[uni$outcome == "E = r_obs / ceiling" & uni$predictor == preds[["log_surface"]]]),
-            sprintf("%.2f", uni$spearman_rho[uni$outcome == "E = r_obs / ceiling" & uni$predictor == preds[["log_snr"]]]),
-            sprintf("%.2f", uni$spearman_rho[uni$outcome == "anomaly r (observed)" & uni$predictor == preds[["log_snr"]]]),
-            sprintf("%.2f", uni$spearman_rho[uni$outcome == "anomaly r (observed)" & uni$predictor == preds[["log_surface"]]]),
+            r2(uni$spearman_rho[uni$outcome == "E = r_obs / ceiling" & uni$predictor == preds[["log_surface"]]]),
+            r2(uni$spearman_rho[uni$outcome == "E = r_obs / ceiling" & uni$predictor == preds[["log_snr"]]]),
+            r2(uni$spearman_rho[uni$outcome == "anomaly r (observed)" & uni$predictor == preds[["log_snr"]]]),
+            r2(uni$spearman_rho[uni$outcome == "anomaly r (observed)" & uni$predictor == preds[["log_surface"]]]),
             nrow(eligible), KMIN, NDRAW,
-            sprintf("%.2f", t33$r_pooled[t33$k_scans == "1"]), sprintf("%.2f", t33$r_pooled_lo[t33$k_scans == "1"]), sprintf("%.2f", t33$r_pooled_hi[t33$k_scans == "1"]),
-            sprintf("%.2f", t33$r_pooled[t33$k_scans == "2"]), sprintf("%.2f", t33$r_pooled[t33$k_scans == "3"]), sprintf("%.2f", t33$r_pooled[t33$k_scans == "4"]),
-            sprintf("%.2f", t33$r_pooled[t33$k_scans == "all"]), t33$median_valid_scans_all[1],
-            sprintf("%.2f", t11$r_pooled[t11$k_scans == "1"]), sprintf("%.2f", t11$r_pooled[t11$k_scans == "all"]),
-            sprintf("%.2f", t55$r_pooled[t55$k_scans == "1"]), sprintf("%.2f", t55$r_pooled[t55$k_scans == "all"]),
-            sprintf("%.2f", t33$median_site_r[t33$k_scans == "1"]), sprintf("%.2f", t33$median_site_r[t33$k_scans == "all"]),
+            r2(t33$r_pooled[t33$k_scans == "1"]), r2(t33$r_pooled_lo[t33$k_scans == "1"]), r2(t33$r_pooled_hi[t33$k_scans == "1"]),
+            r2(t33$r_pooled[t33$k_scans == "2"]), r2(t33$r_pooled[t33$k_scans == "3"]), r2(t33$r_pooled[t33$k_scans == "4"]),
+            r2(t33$r_pooled[t33$k_scans == "all"]), t33$median_valid_scans_all[1],
+            r2(t11$r_pooled[t11$k_scans == "1"]), r2(t11$r_pooled[t11$k_scans == "all"]),
+            r2(t55$r_pooled[t55$k_scans == "1"]), r2(t55$r_pooled[t55$k_scans == "all"]),
+            r2(t33$median_site_r[t33$k_scans == "1"]), r2(t33$median_site_r[t33$k_scans == "all"]),
             sprintf("%.1f", noise_fit$single_scan_noise_sd_1e15[noise_fit$block == "3x3"]),
             sprintf("%.1f", noise_fit$single_scan_noise_sd_1e15[noise_fit$block == "1x1"]),
             sprintf("%.1f", noise_fit$single_scan_noise_sd_1e15[noise_fit$block == "5x5"]),
-            sprintf("%.2f", t33$sd_column_anom_1e15[t33$k_scans == "1"]), sprintf("%.2f", t33$sd_column_anom_1e15[t33$k_scans == "all"]),
+            r2(t33$sd_column_anom_1e15[t33$k_scans == "1"]), r2(t33$sd_column_anom_1e15[t33$k_scans == "all"]),
             sum(filter(tert, sample == "8 h, start 12:00 LST", stratification == "absolute HRRR mixing depth")$n),
-            sprintf("%.2f", tr("8 h, start 12:00 LST", "absolute HRRR mixing depth", "r")),
-            sprintf("%.2f", filter(tert, sample == "8 h, start 12:00 LST", stratification == "absolute HRRR mixing depth", tert == 2)$r),
-            sprintf("%.2f", filter(tert, sample == "8 h, start 12:00 LST", stratification == "absolute HRRR mixing depth", tert == 3)$r),
-            sprintf("%.2f", tr("8 h, start 12:00 LST", "absolute HRRR mixing depth", "diff_top_minus_bottom")),
-            sprintf("%.2f", tr("8 h, start 12:00 LST", "absolute HRRR mixing depth", "diff_ci_lo")),
-            sprintf("%.2f", tr("8 h, start 12:00 LST", "absolute HRRR mixing depth", "diff_ci_hi")),
-            sprintf("%.2f", tr("8 h, start 12:00 LST", "mixing depth relative to site-month", "r")),
-            sprintf("%.2f", filter(tert, sample == "8 h, start 12:00 LST", stratification == "mixing depth relative to site-month", tert == 3)$r),
-            sprintf("%.2f", tr("8 h, start 12:00 LST", "mixing depth relative to site-month", "diff_top_minus_bottom")),
-            sprintf("%.2f", tr("8 h, start 12:00 LST", "mixing depth relative to site-month", "diff_ci_lo")),
-            sprintf("%.2f", tr("8 h, start 12:00 LST", "mixing depth relative to site-month", "diff_ci_hi")),
+            r2(tr("8 h, start 12:00 LST", "absolute HRRR mixing depth", "r")),
+            r2(filter(tert, sample == "8 h, start 12:00 LST", stratification == "absolute HRRR mixing depth", tert == 2)$r),
+            r2(filter(tert, sample == "8 h, start 12:00 LST", stratification == "absolute HRRR mixing depth", tert == 3)$r),
+            r2(tr("8 h, start 12:00 LST", "absolute HRRR mixing depth", "diff_top_minus_bottom")),
+            r2(tr("8 h, start 12:00 LST", "absolute HRRR mixing depth", "diff_ci_lo")),
+            r2(tr("8 h, start 12:00 LST", "absolute HRRR mixing depth", "diff_ci_hi")),
+            r2(tr("8 h, start 12:00 LST", "mixing depth relative to site-month", "r")),
+            r2(filter(tert, sample == "8 h, start 12:00 LST", stratification == "mixing depth relative to site-month", tert == 3)$r),
+            r2(tr("8 h, start 12:00 LST", "mixing depth relative to site-month", "diff_top_minus_bottom")),
+            r2(tr("8 h, start 12:00 LST", "mixing depth relative to site-month", "diff_ci_lo")),
+            r2(tr("8 h, start 12:00 LST", "mixing depth relative to site-month", "diff_ci_hi")),
             sum(filter(tert, sample == "8 h, start 04:00 LST", stratification == "absolute HRRR mixing depth")$n),
-            sprintf("%.2f", tr("8 h, start 04:00 LST", "absolute HRRR mixing depth", "r")),
-            sprintf("%.2f", filter(tert, sample == "8 h, start 04:00 LST", stratification == "absolute HRRR mixing depth", tert == 2)$r),
-            sprintf("%.2f", filter(tert, sample == "8 h, start 04:00 LST", stratification == "absolute HRRR mixing depth", tert == 3)$r),
-            sprintf("%.2f", tr("8 h, start 04:00 LST", "absolute HRRR mixing depth", "diff_top_minus_bottom")),
-            sprintf("%.2f", tr("8 h, start 04:00 LST", "absolute HRRR mixing depth", "diff_ci_lo")),
-            sprintf("%.2f", tr("8 h, start 04:00 LST", "absolute HRRR mixing depth", "diff_ci_hi")),
-            sprintf("%.2f", tr("8 h, start 04:00 LST", "mixing depth relative to site-month", "r")),
-            sprintf("%.2f", filter(tert, sample == "8 h, start 04:00 LST", stratification == "mixing depth relative to site-month", tert == 3)$r),
-            sprintf("%.2f", tr("8 h, start 04:00 LST", "mixing depth relative to site-month", "diff_top_minus_bottom")),
-            sprintf("%.2f", tr("8 h, start 04:00 LST", "mixing depth relative to site-month", "diff_ci_lo")),
-            sprintf("%.2f", tr("8 h, start 04:00 LST", "mixing depth relative to site-month", "diff_ci_hi")),
+            r2(tr("8 h, start 04:00 LST", "absolute HRRR mixing depth", "r")),
+            r2(filter(tert, sample == "8 h, start 04:00 LST", stratification == "absolute HRRR mixing depth", tert == 2)$r),
+            r2(filter(tert, sample == "8 h, start 04:00 LST", stratification == "absolute HRRR mixing depth", tert == 3)$r),
+            r2(tr("8 h, start 04:00 LST", "absolute HRRR mixing depth", "diff_top_minus_bottom")),
+            r2(tr("8 h, start 04:00 LST", "absolute HRRR mixing depth", "diff_ci_lo")),
+            r2(tr("8 h, start 04:00 LST", "absolute HRRR mixing depth", "diff_ci_hi")),
+            r2(tr("8 h, start 04:00 LST", "mixing depth relative to site-month", "r")),
+            r2(filter(tert, sample == "8 h, start 04:00 LST", stratification == "mixing depth relative to site-month", tert == 3)$r),
+            r2(tr("8 h, start 04:00 LST", "mixing depth relative to site-month", "diff_top_minus_bottom")),
+            r2(tr("8 h, start 04:00 LST", "mixing depth relative to site-month", "diff_ci_lo")),
+            r2(tr("8 h, start 04:00 LST", "mixing depth relative to site-month", "diff_ci_hi")),
             sum(filter(tert, sample == "24 h", stratification == "absolute HRRR mixing depth")$n),
-            sprintf("%.2f", tr("24 h", "absolute HRRR mixing depth", "r")),
-            sprintf("%.2f", filter(tert, sample == "24 h", stratification == "absolute HRRR mixing depth", tert == 3)$r),
-            sprintf("%.2f", tr("24 h", "absolute HRRR mixing depth", "diff_top_minus_bottom")),
-            sprintf("%.2f", tr("24 h", "absolute HRRR mixing depth", "diff_ci_lo")),
-            sprintf("%.2f", tr("24 h", "absolute HRRR mixing depth", "diff_ci_hi")),
-            sprintf("%.2f", tr("24 h", "mixing depth relative to site-month", "r")),
-            sprintf("%.2f", filter(tert, sample == "24 h", stratification == "mixing depth relative to site-month", tert == 3)$r),
-            sprintf("%.2f", tr("24 h", "mixing depth relative to site-month", "diff_top_minus_bottom")),
-            sprintf("%.2f", tr("24 h", "mixing depth relative to site-month", "diff_ci_lo")),
-            sprintf("%.2f", tr("24 h", "mixing depth relative to site-month", "diff_ci_hi")),
+            r2(tr("24 h", "absolute HRRR mixing depth", "r")),
+            r2(filter(tert, sample == "24 h", stratification == "absolute HRRR mixing depth", tert == 3)$r),
+            r2(tr("24 h", "absolute HRRR mixing depth", "diff_top_minus_bottom")),
+            r2(tr("24 h", "absolute HRRR mixing depth", "diff_ci_lo")),
+            r2(tr("24 h", "absolute HRRR mixing depth", "diff_ci_hi")),
+            r2(tr("24 h", "mixing depth relative to site-month", "r")),
+            r2(filter(tert, sample == "24 h", stratification == "mixing depth relative to site-month", tert == 3)$r),
+            r2(tr("24 h", "mixing depth relative to site-month", "diff_top_minus_bottom")),
+            r2(tr("24 h", "mixing depth relative to site-month", "diff_ci_lo")),
+            r2(tr("24 h", "mixing depth relative to site-month", "diff_ci_hi")),
             sprintf("%+.3f", filter(inter, sample == "8 h, start 04:00 LST", model == "mixing depth only", term == "col_std:pbl_std")$estimate),
             sprintf("%.3f", filter(inter, sample == "8 h, start 04:00 LST", model == "mixing depth only", term == "col_std:pbl_std")$p),
             sprintf("%+.3f", filter(inter, sample == "8 h, start 12:00 LST", model == "mixing depth only", term == "col_std:pbl_std")$estimate),
             sprintf("%.3f", filter(inter, sample == "8 h, start 12:00 LST", model == "mixing depth only", term == "col_std:pbl_std")$p),
             sprintf("%+.3f", filter(inter, sample == "24 h", model == "mixing depth only", term == "col_std:pbl_std")$estimate),
             sprintf("%.3f", filter(inter, sample == "24 h", model == "mixing depth only", term == "col_std:pbl_std")$p),
-            sprintf("%.2f", tr("8 h, start 04:00 LST", "absolute HRRR mixing depth", "pbl_median_km")),
-            sprintf("%.2f", filter(tert, sample == "8 h, start 04:00 LST", stratification == "absolute HRRR mixing depth", tert == 3)$pbl_median_km),
-            sprintf("%.2f", tr("8 h, start 12:00 LST", "absolute HRRR mixing depth", "pbl_median_km")),
-            sprintf("%.2f", filter(tert, sample == "8 h, start 12:00 LST", stratification == "absolute HRRR mixing depth", tert == 3)$pbl_median_km),
+            r2(tr("8 h, start 04:00 LST", "absolute HRRR mixing depth", "pbl_median_km")),
+            r2(filter(tert, sample == "8 h, start 04:00 LST", stratification == "absolute HRRR mixing depth", tert == 3)$pbl_median_km),
+            r2(tr("8 h, start 12:00 LST", "absolute HRRR mixing depth", "pbl_median_km")),
+            r2(filter(tert, sample == "8 h, start 12:00 LST", stratification == "absolute HRRR mixing depth", tert == 3)$pbl_median_km),
             sprintf("%+.3f", filter(inter, sample == "8 h, start 04:00 LST", model != "mixing depth only", term == "col_std:pbl_std")$estimate),
             sprintf("%.3f", filter(inter, sample == "8 h, start 04:00 LST", model != "mixing depth only", term == "col_std:pbl_std")$p),
             sprintf("%+.3f", filter(inter, sample == "8 h, start 12:00 LST", model != "mixing depth only", term == "col_std:pbl_std")$estimate),
             sprintf("%.3f", filter(inter, sample == "8 h, start 12:00 LST", model != "mixing depth only", term == "col_std:pbl_std")$p),
             sprintf("%+.3f", filter(inter, sample == "24 h", model != "mixing depth only", term == "col_std:pbl_std")$estimate),
             sprintf("%.3f", filter(inter, sample == "24 h", model != "mixing depth only", term == "col_std:pbl_std")$p),
-            sprintf("%.2f", tr("8 h, start 04:00 LST", "relative to site-month, smoke-free days only", "r")),
-            sprintf("%.2f", filter(tert, sample == "8 h, start 04:00 LST", stratification == "relative to site-month, smoke-free days only", tert == 3)$r),
-            sprintf("%.2f", tr("8 h, start 04:00 LST", "relative to site-month, smoke-free days only", "diff_top_minus_bottom")),
-            sprintf("%.2f", tr("8 h, start 04:00 LST", "relative to site-month, smoke-free days only", "diff_ci_lo")),
-            sprintf("%.2f", tr("8 h, start 04:00 LST", "relative to site-month, smoke-free days only", "diff_ci_hi")),
+            r2(tr("8 h, start 04:00 LST", "relative to site-month, smoke-free days only", "r")),
+            r2(filter(tert, sample == "8 h, start 04:00 LST", stratification == "relative to site-month, smoke-free days only", tert == 3)$r),
+            r2(tr("8 h, start 04:00 LST", "relative to site-month, smoke-free days only", "diff_top_minus_bottom")),
+            r2(tr("8 h, start 04:00 LST", "relative to site-month, smoke-free days only", "diff_ci_lo")),
+            r2(tr("8 h, start 04:00 LST", "relative to site-month, smoke-free days only", "diff_ci_hi")),
             sum(filter(tert, sample == "8 h, start 04:00 LST", stratification == "relative to site-month, smoke-free days only")$n),
-            sprintf("%.2f", tr("8 h, start 12:00 LST", "relative to site-month, smoke-free days only", "r")),
-            sprintf("%.2f", filter(tert, sample == "8 h, start 12:00 LST", stratification == "relative to site-month, smoke-free days only", tert == 3)$r),
-            sprintf("%.2f", tr("8 h, start 12:00 LST", "relative to site-month, smoke-free days only", "diff_top_minus_bottom")),
-            sprintf("%.2f", tr("8 h, start 12:00 LST", "relative to site-month, smoke-free days only", "diff_ci_lo")),
-            sprintf("%.2f", tr("8 h, start 12:00 LST", "relative to site-month, smoke-free days only", "diff_ci_hi")),
+            r2(tr("8 h, start 12:00 LST", "relative to site-month, smoke-free days only", "r")),
+            r2(filter(tert, sample == "8 h, start 12:00 LST", stratification == "relative to site-month, smoke-free days only", tert == 3)$r),
+            r2(tr("8 h, start 12:00 LST", "relative to site-month, smoke-free days only", "diff_top_minus_bottom")),
+            r2(tr("8 h, start 12:00 LST", "relative to site-month, smoke-free days only", "diff_ci_lo")),
+            r2(tr("8 h, start 12:00 LST", "relative to site-month, smoke-free days only", "diff_ci_hi")),
             sum(filter(tert, sample == "8 h, start 12:00 LST", stratification == "relative to site-month, smoke-free days only")$n),
-            sprintf("%.2f", tr("8 h, start 04:00 LST", "absolute HRRR mixing depth", "sd_column_anom_1e15")),
-            sprintf("%.2f", filter(tert, sample == "8 h, start 04:00 LST", stratification == "absolute HRRR mixing depth", tert == 3)$sd_column_anom_1e15),
-            sprintf("%.2f", tr("8 h, start 12:00 LST", "absolute HRRR mixing depth", "sd_column_anom_1e15")),
-            sprintf("%.2f", filter(tert, sample == "8 h, start 12:00 LST", stratification == "absolute HRRR mixing depth", tert == 3)$sd_column_anom_1e15))
+            r2(tr("8 h, start 04:00 LST", "absolute HRRR mixing depth", "sd_column_anom_1e15")),
+            r2(filter(tert, sample == "8 h, start 04:00 LST", stratification == "absolute HRRR mixing depth", tert == 3)$sd_column_anom_1e15),
+            r2(tr("8 h, start 12:00 LST", "absolute HRRR mixing depth", "sd_column_anom_1e15")),
+            r2(filter(tert, sample == "8 h, start 12:00 LST", stratification == "absolute HRRR mixing depth", tert == 3)$sd_column_anom_1e15))
 ) |> mutate(value = as.character(value), source = "R/20_agreement_diagnostics.R")
 # the remaining numbers the text quotes, so that every value in Sect. 3.6 is derived
 nc_all <- read_tbl(noise_path, colClasses = list(character = c("site", "block_label"))) |>
@@ -640,20 +644,20 @@ nums2 <- tibble(
           "nc_single_median_11", "nc_single_median_33", "nc_single_median_55",
           "pbl_8h4_sites", "pbl_8h4_rel_r_mid", "pbl_8h4_sf_r_mid", "pbl_8h12_rel_r_mid", "pbl_8h12_sf_r_mid",
           "pbl_24_sf_r_low", "pbl_24_sf_r_mid", "pbl_24_sf_r_high", "pbl_24_r_mid", "pbl_8h4_sf_r_high_chk"),
-  value = c(MIN_ANOM_PAIRS, sprintf("%.2f", p1$mean_diff), sprintf("%.2f", pc12$mean_diff), sprintf("%.2f", pc4$mean_diff),
+  value = c(MIN_ANOM_PAIRS, r2(p1$mean_diff), r2(pc12$mean_diff), r2(pc4$mean_diff),
             sprintf("%+.2f", p_same12$mean_diff), sprintf("%+.2f", p_same4$mean_diff),
             sprintf("%.0f", 100 * m1$r2[1]), sprintf("%.0f", 100 * m2$r2[1]),
             sprintf("%+.2f", m1$estimate_per_sd[m1$term == "smoke_share"]), sprintf("%.3f", m1$p[m1$term == "smoke_share"]),
             ncm("1x1"), ncm("3x3"), ncm("5x5"),
             filter(inter, sample == "8 h, start 04:00 LST")$n_sites[1],
-            sprintf("%.2f", tmid("8 h, start 04:00 LST", rel)), sprintf("%.2f", tmid("8 h, start 04:00 LST", sf)),
-            sprintf("%.2f", tmid("8 h, start 12:00 LST", rel)), sprintf("%.2f", tmid("8 h, start 12:00 LST", sf)),
-            sprintf("%.2f", tr("24 h", sf, "r")), sprintf("%.2f", tmid("24 h", sf)),
-            sprintf("%.2f", filter(tert, sample == "24 h", stratification == sf, tert == 3)$r),
-            sprintf("%.2f", tmid("24 h", ab)),
-            sprintf("%.2f", filter(tert, sample == "8 h, start 04:00 LST", stratification == sf, tert == 3)$r))
+            r2(tmid("8 h, start 04:00 LST", rel)), r2(tmid("8 h, start 04:00 LST", sf)),
+            r2(tmid("8 h, start 12:00 LST", rel)), r2(tmid("8 h, start 12:00 LST", sf)),
+            r2(tr("24 h", sf, "r")), r2(tmid("24 h", sf)),
+            r2(filter(tert, sample == "24 h", stratification == sf, tert == 3)$r),
+            r2(tmid("24 h", ab)),
+            r2(filter(tert, sample == "8 h, start 04:00 LST", stratification == sf, tert == 3)$r))
 ) |> mutate(value = as.character(value), source = "R/20_agreement_diagnostics.R")
-nums <- bind_rows(nums, nums2) |> mutate(value = sub("^-0\\.0+$", "0.00", value))   # no negative zero
+nums <- bind_rows(nums, nums2)
 data.table::fwrite(nums, file.path(P$tables, "manuscript_numbers_20.csv"))
 
 # ============================================================================
@@ -668,7 +672,11 @@ if (HAS_GG) {
   # AQS site name) with overlap suppression, so the cluster near 0.6 stays legible.
   st_abbr <- setNames(c(state.abb, "DC"), c(state.name, "District Of Columbia"))
   lab20 <- both |>
-    mutate(lab = paste0(st_abbr[state], ": ", str_to_title(str_squish(word(str_replace_all(tolower(site_name), "[-_]", " "), 1, 2)))))
+    # first two words of the AQS site name; squish before taking words (double
+    # spaces gave an empty second word) and keep one-word names (word(x, 1, 2)
+    # returned NA for Rubidoux, Sydney, Lawrenceville and Hawthorne)
+    mutate(lab = paste0(st_abbr[state], ": ", str_to_title(
+      str_extract(str_squish(str_replace_all(tolower(site_name), "[-_/()]", " ")), "^\\S+( \\S+)?"))))
   HAS_REPEL <- requireNamespace("ggrepel", quietly = TRUE)
   p20 <- ggplot(lab20, aes(anom_r_24h, anom_r_8h)) +
     annotate("rect", xmin = -0.35, xmax = 1, ymin = -0.35, ymax = 1, fill = NA, colour = NA) +
@@ -704,8 +712,11 @@ if (HAS_GG) {
     annotate("text", x = 0.985, y = 0.985, label = "E = 1", hjust = 1, vjust = -0.4, size = 3, colour = "grey35") +
     annotate("text", x = 0.985, y = 0.49, label = "E = 0.5", hjust = 1, vjust = -0.4, size = 3, colour = "grey55") +
     scale_fill_viridis_c(name = ugm3, trans = "log10", breaks = c(1, 2, 4)) +
-    scale_x_continuous(limits = c(0.5, 1), breaks = seq(0.5, 1, 0.1)) +
-    scale_y_continuous(limits = c(-0.3, 1), breaks = seq(-0.2, 1, 0.2)) +
+    scale_x_continuous(breaks = seq(0.3, 1, 0.1)) +
+    scale_y_continuous(breaks = seq(-0.2, 1, 0.2)) +
+    # coord_cartesian, not scale limits: limits drop points outside them (one site
+    # has a ceiling of 0.34) and the title counts every site in gap
+    coord_cartesian(xlim = c(0.3, 1), ylim = c(-0.3, 1)) +
     labs(x = "Ceiling on r implied by scan-to-scan retrieval noise", y = "Observed within-month anomaly r",
          title = sprintf("(a) Observed correlation against its noise ceiling, %d sites", nrow(gap))) +
     theme(legend.position = "right", plot.title = element_text(size = 11))

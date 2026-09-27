@@ -32,7 +32,11 @@ function csv(name) {
 }
 const num = v => (v === "" || v === "NA" || v === undefined) ? NaN : Number(v);
 const f0 = v => Number.isFinite(num(v)) ? num(v).toFixed(0) : "–";
-const f2 = v => Number.isFinite(num(v)) ? num(v).toFixed(2) : "–";
+// two decimals, but never "-0.00" (three decimals then), matching r2() in R/20
+const f2 = v => { if (!Number.isFinite(num(v))) return "–"; const s = num(v).toFixed(2); return s === "-0.00" ? num(v).toFixed(3) : s; };
+// a median of counts can be x.5: show it, rather than rounding half up
+const fh = v => Number.isFinite(num(v)) ? (Number.isInteger(num(v)) ? String(num(v)) : num(v).toFixed(1)) : "–";
+const pfmt = v => Number.isFinite(num(v)) ? (num(v) < 0.0005 ? "p < 0.001" : `p = ${num(v).toFixed(3)}`) : "–";
 const f3 = v => Number.isFinite(num(v)) ? num(v).toFixed(3) : "–";
 const sgn = (v, d) => Number.isFinite(num(v)) ? (num(v) >= 0 ? "+" : "") + num(v).toFixed(d) : "–";
 // minus signs and en dashes as Copernicus sets them
@@ -54,7 +58,7 @@ const builders = {
                "r_{24h} vs 04–12 column", "r_{24h} vs 12–20 column", "usable % 24 h / 8 h", "scans 24 h / 8 h"],
       rows: rows.map(r => [`${r.site_name} (${r.state})`, r.site, f0(r.anom_n_24h), typo(f2(r.anom_r_24h)), f0(r.anom_n_8h), typo(f2(r.anom_r_8h)),
                            typo(f2(r.r_8h_start4)), typo(f2(r.r_8h_start12)), typo(f2(r.r_24h_col_start4)), typo(f2(r.r_24h_col_start12)),
-                           `${f0(r.usable_pct_24h)} / ${f0(r.usable_pct_8h)}`, `${f0(r.median_valid_scans_24h)} / ${f0(r.median_valid_scans_8h)}`]),
+                           `${f0(r.usable_pct_24h)} / ${f0(r.usable_pct_8h)}`, `${fh(r.median_valid_scans_24h)} / ${fh(r.median_valid_scans_8h)}`]),
       widths: [1700, 900, 500, 550, 500, 550, 650, 650, 800, 800, 800, 750]
     };
   },
@@ -68,7 +72,7 @@ const builders = {
     for (const term of Object.keys(labels)) {
       out.push([labels[term], ...models.map(m => {
         const x = rows.find(r => r.model === m && r.term === term);
-        return x ? typo(`${sgn(x.estimate_per_sd, 3)} (${f3(x.se)}), p = ${f3(x.p)}`) : "–";
+        return x ? typo(`${sgn(x.estimate_per_sd, 3)} (${f3(x.se)}), ${pfmt(x.p)}`) : "–";
       })]);
     }
     out.push(["R^{2} (adjusted)", ...models.map(m => { const x = rows.find(r => r.model === m); return `${f2(x.r2)} (${f2(x.adj_r2)})`; })]);
@@ -93,7 +97,7 @@ const builders = {
       for (const [m, ml] of [["mixing depth only", "interaction, mixing depth only"],
                              ["mixing depth, with valid-scan count and column level as competing moderators", "interaction, adjusted"]]) {
         const x = it.find(r => r.sample === s && r.model === m && r.term === "col_std:pbl_std");
-        out.push([s, ml, `${f0(x.n)} (${f0(x.n_sites)} sites)`, "", "", "", typo(`${sgn(x.estimate, 3)} (SE ${f3(x.se_cluster)}), p = ${f3(x.p)}`)]);
+        out.push([s, ml, `${f0(x.n)} (${f0(x.n_sites)} sites)`, "", "", "", typo(`${sgn(x.estimate, 3)} (SE ${f3(x.se_cluster)}), ${pfmt(x.p)}`)]);
       }
     }
     return { header: ["Samples", "Stratification", "n (shallow / middle / deep)", "median mixing depth, km", "anomaly r",
