@@ -104,6 +104,7 @@ main <- function() {
   add("R/15_clear_sky_bias.R",  "coatts", clear_sky && nat_done)
   add("R/16_toc_graphic.R",     "coatts", toc_fig   && nat_done)
   add("R/19_met_comparison.R",  "coatts", met_cmp   && hrrr)
+  add("R/20_agreement_diagnostics.R", "coatts", diag && nat_done && hrrr)  # duration, noise ceiling, temporal averaging, mixing depth
   if (!nat_done && (map_fig || clear_sky || toc_fig))
     note("SKIPPED steps 14-16: the national arm has not been run")
 
