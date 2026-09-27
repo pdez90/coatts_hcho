@@ -625,68 +625,146 @@ nums <- tibble(
             sprintf("%.2f", tr("8 h, start 12:00 LST", "absolute HRRR mixing depth", "sd_column_anom_1e15")),
             sprintf("%.2f", filter(tert, sample == "8 h, start 12:00 LST", stratification == "absolute HRRR mixing depth", tert == 3)$sd_column_anom_1e15))
 ) |> mutate(value = as.character(value), source = "R/20_agreement_diagnostics.R")
+# the remaining numbers the text quotes, so that every value in Sect. 3.6 is derived
+nc_all <- read_tbl(noise_path, colClasses = list(character = c("site", "block_label"))) |>
+  filter(is.finite(scan_noise_sd_single_1e15)) |> group_by(block_label) |>
+  summarise(med = median(scan_noise_sd_single_1e15), .groups = "drop")
+ncm <- function(b) sprintf("%.1f", nc_all$med[nc_all$block_label == b])
+p_same12 <- filter(paired, startsWith(quantity, "anomaly r, 8 h 12:00 sample minus 24 h sample"))
+p_same4  <- filter(paired, startsWith(quantity, "anomaly r, 8 h 04:00 sample minus 24 h sample"))
+tmid <- function(h, st) filter(tert, sample == h, stratification == st, tert == 2)$r[1]
+sf <- "relative to site-month, smoke-free days only"; rel <- "mixing depth relative to site-month"; ab <- "absolute HRRR mixing depth"
+nums2 <- tibble(
+  key = c("dd_min_pairs", "dd_diff_mean", "dd_col12_mean", "dd_col4_mean", "dd_same12_mean", "dd_same4_mean",
+          "gap_m1_r2_pct", "gap_m2_r2_pct", "gap_m1_smoke_coef", "gap_m1_smoke_p",
+          "nc_single_median_11", "nc_single_median_33", "nc_single_median_55",
+          "pbl_8h4_sites", "pbl_8h4_rel_r_mid", "pbl_8h4_sf_r_mid", "pbl_8h12_rel_r_mid", "pbl_8h12_sf_r_mid",
+          "pbl_24_sf_r_low", "pbl_24_sf_r_mid", "pbl_24_sf_r_high", "pbl_24_r_mid", "pbl_8h4_sf_r_high_chk"),
+  value = c(MIN_ANOM_PAIRS, sprintf("%.2f", p1$mean_diff), sprintf("%.2f", pc12$mean_diff), sprintf("%.2f", pc4$mean_diff),
+            sprintf("%+.2f", p_same12$mean_diff), sprintf("%+.2f", p_same4$mean_diff),
+            sprintf("%.0f", 100 * m1$r2[1]), sprintf("%.0f", 100 * m2$r2[1]),
+            sprintf("%+.2f", m1$estimate_per_sd[m1$term == "smoke_share"]), sprintf("%.3f", m1$p[m1$term == "smoke_share"]),
+            ncm("1x1"), ncm("3x3"), ncm("5x5"),
+            filter(inter, sample == "8 h, start 04:00 LST")$n_sites[1],
+            sprintf("%.2f", tmid("8 h, start 04:00 LST", rel)), sprintf("%.2f", tmid("8 h, start 04:00 LST", sf)),
+            sprintf("%.2f", tmid("8 h, start 12:00 LST", rel)), sprintf("%.2f", tmid("8 h, start 12:00 LST", sf)),
+            sprintf("%.2f", tr("24 h", sf, "r")), sprintf("%.2f", tmid("24 h", sf)),
+            sprintf("%.2f", filter(tert, sample == "24 h", stratification == sf, tert == 3)$r),
+            sprintf("%.2f", tmid("24 h", ab)),
+            sprintf("%.2f", filter(tert, sample == "8 h, start 04:00 LST", stratification == sf, tert == 3)$r))
+) |> mutate(value = as.character(value), source = "R/20_agreement_diagnostics.R")
+nums <- bind_rows(nums, nums2) |> mutate(value = sub("^-0\\.0+$", "0.00", value))   # no negative zero
 data.table::fwrite(nums, file.path(P$tables, "manuscript_numbers_20.csv"))
 
 # ============================================================================
 # figures
 # ============================================================================
 if (HAS_GG) {
-  # fig20: paired r at the dual-duration sites
-  p20 <- ggplot(both, aes(anom_r_24h, anom_r_8h)) +
-    geom_abline(slope = 1, intercept = 0, colour = "grey60", linetype = 2) +
-    geom_hline(yintercept = 0, colour = "grey85") + geom_vline(xintercept = 0, colour = "grey85") +
-    geom_point(aes(size = pmin(anom_n_24h, anom_n_8h)), shape = 21, fill = "steelblue", alpha = 0.8) +
-    geom_text(aes(label = state), size = 2.4, vjust = -1) +
-    scale_size_area(max_size = 6, name = "anomaly pairs\n(smaller duration)") +
-    coord_equal(xlim = c(-0.3, 1), ylim = c(-0.3, 1)) +
-    labs(x = "Within-month anomaly r, 24 h samples", y = "Within-month anomaly r, 8 h samples",
-         title = sprintf("%d monitors reporting both durations", nrow(both)))
-  ggsave(file.path(P$figures, "fig20_dual_duration.png"), p20, width = 5.5, height = 5.2, dpi = 300)
+  # Colour-blind-safe palette (Okabe-Ito) and a common look for the four figures.
+  OI <- c("#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9")
+  ugm3 <- expression("median surface HCHO (" * mu * "g m"^-3 * ")")
 
-  # fig21: observed r against its ceiling, and E against the site descriptors
+  # fig20: paired r at the dual-duration sites. Short labels (state code and the
+  # AQS site name) with overlap suppression, so the cluster near 0.6 stays legible.
+  st_abbr <- setNames(c(state.abb, "DC"), c(state.name, "District Of Columbia"))
+  lab20 <- both |>
+    mutate(lab = paste0(st_abbr[state], ": ", str_to_title(str_replace_all(tolower(site_name), "-", " "))),
+           lab = str_trunc(lab, 26))
+  p20 <- ggplot(lab20, aes(anom_r_24h, anom_r_8h)) +
+    annotate("rect", xmin = -0.35, xmax = 1, ymin = -0.35, ymax = 1, fill = NA, colour = NA) +
+    geom_abline(slope = 1, intercept = 0, colour = "grey55", linetype = 2) +
+    geom_hline(yintercept = 0, colour = "grey85") + geom_vline(xintercept = 0, colour = "grey85") +
+    geom_point(aes(size = pmin(anom_n_24h, anom_n_8h)), shape = 21, fill = OI[1], colour = "white", alpha = 0.85, stroke = 0.4) +
+    geom_text(aes(label = lab), size = 2.3, nudge_y = 0.035, check_overlap = TRUE, colour = "grey15") +
+    annotate("text", x = 0.95, y = 0.99, label = "8 h agrees better", hjust = 1, size = 2.8, colour = "grey40") +
+    annotate("text", x = 0.99, y = -0.3, label = "24 h agrees better", hjust = 1, size = 2.8, colour = "grey40") +
+    scale_size_area(max_size = 7, breaks = c(30, 60, 90), name = "anomaly pairs\n(smaller of the two)") +
+    coord_equal(xlim = c(-0.35, 1), ylim = c(-0.35, 1), expand = FALSE) +
+    labs(x = "Within-month anomaly r, 24 h samples", y = "Within-month anomaly r, 8 h samples") +
+    theme(legend.position = c(0.86, 0.22), legend.background = element_rect(fill = "white", colour = "grey80"),
+          legend.title = element_text(size = 8), legend.text = element_text(size = 8))
+  ggsave(file.path(P$figures, "fig20_dual_duration.png"), p20, width = 5.8, height = 5.6, dpi = 300)
+
+  # fig21: (a) observed r against its ceiling; (b) E against each descriptor.
   long <- gap |>
     select(site, efficiency, anomaly_r_observed, median_surface_ugm3, snr, median_valid_scans, usable_pct, pbl_hrrr_km, smoke_share) |>
     pivot_longer(c(median_surface_ugm3, snr, median_valid_scans, usable_pct, pbl_hrrr_km, smoke_share),
                  names_to = "predictor", values_to = "x") |>
     mutate(predictor = factor(predictor, levels = c("median_surface_ugm3", "snr", "median_valid_scans", "usable_pct", "pbl_hrrr_km", "smoke_share"),
-                              labels = c("median surface HCHO (µg m⁻³)", "signal-to-noise ratio", "median valid scans",
-                                         "usable share (%)", "HRRR mixing depth (km)", "smoke-affected share")))
+                              labels = c("median surface HCHO (µg m-3)", "signal-to-noise ratio", "median valid scans per sample",
+                                         "samples with a usable scan (%)", "HRRR mixing depth (km)", "share of samples smoke-affected")))
+  guide_lines <- tibble(E = c(1, 0.5), lab = c("E = 1 (at the ceiling)", "E = 0.5"))
   p21a <- ggplot(gap, aes(ceiling_empirical, anomaly_r_observed)) +
-    geom_abline(slope = 1, intercept = 0, colour = "grey60", linetype = 2) +
-    geom_abline(slope = 0.5, intercept = 0, colour = "grey80", linetype = 3) +
-    geom_point(aes(colour = median_surface_ugm3), size = 2) +
-    scale_colour_viridis_c(name = "median surface\nHCHO (µg m⁻³)", trans = "log10") +
-    coord_equal(xlim = c(0.5, 1), ylim = c(-0.3, 1)) +
-    labs(x = "Noise ceiling on r", y = "Observed anomaly r", title = "(a) Observed against ceiling")
+    geom_abline(slope = 1, intercept = 0, colour = "grey45", linetype = 2) +
+    geom_abline(slope = 0.5, intercept = 0, colour = "grey70", linetype = 3) +
+    geom_point(aes(fill = median_surface_ugm3), shape = 21, colour = "grey25", size = 2.4, stroke = 0.3) +
+    annotate("text", x = 0.985, y = 0.985, label = "E = 1", hjust = 1, vjust = -0.4, size = 3, colour = "grey35") +
+    annotate("text", x = 0.985, y = 0.49, label = "E = 0.5", hjust = 1, vjust = -0.4, size = 3, colour = "grey55") +
+    scale_fill_viridis_c(name = ugm3, trans = "log10", breaks = c(1, 2, 4)) +
+    scale_x_continuous(limits = c(0.5, 1), breaks = seq(0.5, 1, 0.1)) +
+    scale_y_continuous(limits = c(-0.3, 1), breaks = seq(-0.2, 1, 0.2)) +
+    labs(x = "Ceiling on r implied by scan-to-scan retrieval noise", y = "Observed within-month anomaly r",
+         title = sprintf("(a) Observed correlation against its noise ceiling, %d sites", nrow(gap))) +
+    theme(legend.position = "right", plot.title = element_text(size = 11))
   p21b <- ggplot(long, aes(x, efficiency)) +
-    geom_hline(yintercept = 1, colour = "grey60", linetype = 2) +
-    geom_point(alpha = 0.6, size = 1.4) + geom_smooth(method = "loess", se = FALSE, colour = "firebrick", linewidth = 0.6, span = 1) +
-    facet_wrap(~ predictor, scales = "free_x") +
-    labs(x = NULL, y = "E = observed r / ceiling", title = "(b) The noise-corrected agreement against site descriptors")
-  png(file.path(P$figures, "fig21_ceiling_gap.png"), width = 8.5, height = 9, units = "in", res = 300)
+    geom_hline(yintercept = 1, colour = "grey45", linetype = 2) +
+    geom_hline(yintercept = 0, colour = "grey85") +
+    geom_point(alpha = 0.55, size = 1.5, colour = OI[1]) +
+    geom_smooth(method = "lm", se = TRUE, colour = "grey20", fill = "grey80", linewidth = 0.5, formula = y ~ x) +
+    facet_wrap(~ predictor, scales = "free_x", nrow = 2) +
+    labs(x = NULL, y = "E = observed r / ceiling", title = "(b) Noise-corrected agreement against the six site descriptors (linear fit ± 95% band)") +
+    theme(plot.title = element_text(size = 11))
+  png(file.path(P$figures, "fig21_ceiling_gap.png"), width = 8, height = 9.2, units = "in", res = 300)
   grid::grid.newpage()
-  grid::pushViewport(grid::viewport(layout = grid::grid.layout(2, 1, heights = grid::unit(c(0.42, 0.58), "npc"))))
+  grid::pushViewport(grid::viewport(layout = grid::grid.layout(2, 1, heights = grid::unit(c(0.44, 0.56), "npc"))))
   print(p21a, vp = grid::viewport(layout.pos.row = 1, layout.pos.col = 1))
   print(p21b, vp = grid::viewport(layout.pos.row = 2, layout.pos.col = 1))
   dev.off()
 
-  # fig22: r against scans averaged, by block
-  p22 <- ggplot(ta |> mutate(k = factor(k_scans, levels = c(as.character(seq_len(KMIN)), "all"))),
-                aes(k, r_pooled, group = block, colour = block)) +
-    geom_ribbon(aes(ymin = r_pooled_lo, ymax = r_pooled_hi, fill = block), alpha = 0.15, colour = NA) +
-    geom_line() + geom_point() +
-    labs(x = "TEMPO scans averaged per 24 h sample", y = "Within-month anomaly r (pooled)",
-         colour = "grid-cell block", fill = "grid-cell block",
-         title = sprintf("%d samples with at least %d valid scans", nrow(eligible), KMIN))
-  ggsave(file.path(P$figures, "fig22_temporal_averaging.png"), p22, width = 6, height = 4, dpi = 300)
+  # fig22: r against scans averaged, by block. Bands are the 2.5-97.5 % range of
+  # the pooled r over the random draws; "all" uses every valid scan.
+  ta_plot <- ta |> mutate(k = factor(ifelse(k_scans == "all", sprintf("all\n(median %d)", median_valid_scans_all[block == "3x3"][1]), k_scans),
+                                    levels = c(as.character(seq_len(KMIN)), sprintf("all\n(median %d)", median_valid_scans_all[block == "3x3"][1]))),
+                          block = factor(block, levels = c("1x1", "3x3", "5x5"), labels = c("1 × 1 cell", "3 × 3 cells", "5 × 5 cells")))
+  p22 <- ggplot(ta_plot, aes(k, r_pooled, group = block, colour = block)) +
+    geom_ribbon(aes(ymin = r_pooled_lo, ymax = r_pooled_hi, fill = block), alpha = 0.18, colour = NA) +
+    geom_line(linewidth = 0.8) + geom_point(size = 2.2) +
+    geom_text(data = ta_plot |> filter(k_scans %in% c("1", "all")), aes(label = sprintf("%.2f", r_pooled)),
+              size = 2.7, vjust = -1.1, show.legend = FALSE) +
+    scale_colour_manual(values = OI[1:3]) + scale_fill_manual(values = OI[1:3]) +
+    scale_y_continuous(limits = c(0.15, 0.55), breaks = seq(0.2, 0.5, 0.1)) +
+    labs(x = "TEMPO scans averaged per 24 h sample", y = "Pooled within-month anomaly r",
+         colour = "spatial block", fill = "spatial block",
+         subtitle = sprintf("%d samples with at least %d valid scans in every block; %d random draws per point",
+                            nrow(eligible), KMIN, NDRAW)) +
+    theme(legend.position = c(0.84, 0.2), legend.background = element_rect(fill = "white", colour = "grey80"),
+          plot.subtitle = element_text(size = 9, colour = "grey30"))
+  ggsave(file.path(P$figures, "fig22_temporal_averaging.png"), p22, width = 6, height = 4.2, dpi = 300)
 
-  # fig23: r by mixing-depth tertile
-  p23 <- ggplot(tert |> mutate(tert = factor(tert, labels = c("shallow", "middle", "deep"))),
-                aes(tert, r, fill = stratification)) +
-    geom_col(position = position_dodge(0.7), width = 0.65) +
+  # fig23: r by mixing-depth tertile, one panel per sample type, the difference
+  # deep - shallow and its interval written into each panel.
+  strat_levels <- c("absolute HRRR mixing depth", "mixing depth relative to site-month", "relative to site-month, smoke-free days only")
+  t23 <- tert |>
+    filter(stratification %in% strat_levels) |>
+    mutate(tert = factor(tert, labels = c("shallow", "middle", "deep")),
+           stratification = factor(stratification, levels = strat_levels,
+                                   labels = c("absolute depth", "relative to the site-month", "relative, smoke-free days only")),
+           sample = factor(sample, levels = c("8 h, start 04:00 LST", "8 h, start 12:00 LST", "24 h"),
+                           labels = c("8 h samples from 04:00 LST", "8 h samples from 12:00 LST", "24 h samples")))
+  ann23 <- t23 |> filter(tert == "deep") |>
+    group_by(sample, stratification) |>
+    summarise(txt = sprintf("%+.2f (%.2f, %.2f)", diff_top_minus_bottom[1], diff_ci_lo[1], diff_ci_hi[1]), .groups = "drop") |>
+    group_by(sample) |> mutate(y = 0.72 - 0.045 * (as.integer(stratification) - 1)) |> ungroup()
+  p23 <- ggplot(t23, aes(tert, r, fill = stratification)) +
+    geom_col(position = position_dodge(0.72), width = 0.68) +
+    geom_text(aes(label = sprintf("%.2f", r)), position = position_dodge(0.72), vjust = -0.35, size = 2.4) +
+    geom_text(data = ann23, aes(x = 0.55, y = y, label = txt, colour = stratification), hjust = 0, size = 2.5, inherit.aes = FALSE, show.legend = FALSE) +
+    annotate("text", x = 0.55, y = 0.765, label = "deep minus shallow (95% CI):", hjust = 0, size = 2.5, colour = "grey30") +
     facet_wrap(~ sample) +
-    labs(x = "HRRR mixing depth over the sampling window (tertile)", y = "Within-month anomaly r", fill = NULL) +
-    theme(legend.position = "bottom")
-  ggsave(file.path(P$figures, "fig23_pbl_tertiles.png"), p23, width = 8, height = 3.8, dpi = 300)
+    scale_fill_manual(values = OI[1:3]) + scale_colour_manual(values = OI[1:3]) +
+    scale_y_continuous(limits = c(0, 0.8), breaks = seq(0, 0.6, 0.2), expand = c(0, 0)) +
+    labs(x = "HRRR mixing depth over the sampling window (tertile)", y = "Within-month anomaly r", fill = "tertiles defined on") +
+    theme(legend.position = "bottom", panel.grid.major.x = element_blank())
+  ggsave(file.path(P$figures, "fig23_pbl_tertiles.png"), p23, width = 8.5, height = 4.2, dpi = 300)
 }
 log_msg("Agreement diagnostics done.")
