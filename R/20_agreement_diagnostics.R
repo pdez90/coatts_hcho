@@ -668,20 +668,23 @@ if (HAS_GG) {
   # AQS site name) with overlap suppression, so the cluster near 0.6 stays legible.
   st_abbr <- setNames(c(state.abb, "DC"), c(state.name, "District Of Columbia"))
   lab20 <- both |>
-    mutate(lab = paste0(st_abbr[state], ": ", str_to_title(str_replace_all(tolower(site_name), "-", " "))),
-           lab = str_trunc(lab, 26))
+    mutate(lab = paste0(st_abbr[state], ": ", str_to_title(word(str_replace_all(tolower(site_name), "[-_]", " "), 1))))
+  HAS_REPEL <- requireNamespace("ggrepel", quietly = TRUE)
   p20 <- ggplot(lab20, aes(anom_r_24h, anom_r_8h)) +
     annotate("rect", xmin = -0.35, xmax = 1, ymin = -0.35, ymax = 1, fill = NA, colour = NA) +
     geom_abline(slope = 1, intercept = 0, colour = "grey55", linetype = 2) +
     geom_hline(yintercept = 0, colour = "grey85") + geom_vline(xintercept = 0, colour = "grey85") +
     geom_point(aes(size = pmin(anom_n_24h, anom_n_8h)), shape = 21, fill = OI[1], colour = "white", alpha = 0.85, stroke = 0.4) +
-    geom_text(aes(label = lab), size = 2.3, nudge_y = 0.035, check_overlap = TRUE, colour = "grey15") +
+    (if (HAS_REPEL) ggrepel::geom_text_repel(aes(label = lab), size = 2.4, colour = "grey15", min.segment.length = 0.2,
+                                              segment.colour = "grey60", box.padding = 0.3, max.overlaps = 30, seed = 42)
+     else geom_text(aes(label = lab), size = 2.3, nudge_y = 0.035, check_overlap = TRUE, colour = "grey15")) +
     annotate("text", x = 0.95, y = 0.99, label = "8 h agrees better", hjust = 1, size = 2.8, colour = "grey40") +
     annotate("text", x = 0.99, y = -0.3, label = "24 h agrees better", hjust = 1, size = 2.8, colour = "grey40") +
     scale_size_area(max_size = 7, breaks = c(30, 60, 90), name = "anomaly pairs\n(smaller of the two)") +
     coord_equal(xlim = c(-0.35, 1), ylim = c(-0.35, 1), expand = FALSE) +
     labs(x = "Within-month anomaly r, 24 h samples", y = "Within-month anomaly r, 8 h samples") +
-    theme(legend.position = c(0.86, 0.22), legend.background = element_rect(fill = "white", colour = "grey80"),
+    theme(legend.position = "inside", legend.position.inside = c(0.86, 0.22),
+          legend.background = element_rect(fill = "white", colour = "grey80"),
           legend.title = element_text(size = 8), legend.text = element_text(size = 8))
   ggsave(file.path(P$figures, "fig20_dual_duration.png"), p20, width = 5.8, height = 5.6, dpi = 300)
 
@@ -691,7 +694,7 @@ if (HAS_GG) {
     pivot_longer(c(median_surface_ugm3, snr, median_valid_scans, usable_pct, pbl_hrrr_km, smoke_share),
                  names_to = "predictor", values_to = "x") |>
     mutate(predictor = factor(predictor, levels = c("median_surface_ugm3", "snr", "median_valid_scans", "usable_pct", "pbl_hrrr_km", "smoke_share"),
-                              labels = c("median surface HCHO (µg m-3)", "signal-to-noise ratio", "median valid scans per sample",
+                              labels = c("median surface HCHO (µg/m³)", "signal-to-noise ratio", "median valid scans per sample",
                                          "samples with a usable scan (%)", "HRRR mixing depth (km)", "share of samples smoke-affected")))
   guide_lines <- tibble(E = c(1, 0.5), lab = c("E = 1 (at the ceiling)", "E = 0.5"))
   p21a <- ggplot(gap, aes(ceiling_empirical, anomaly_r_observed)) +
@@ -729,15 +732,19 @@ if (HAS_GG) {
   p22 <- ggplot(ta_plot, aes(k, r_pooled, group = block, colour = block)) +
     geom_ribbon(aes(ymin = r_pooled_lo, ymax = r_pooled_hi, fill = block), alpha = 0.18, colour = NA) +
     geom_line(linewidth = 0.8) + geom_point(size = 2.2) +
-    geom_text(data = ta_plot |> filter(k_scans %in% c("1", "all")), aes(label = sprintf("%.2f", r_pooled)),
-              size = 2.7, vjust = -1.1, show.legend = FALSE) +
+    geom_text(data = ta_plot |> filter(k_scans == "1"), aes(label = sprintf("%.2f", r_pooled)),
+              size = 2.7, hjust = 1.35, show.legend = FALSE) +
+    geom_text(data = ta_plot |> filter(k_scans == "all"), aes(label = sprintf("%.2f", r_pooled)),
+              size = 2.7, hjust = -0.35, show.legend = FALSE) +
     scale_colour_manual(values = OI[1:3]) + scale_fill_manual(values = OI[1:3]) +
     scale_y_continuous(limits = c(0.15, 0.55), breaks = seq(0.2, 0.5, 0.1)) +
     labs(x = "TEMPO scans averaged per 24 h sample", y = "Pooled within-month anomaly r",
          colour = "spatial block", fill = "spatial block",
          subtitle = sprintf("%d samples with at least %d valid scans in every block; %d random draws per point",
                             nrow(eligible), KMIN, NDRAW)) +
-    theme(legend.position = c(0.84, 0.2), legend.background = element_rect(fill = "white", colour = "grey80"),
+    scale_x_discrete(expand = expansion(add = c(0.6, 0.7))) +
+    theme(legend.position = "inside", legend.position.inside = c(0.84, 0.2),
+          legend.background = element_rect(fill = "white", colour = "grey80"),
           plot.subtitle = element_text(size = 9, colour = "grey30"))
   ggsave(file.path(P$figures, "fig22_temporal_averaging.png"), p22, width = 6, height = 4.2, dpi = 300)
 
