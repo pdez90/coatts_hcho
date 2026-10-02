@@ -1,0 +1,45 @@
+column,units,description
+arm,"","national: the CONUS EPA AQS formaldehyde monitors of the national analysis (24 h, 8 h and 3 h samples, Colorado included); colorado_24h: the seven Colorado 24 h sites of the case study; colorado_3h: the Colorado 3 h ozone-precursor sites (Chatfield State Park, Platteville). A Colorado sample can therefore appear in both a Colorado arm and the national arm."
+site_id,"",EPA AQS site ID (state-county-site).
+site_code,"",CDPHE site code (Colorado arms only).
+site_name,"","Site name: AQS's for the national arm, CDPHE's for the Colorado arms (they can differ for the same station)."
+state,"",U.S. state.
+county,"",County (national arm only).
+networks,"","AQS monitoring networks, e.g. NATTS, PAMS (national arm only; blank when AQS lists none)."
+lat,degrees north,Monitor latitude.
+lon,degrees east,Monitor longitude.
+duration_h,h,Sampling duration.
+start_utc,ISO 8601 UTC,Start of the sampling window.
+end_utc,ISO 8601 UTC,End of the sampling window (start_utc + duration_h).
+sample_date_local,date,Local standard-time date on which sampling began.
+hcho_ugm3,ug m-3,"Surface formaldehyde as reported to AQS, at 25 C and 1 atm; values reported in ppb (ppbC) were converted at 25 C and 1 atm. Collocated monitors (POCs) for the same window are averaged."
+hcho_ppb,ppb,hcho_ugm3 as a mixing ratio (x 24.45 / 30.026).
+hcho_molec_cm3,molecules cm-3,Surface number density: hcho_ppb at the HRRR temperature and pressure averaged over the sampling window.
+n_poc,"",Number of collocated monitors (POCs) averaged (national arm only).
+qualifiers,"","AQS qualifiers: code and description for the national arm, codes only for the Colorado arms. Samples with AQS null-data qualifiers were removed."
+method,"",AQS sampling and analysis method (national arm only).
+sample_frequency,"",AQS sampling frequency (national arm only).
+temp_c_hrrr,C,NOAA HRRR 2 m temperature averaged over the hours of the sampling window.
+press_hpa_hrrr,hPa,NOAA HRRR surface pressure averaged over the hours of the sampling window.
+pbl_m_hrrr,m,NOAA HRRR planetary boundary layer height averaged over the hours of the sampling window.
+met_coverage,fraction,Share of the sampling window's hours with an HRRR analysis.
+lag_h,h,"Shift of the TEMPO window relative to the sampling window (0 = the sampling window itself; national sub-daily samples -3, 0, 3; Colorado 3 h -3 to 9; 24 h samples 0 only)."
+max_ecf,"","TEMPO screen: maximum effective cloud fraction of a pixel (0.1, 0.2 or 0.3; primary 0.2)."
+block,"","TEMPO pixel block averaged around the monitor: 1x1, 3x3 or 5x5 pixels (primary 3x3)."
+scan_window,"","Which TEMPO scans were used: those in the sampling window (shifted by lag_h), or, for a second Colorado 24 h variant, only those between 10:00 and 14:00 local standard time."
+tempo_start_utc,ISO 8601 UTC,"Start of the TEMPO window. A scan is assigned to the UTC hour containing its mid-scan time, and the scans whose hours fall in [tempo_start_utc, tempo_end_utc) are averaged."
+tempo_end_utc,ISO 8601 UTC,End of the TEMPO window.
+n_scans,"",TEMPO scans with data over the site in the TEMPO window.
+n_valid_scans,"","Scans in which at least half of the block's pixels pass the screen (main data quality flag 0, effective cloud fraction <= max_ecf, and the solar zenith angle and snow/ice limits in R/00_config.R)."
+tempo_vc,molecules cm-2,TEMPO L3 V04 HCHO vertical column: mean over valid scans of each scan's mean over the passing pixels of the block.
+tempo_pbl_m,m,"Boundary-layer height supplied with the TEMPO retrieval, mean over valid scans."
+tempo_press_hpa,hPa,"Surface pressure supplied with the TEMPO retrieval, mean over valid scans."
+scan_times_utc,ISO 8601 UTC,Space-separated start of the UTC hour of each valid scan.
+h_eff_km,km,Effective mixing height: tempo_vc / hcho_molec_cm3 / 1e5.
+usable,"",TRUE when the sample has both a surface value and a TEMPO column (at least one valid scan).
+hms_available,"",TRUE when NOAA Hazard Mapping System smoke files exist for every day the window touches; the smoke columns are blank otherwise.
+n_smoke_polygons,"",HMS smoke polygons over the site whose analysis period overlaps the sampling window widened by 3 h on each side.
+smoke_max_density,"","Densest of those polygons: 0 none, 1 light, 2 medium, 3 heavy."
+smoke_class,"","none, light or medium/heavy, from smoke_max_density."
+smoke_any,"",TRUE when smoke_max_density > 0.
+smoke_any_day,"","TRUE when any HMS polygon covered the site on the window's HMS days, whatever its analysis period."

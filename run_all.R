@@ -17,6 +17,7 @@
 #   meteorology       18 (NOAA HRRR at every monitor; runs after 01, 06 and 11)
 #                     19 (HRRR vs TEMPO vs the CDPHE sensors; after 13)
 #   manuscript        20 (why agreement differs) -> 21 (Table 1) -> 22 (by season)
+#   release           23 (the matched dataset, written to dataset/, which git tracks)
 # =============================================================================
 main <- function() {
   if (!file.exists("R/00_config.R")) stop("Set the working directory to the project root (~/HCHO).")
@@ -109,13 +110,15 @@ main <- function() {
   add("R/20_agreement_diagnostics.R", "coatts", diag && nat_done && hrrr)  # duration, noise ceiling, temporal averaging, mixing depth
   add("R/21_manuscript_tables.R", "coatts", nat_done)   # Table 1 as the build renders it
   add("R/22_seasonal_analysis.R", "coatts", nat_done)   # agreement by season (Wang et al. 2022 comparison)
+  # the matched data of all three arms, with smoke flags, for release in dataset/
+  add("R/23_export_dataset.R",  "coatts", nat_done && three_h && smoke)
   # Fig. S1 is a figure only and runs last, so a missing map package cannot stop the
   # analysis steps; it needs the Colorado 24 h and 3 h samples and the AQS inventory
   # (step 11), not the national TEMPO arm
   add("R/14_site_map.R",        "coatts", map_fig && three_h &&
         (aqs_s || file.exists(file.path("output", "tables", "aqs_samples_inventory.csv"))))
   if (!nat_done)
-    note("SKIPPED steps 15-17 and 20-22: the national analysis (step 13) has not been run")
+    note("SKIPPED steps 15-17 and 20-23: the national analysis (step 13) has not been run")
 
   for (k in seq_len(nrow(steps))) {
     s <- steps$script[k]; arm <- steps$arm[k]

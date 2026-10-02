@@ -154,6 +154,7 @@ Colorado samples. To get a key, run
 | 20 | `R/20_agreement_diagnostics.R` | Why agreement differs: (A) 24 h against 8 h at the 23 monitors that report both, as paired within-site differences, plus the 24 h sample against the column restricted to each 8 h block; (B) the gap between each 24 h site's anomaly correlation and its step-17 noise ceiling, and a weighted Fisher-z model of both against six pre-specified site descriptors; (C) the empirical temporal-averaging curve, k = 1..4 random scans per 24 h sample against all scans, by spatial block, with the single-scan noise re-estimated from the variance against 1/k; (D) the column-surface anomaly correlation by tertile of HRRR mixing depth within each 8 h start hour, with a site-clustered interaction model and smoke-free and competing-moderator checks | `output/tables/diag7_dual_duration_*.csv`, `diag8_ceiling_gap_*.csv`, `diag9_temporal_averaging*.csv`, `diag10_pbl_*.csv`, `manuscript_numbers_20.csv`, `fig20`-`fig23` |
 | 21 | `R/21_manuscript_tables.R` | Table 1 of the manuscript, cell by cell, from the step-13 outputs, so the document renders a CSV rather than a transcription. The supplement's Tables S2-S4 and S8-S11 are rendered from the CSVs of steps 13, 19, 22 and 20 directly by `manuscript/src/tables_amt.js` | `output/tables/manuscript_table1.csv` |
 | 22 | `R/22_seasonal_analysis.R` | Agreement by season nationally (main Sect. 3.1; supplement Table S4, Fig. S5): pooled and day-to-day correlation by season (24 h, 8 h), the spatial correlation of site-season means (>= 6 samples per site-season, as in Wang et al. 2022) and the column-to-surface seasonal amplitude | `output/tables/national_seasonal*.csv`, `manuscript_numbers_22.csv`, `fig24_seasonal.png` |
+| 23 | `R/23_export_dataset.R` | The matched dataset for release: every surface sample of the three arms matched to its TEMPO columns under each screening variant and lag, with HRRR meteorology and HMS smoke flags, in one schema; values are copied as text from steps 04, 07, 08 and 13, and the row counts of the primary variant are checked against those steps' own files | `dataset/matched_primary.csv.gz`, `dataset/matched_all_variants.csv.gz`, `dataset/data_dictionary.csv`, `dataset/README.md` |
 
 Step 12 is the long one. `aqs_arm_durations` names all three duration sets, so
 it covers every national site. Two different numbers describe its size and they
@@ -170,9 +171,10 @@ by step 3, so run step 3 at least once first.
 `run_all.R` order: 01 → 02 → 03 → 04 (24-h data) → 06 → 02 → 03 (3-h data) →
 08 (smoke) → 05 → 07 (analyses) → 09 (diagnostics) → 10, 11 (national data) →
 12 (national TEMPO) → 13 (national analysis) → 17 (national noise ceiling and
-time of day) → 14 (site map) → 15 (observability bias) → 16 (TOC graphic) → 19
-(HRRR against TEMPO meteorology) → 20 (agreement diagnostics) → 21 (Table 1) → 22
-(agreement by season);
+time of day) → 15 (observability bias) → 16 (TOC graphic) → 19 (HRRR against
+TEMPO meteorology) → 20 (agreement diagnostics) → 21 (Table 1) → 22 (agreement
+by season) → 23 (release dataset) → 14 (site map, last, so a missing map
+package cannot stop the analysis);
 step 18 (HRRR meteorology) runs before each arm's matching. Every arm reads AQS,
 so `run_all.R` stops at once if AQS credentials are absent.
 
@@ -184,7 +186,7 @@ invocation: each step is gated on its input being produced earlier in that run,
 not on a file that happened to exist at startup. Leave the flag off and
 the Colorado case study, its diagnostics, the HRRR meteorology and the AQS
 inventory and sample pull still run end to end; the national analysis (steps 13,
-15-17 and 20-22) needs the national TEMPO extraction.
+15-17 and 20-23) needs the national TEMPO extraction.
 Turn parts off with `run_three_hour_arm`, `run_smoke_flags`, `run_diagnostics`,
 `run_aqs_inventory`, `run_aqs_samples` and `run_aqs_tempo` in `R/00_config.R`. Every arm needs an
 AQS API key (`AQS_EMAIL`, `AQS_KEY` in `~/.Renviron`); without one `run_all.R`
@@ -194,6 +196,17 @@ Every step caches what it has done. If step 3 is interrupted (it makes roughly
 one request per TEMPO scan, on the order of 2,000), run it again and it
 continues. Expect it to take from tens of minutes to a few hours depending on
 the OPeNDAP server.
+
+## Dataset
+
+`dataset/` holds the matched data in a form others can use without running the
+pipeline: one row per surface sample, screening variant and time lag, for the
+national, Colorado 24 h and Colorado 3 h arms, with the TEMPO column, HRRR
+meteorology and HMS smoke flags. `matched_primary.csv.gz` is the primary
+screening (the main analyses use its `lag_h` = 0 rows with `usable` = TRUE);
+`matched_all_variants.csv.gz` adds every cloud-fraction threshold, block size and
+lag; `data_dictionary.csv` defines every column. Step 23 writes the folder and
+`data/` stays untracked, so the dataset is versioned with the code that made it.
 
 ## Settings
 
