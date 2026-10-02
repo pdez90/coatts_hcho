@@ -1,9 +1,10 @@
 # =============================================================================
 # 01_coatts.R - the Colorado 24-h formaldehyde record
 #
-# SOURCE OF RECORD: EPA AQS. Six of the seven COATTS sites report to AQS, and
-# the measurement comes from AQS, exactly as it does for the other 122 sites in
-# the national arm. That was not always so: this step used to read
+# SOURCE OF RECORD: EPA AQS. All seven COATTS sites report to AQS (six are in
+# the national arm; see below for Wheat Ridge), and the measurement comes from
+# AQS, exactly as it does for the other sites in the national arm. That was
+# not always so: this step used to read
 # all seven from CDPHE's annual data packets, which meant the Colorado results
 # and the national results were derived from different copies of the same
 # measurements and were never compared, and a reader can now reproduce the

@@ -16,7 +16,7 @@
 #     over sites with >= MIN_SEASON_SAMPLES matched samples in that season
 #     (Wang required six surface samples per season).
 #  D. Seasonal amplitude: at sites with >= MIN_SEASON_SAMPLES in all four
-#     seasons, (max - min of the four seasonal means) / annual mean, for the
+#     seasons, (max - min of the four seasonal means) / their mean, for the
 #     column and for the surface, and the summer-to-winter (JJA/DJF) ratio.
 #
 # Inputs : data/processed/aqs_matched_primary.csv.gz  (step 13)
@@ -47,14 +47,17 @@ log_msg(nrow(use), " usable matched samples (", paste(DURATIONS, collapse = ", "
         n_distinct(use$site), " sites")
 
 # Pearson r with a site-clustered bootstrap interval (boot_index falls back to
-# rows, and says so, below five sites)
+# rows below five sites; the basis is returned and written to the table)
 boot_r <- function(x, y, cl) {
   bi <- boot_index(length(x), cl)
   b <- replicate(NBOOT, { k <- bi$draw(); suppressWarnings(cor(x[k], y[k])) })
   ok <- is.finite(b)
-  c(lo = if (any(ok)) quantile(b[ok], 0.025)[[1]] else NA_real_,
-    hi = if (any(ok)) quantile(b[ok], 0.975)[[1]] else NA_real_)
+  list(lo = if (any(ok)) quantile(b[ok], 0.025)[[1]] else NA_real_,
+       hi = if (any(ok)) quantile(b[ok], 0.975)[[1]] else NA_real_,
+       basis = bi$basis)
 }
+# p-values as keys: three decimals, and "<0.001" rather than "0.000"
+pkey <- function(p) ifelse(is.na(p), NA_character_, ifelse(p < 0.001, "<0.001", sprintf("%.3f", p)))
 
 col_or_na <- function(t, col) if (col %in% names(t)) t[[col]][1] else NA_real_
 
@@ -71,7 +74,7 @@ by_season <- map_dfr(DURATIONS, function(dc) map_dfr(SEASONS, function(s) {
   ci <- boot_r(d$tempo_vc_1e15, d$hcho_ugm3, d$site)
   an <- if (nrow(da) >= 6) anomstats(da) else tibble(n = nrow(da))
   tibble(duration_class = dc, season = s, n = nrow(d), n_sites = n_distinct(d$site),
-         pearson_r = cor(d$tempo_vc_1e15, d$hcho_ugm3), r_lo = ci[["lo"]], r_hi = ci[["hi"]],
+         pearson_r = cor(d$tempo_vc_1e15, d$hcho_ugm3), r_lo = ci$lo, r_hi = ci$hi, ci_basis = ci$basis,
          median_surface_ugm3 = median(d$hcho_ugm3), median_tempo_1e15 = median(d$tempo_vc_1e15),
          anom_n = an$n, anom_site_months = col_or_na(an, "site_months"),
          anom_pearson_r = col_or_na(an, "pearson_r"),
@@ -124,14 +127,15 @@ k1 <- map_dfr(DURATIONS, function(dc) map_dfr(SEASONS, function(s) tibble(
   value = c(sprintf("%.2f", g(dc, s, "pearson_r")), sprintf("%.2f", g(dc, s, "r_lo")),
             sprintf("%.2f", g(dc, s, "r_hi")), as.character(g(dc, s, "n")),
             sprintf("%.2f", g(dc, s, "anom_pearson_r")), as.character(g(dc, s, "anom_n")),
-            sprintf("%.3f", g(dc, s, "anom_pearson_p_perm"))))))
+            pkey(g(dc, s, "anom_pearson_p_perm"))))))
 k2 <- tibble(key = c(paste0("seas_sp_", tolower(spatial$season)), paste0("seas_spn_", tolower(spatial$season)),
                      paste0("seas_spp_", tolower(spatial$season))),
              value = c(sprintf("%.2f", spatial$spatial_r), as.character(spatial$n_sites),
-                       sprintf("%.3f", spatial$spatial_p)))
-k3 <- tibble(key = c("seas_min_samples", "seas_amp_sites", "seas_amp_ratio_median", "seas_amp_ratio_q25",
+                       pkey(spatial$spatial_p)))
+k3 <- tibble(key = c("seas_min_samples", "seas_n_8_total", "seas_amp_sites", "seas_amp_ratio_median", "seas_amp_ratio_q25",
                      "seas_amp_ratio_q75", "seas_jja_djf_surface", "seas_jja_djf_column"),
-             value = c(MIN_SEASON_SAMPLES, nrow(amp), sprintf("%.2f", median(amp$amp_ratio)),
+             value = c(MIN_SEASON_SAMPLES, sum(by_season$n[by_season$duration_class == "8 h"]), nrow(amp),
+                       sprintf("%.2f", median(amp$amp_ratio)),
                        sprintf("%.2f", quantile(amp$amp_ratio, 0.25)), sprintf("%.2f", quantile(amp$amp_ratio, 0.75)),
                        sprintf("%.2f", median(amp$surface_jja_djf)), sprintf("%.2f", median(amp$column_jja_djf))))
 nums <- bind_rows(k1, k2, k3) |> mutate(value = as.character(value), source = "R/22_seasonal_analysis.R")
@@ -146,7 +150,10 @@ pa_d <- bind_rows(
   # 8 h samples are almost all summer (PAMS season), so only 24 h is drawn by
   # season; the 8 h rows stay in national_seasonal.csv and Table S11
   filter(duration_class == "24 h") |>
-  mutate(lab_vjust = ifelse(kind == "pooled (whole period)", 2.2, -1.1))
+  # labels off the point and clear of the error bars and connecting lines:
+  # pooled below-right, day-to-day above-left
+  mutate(pooled = kind == "pooled (whole period)",
+         lab_hjust = ifelse(pooled, -0.3, 1.2), lab_vjust = ifelse(pooled, 1.6, -0.7))
 pa <- ggplot(pa_d, aes(season, r, colour = kind, group = kind)) +
   geom_hline(yintercept = 0, colour = "grey70") +
   # the two series are dodged sideways so their points, intervals and labels
@@ -154,7 +161,8 @@ pa <- ggplot(pa_d, aes(season, r, colour = kind, group = kind)) +
   geom_line(linewidth = 0.6, position = position_dodge(width = 0.3)) +
   geom_errorbar(aes(ymin = lo, ymax = hi), width = 0.12, na.rm = TRUE, position = position_dodge(width = 0.3)) +
   geom_point(size = 2.4, position = position_dodge(width = 0.3)) +
-  geom_text(aes(label = n, vjust = lab_vjust), size = 2.6, show.legend = FALSE, position = position_dodge(width = 0.3)) +
+  geom_text(aes(label = n, hjust = lab_hjust, vjust = lab_vjust), size = 2.6, show.legend = FALSE,
+            position = position_dodge(width = 0.3)) +
   scale_colour_manual(values = c("#0072B2", "#D55E00"), name = NULL) +
   scale_y_continuous(expand = expansion(mult = c(0.05, 0.15))) +
   labs(x = NULL, y = "Pearson r, TEMPO column vs surface HCHO",
@@ -164,12 +172,12 @@ pb <- ggplot(mutate(site_season, season = factor(season, levels = SEASONS)), aes
   geom_point(alpha = 0.6, size = 1.4, colour = "#0072B2") +
   geom_smooth(method = "lm", formula = y ~ x, se = FALSE, colour = "grey30", linewidth = 0.5) +
   geom_text(data = mutate(spatial, season = factor(season, levels = SEASONS)),
-            aes(x = -Inf, y = Inf, label = sprintf("r = %.2f (%d sites)", spatial_r, n_sites)),
+            aes(x = -Inf, y = Inf, label = sub("^r = -", "r = \u2212", sprintf("r = %.2f (%d sites)", spatial_r, n_sites))),
             hjust = -0.1, vjust = 1.4, size = 2.8, inherit.aes = FALSE) +
   facet_wrap(~ season, nrow = 1, scales = "free") +
   labs(x = expression("Site-season mean column ("*10^15~molecules~cm^-2*")"),
        y = expression("Site-season mean surface HCHO ("*mu*g~m^-3*")"),
-       title = sprintf("(b) Seasonal means across 24 h sites (>= %d samples per site-season)", MIN_SEASON_SAMPLES)) +
+       title = sprintf("(b) Seasonal means across 24 h sites (\u2265 %d samples per site-season)", MIN_SEASON_SAMPLES)) +
   theme(plot.title = element_text(size = 11))
 fig <- if (requireNamespace("patchwork", quietly = TRUE)) {
   patchwork::wrap_plots(pa, pb, ncol = 1, heights = c(1.1, 1))

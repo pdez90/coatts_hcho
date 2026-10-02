@@ -154,11 +154,11 @@ CFG <- list(
   aqs_years = c(2024L, 2025L),
   aqs_refresh = FALSE,                       # TRUE re-downloads the AirData files
   aqs_durations = c("24 h", "8 h", "3 h", "1 h"),
-  aqs_min_samples = 20L,
-  # A state needs this many 24 h sites before pooling within it means
-  # anything. Eleven states clear 4; Colorado is one of them, not the
-  # largest (California has 14, New York 13, Oregon 8).
-  min_sites_per_state = 4L,                     # per site over aqs_years, to be a candidate
+  aqs_min_samples = 20L,                        # per site over aqs_years, to be a candidate
+  # A state needs this many 24 h sites with a site-level correlation before
+  # pooling within it means anything. Ten states clear 4; Colorado is one of
+  # them, not the largest (California has 14, New York 13).
+  min_sites_per_state = 4L,
   aqs_conus_bbox = c(-125, 24, -66, 50),     # lon_min, lat_min, lon_max, lat_max
   # Sample-level check of sampling clocks. AQS records the time each sample
   # BEGAN, in local standard time. The first pull (Sept 2026) returned

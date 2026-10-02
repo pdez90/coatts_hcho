@@ -6,7 +6,7 @@
 //               every cell of a table that tables_amt.js renders from a CSV.
 //               These cannot be transcribed wrongly and are not re-checked.
 //   verified  - literals in prose, captions and the literal supplement tables
-//               (S1-S6). Each must occur in at least one output table, rounded
+//               (S1, S4, S5, S6). Each must occur in at least one output table, rounded
 //               to the precision the text uses; a decimal found in five or more
 //               tables is reported as weakly verified.
 //   exempt    - physical constants and procedural counts, each pinned to the

@@ -84,7 +84,9 @@ const builders = {
     const s = csv("national_seasonal.csv"), sp = csv("national_seasonal_spatial.csv");
     const name = { DJF: "winter (DJF)", MAM: "spring (MAM)", JJA: "summer (JJA)", SON: "autumn (SON)" };
     const out = s.map(r => {
-      const pooled = Number.isFinite(num(r.pearson_r)) ? typo(`${f2(r.pearson_r)} (${f2(r.r_lo)}, ${f2(r.r_hi)})`) : "–";
+      // ^{a}: fewer than five sites, so R/22 drew rows rather than sites (descriptive)
+      const rowb = String(r.ci_basis || "").startsWith("row") ? "^{a}" : "";
+      const pooled = Number.isFinite(num(r.pearson_r)) ? typo(`${f2(r.pearson_r)} (${f2(r.r_lo)}, ${f2(r.r_hi)})`) + rowb : "–";
       const dd = Number.isFinite(num(r.anom_pearson_r)) ? typo(`${f2(r.anom_pearson_r)} (${f0(r.anom_n)}), ${pfmt(r.anom_pearson_p_perm)}`) : "–";
       const x = r.duration_class === "24 h" ? sp.find(q => q.season === r.season) : null;
       const across = x && Number.isFinite(num(x.spatial_r)) ? typo(`${f2(x.spatial_r)} (${f0(x.n_sites)}), ${pfmt(x.spatial_p)}`) : "–";

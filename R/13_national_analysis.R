@@ -326,8 +326,8 @@ by_site <- use |>
   ungroup() |>
   arrange(duration_class, desc(pearson_r))
 # many site-level tests: report a Benjamini-Hochberg false-discovery-rate count
-# alongside the nominal one, so the significance counts are not read as 141
-# independent uncorrected tests
+# alongside the nominal one, so the significance counts are not read as that
+# many independent uncorrected tests
 by_site <- by_site |>
   mutate(pearson_q = p.adjust(pearson_p, method = "BH"),
          anom_pearson_q = if ("anom_pearson_p" %in% names(by_site))

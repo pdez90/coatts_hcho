@@ -12,8 +12,11 @@
 #   analyses          05 (24-h) -> 07 (3-h)
 #   diagnostics       09 (tests of explanations; no downloads)
 #   national data     10 (AQS inventory) -> 11 (samples) -> 12 (TEMPO) -> 13 (analysis)
+#   national figures  17 (noise ceiling, time of day) -> 14 (site map) ->
+#                     15 (observability) -> 16 (TOC graphic)
 #   meteorology       18 (NOAA HRRR at every monitor; runs after 01, 06 and 11)
 #                     19 (HRRR vs TEMPO vs the CDPHE sensors; after 13)
+#   manuscript        20 (why agreement differs) -> 21 (Table 1) -> 22 (by season)
 # =============================================================================
 main <- function() {
   if (!file.exists("R/00_config.R")) stop("Set the working directory to the project root (~/HCHO).")

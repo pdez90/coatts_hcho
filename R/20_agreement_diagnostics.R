@@ -456,11 +456,13 @@ inter <- map_dfr(c(4L, 12L, 0L), function(h) {
   lab <- if (h == 0L) "24 h" else sprintf("8 h, start %02d:00 LST", h)
   one <- function(f, model) {
     fit <- lm(f, data = d)
-    V <- cluster_vcov(fit, d$site)
+    # the site of each row lm() actually used (rows with a missing value drop out)
+    used <- as.integer(rownames(model.frame(fit)))
+    V <- cluster_vcov(fit, d$site[used])
     co <- coef(fit); se <- sqrt(diag(V))
-    tibble(sample = lab, model = model, n = nrow(d), n_sites = n_distinct(d$site),
+    tibble(sample = lab, model = model, n = length(used), n_sites = n_distinct(d$site[used]),
            term = names(co), estimate = co, se_cluster = se, t = co / se,
-           p = 2 * pt(-abs(co / se), df = n_distinct(d$site) - 1))
+           p = 2 * pt(-abs(co / se), df = n_distinct(d$site[used]) - 1))
   }
   bind_rows(one(surface_anom ~ col_std * pbl_std, "mixing depth only"),
             one(surface_anom ~ col_std * pbl_std + col_std:scans_std + col_std:level_std + scans_std + level_std,
@@ -647,7 +649,10 @@ nums2 <- tibble(
             r2(tmid("24 h", ab)),
             r2(filter(tert, sample == "8 h, start 04:00 LST", stratification == sf, tert == 3)$r))
 ) |> mutate(value = as.character(value), source = "R/20_agreement_diagnostics.R")
-nums <- bind_rows(nums, nums2)
+nums <- bind_rows(nums, nums2,
+                  tibble(key = c("ta_pairs", "ta_sites"),
+                         value = c(as.character(t33$n_anomalies[1]), as.character(t33$n_sites[1])),
+                         source = "R/20_agreement_diagnostics.R"))
 data.table::fwrite(nums, file.path(P$tables, "manuscript_numbers_20.csv"))
 
 # ============================================================================
