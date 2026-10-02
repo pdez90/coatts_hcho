@@ -28,7 +28,7 @@
 source("R/00_config.R")
 source("R/helpers_met.R")
 
-read_arm <- function(path, arm) {
+read_arm <- function(path, arm, dur_h) {
   if (!file.exists(path)) { log_msg("  no ", basename(path), " - ", arm, " skipped"); return(NULL) }
   d <- read_tbl(path)
   need <- c("temp_c_hrrr", "press_hpa_hrrr", "pbl_m_hrrr")
@@ -37,18 +37,21 @@ read_arm <- function(path, arm) {
     return(NULL)
   }
   d$arm <- arm
+  # the duration is part of the sample key; the national file carries it, and
+  # each Colorado arm has a single duration
+  d$dur_h <- if ("duration_h" %in% names(d)) as.numeric(d$duration_h) else dur_h
   d
 }
 
 arms <- list(
-  read_arm(file.path(P$processed, "matched_primary.csv"), "Colorado 24 h"),
-  read_arm(file.path(P$processed, "threeh_matched_primary.csv"), "Colorado 3 h"),
-  read_arm(file.path(P$processed, "aqs_matched_primary.csv.gz"), "National")
+  read_arm(file.path(P$processed, "matched_primary.csv"), "Colorado 24 h", 24),
+  read_arm(file.path(P$processed, "threeh_matched_primary.csv"), "Colorado 3 h", 3),
+  read_arm(file.path(P$processed, "aqs_matched_primary.csv.gz"), "National", NA_real_)
 ) |> compact()
 if (!length(arms)) stop("No matched files carry HRRR columns. Run R/18_hrrr_met.R, then steps 04/07/13.")
 
 pick_cols <- function(d) {
-  keep <- intersect(c("arm", "site", "site_name", "season", "sample_date", "start_utc",
+  keep <- intersect(c("arm", "site", "site_name", "season", "sample_date", "start_utc", "dur_h",
                       "met_site_id", "lag_h", "usable",
                       "temp_c", "press_hpa", "temp_c_hrrr", "press_hpa_hrrr", "pbl_m_hrrr",
                       "scan_hours", "tempo_press_hpa", "tempo_pbl_m"), names(d))
@@ -78,7 +81,7 @@ log_msg("HRRR at TEMPO's own scan hours: ", sum(!is.na(d$pbl_m_hrrr_scan)), " of
 # are in a Colorado arm and in the national arm, so the stacked table holds those
 # samples twice. The pooled "all arms" rows count each sample once; the per-arm
 # rows are unaffected.
-d_once <- distinct(d, met_site_id, start_utc, .keep_all = TRUE)
+d_once <- distinct(d, met_site_id, start_utc, dur_h, .keep_all = TRUE)
 log_msg("Pooled comparison: ", nrow(d_once), " distinct samples (", nrow(d) - nrow(d_once),
         " appear in two arms and are counted once)")
 

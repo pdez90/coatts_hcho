@@ -7,12 +7,12 @@
 # verified transcription is still a transcription: a row can be re-typed
 # correctly against a stale table, or a value placed in the wrong column with
 # every cell still "found". This step writes the table itself, cell by cell,
-# from the same objects steps 13 and 17 wrote, so the document's Table 1 is a
+# from the step-13 outputs, so the document's Table 1 is a
 # rendering of output/tables/manuscript_table1.csv and nothing else.
 #
-# The supplement's new tables (S7-S10) are rendered by build_amt.js directly
-# from the step-20 outputs; this step only adds the one table that needed
-# assembling from several sources.
+# The supplement's Tables S2-S4 and S8-S11 are rendered by tables_amt.js
+# directly from the CSVs of steps 13, 19, 20 and 22; this step only adds the
+# one table that needed assembling from several sources.
 #
 # Outputs: output/tables/manuscript_table1.csv   (row_label, 24 h, 8 h, 3 h)
 # =============================================================================

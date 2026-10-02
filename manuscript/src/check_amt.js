@@ -6,7 +6,7 @@
 //               every cell of a table that tables_amt.js renders from a CSV.
 //               These cannot be transcribed wrongly and are not re-checked.
 //   verified  - literals in prose, captions and the literal supplement tables
-//               (S1, S4, S5, S6). Each must occur in at least one output table, rounded
+//               (S1, S5, S6, S7). Each must occur in at least one output table, rounded
 //               to the precision the text uses; a decimal found in five or more
 //               tables is reported as weakly verified.
 //   exempt    - physical constants and procedural counts, each pinned to the
@@ -109,10 +109,24 @@ bad += check(SI, "supplement");
 // cross-references: every Fig./Table S-number cited exists, and each exists is cited
 const siFigs = SI.sections.filter(s => s.fig).length, siTabs = SI.sections.filter(s => s.table).length;
 const mainFigs = C.sections.filter(s => s.fig).length, mainTabs = C.sections.filter(s => s.table).length;
+// Supplement references, in reading order. "Tables S4 and S6" is two items,
+// "Figs. S7-S9" three; a caption's own label ("Table S5.") is not a citation.
+function siRefs(t) {
+  const out = [];
+  for (const m of t.matchAll(/\b(Figs?\.|Tables?)\s+((?:S\d+[a-z]?(?:\s*(?:-|,\s*and|,|and)\s*)?)+)/g)) {
+    const kind = m[1][0] === "F" ? "SF" : "ST";
+    for (const part of m[2].split(/\s*(?:,\s*and|,|and)\s*/)) {
+      const r = part.match(/S(\d+)[a-z]?(?:\s*-\s*S?(\d+))?/); if (!r) continue;
+      const a = +r[1], b = r[2] ? +r[2] : a; for (let i = a; i <= b; i++) out.push(kind + i);
+    }
+  }
+  return out;
+}
+const ownLabel = t => t.replace(/^(Table|Figure) S\d+\.\s*/, "");
+const reading = harvest(C).concat(harvest(SI).map(ownLabel));
 const cited = new Set();
-harvest(C).concat(harvest(SI)).forEach(t => {
-  for (const m of t.matchAll(/Figs?\.?\s*S(\d+)(?:\s*(?:-|and|,)\s*S?(\d+))?/g)) { const a = +m[1], b = m[2] ? +m[2] : a; for (let i = a; i <= b; i++) cited.add("SF" + i); }
-  for (const m of t.matchAll(/Tables?\s*S(\d+)(?:\s*(?:-|and|,)\s*S?(\d+))?/g)) { const a = +m[1], b = m[2] ? +m[2] : a; for (let i = a; i <= b; i++) cited.add("ST" + i); }
+reading.forEach(t => {
+  siRefs(t).forEach(k => cited.add(k));
   for (const m of t.matchAll(/Figs?\.?\s*(\d+)(?:\s*(?:-|and|,)\s*(\d+))?(?![\d:])/g)) { const a = +m[1], b = m[2] ? +m[2] : a; for (let i = a; i <= b; i++) cited.add("F" + i); }
   for (const m of t.matchAll(/Table\s*(\d+)(?!\d)/g)) cited.add("T" + m[1]);
 });
@@ -128,6 +142,20 @@ for (let i = 1; i <= mainTabs; i++) if (!cited.has("T" + i)) gaps.push("Table " 
   else if (k.startsWith("F") && n > mainFigs) gaps.push("Fig. " + n + " cited but absent");
   else if (k.startsWith("T") && n > mainTabs) gaps.push("Table " + n + " cited but absent");
 });
+// numbering follows first citation: main text first, then the supplement
+const first = { SF: [], ST: [] };
+reading.forEach(t => siRefs(t).forEach(k => { const kind = k.slice(0, 2), n = +k.slice(2); if (!first[kind].includes(n)) first[kind].push(n); }));
+for (const [kind, name] of [["SF", "Fig. S"], ["ST", "Table S"]]) {
+  if (first[kind].some((n, i) => n !== i + 1)) gaps.push(name + " numbers are not in order of first citation (first cited: " + first[kind].map(n => name + n).join(", ") + ")");
+}
+SI.sections.filter(s => s.fig).forEach((s, i) => { if (!s.fig.caption.startsWith("Figure S" + (i + 1) + ".")) gaps.push("figure " + (i + 1) + " of the supplement is captioned " + s.fig.caption.slice(0, 12)); });
+SI.sections.filter(s => s.table).forEach((s, i) => { if (!s.table.caption.startsWith("Table S" + (i + 1) + ".")) gaps.push("table " + (i + 1) + " of the supplement is captioned " + s.table.caption.slice(0, 11)); });
+const mainFirst = [];
+harvest(C).forEach(t => { for (const m of t.matchAll(/\bFigs?\.\s+(\d+)(?:\s*(?:-|and|,)\s*(\d+))?(?![\d:])/g)) { const a = +m[1], b = m[2] ? +m[2] : a; for (let i = a; i <= b; i++) if (!mainFirst.includes(i)) mainFirst.push(i); } });
+if (mainFirst.some((n, i) => n !== i + 1)) gaps.push("main-text figures are not in order of first citation (" + mainFirst.join(", ") + ")");
+// p-values printed from the pipeline must read "p < 0.001", never "p = 0.000"
+harvest(C).concat(harvest(SI)).forEach(t => { const m = t.match(/\bp ?= ?(?:<|p\b|0\.0+(?![\d]))/); if (m) gaps.push("malformed p-value: ..." + t.slice(Math.max(0, m.index - 40), m.index + 20) + "..."); });
+
 console.log("\ncross-references: main " + mainFigs + " figures / " + mainTabs + " table; supplement " + siFigs + " figures / " + siTabs + " tables; " +
             (gaps.length ? gaps.join("; ") : "all cited, none dangling"));
 

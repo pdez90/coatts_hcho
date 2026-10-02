@@ -50,7 +50,7 @@ const builders = {
              rows: rows.map(r => [r.row_label, r["24 h"], r["8 h"], r["3 h"]]),
              widths: [3400, 1875, 1875, 1876] };
   },
-  // Table S7: the dual-duration monitors (R/20, diag7_dual_duration_sites.csv)
+  // Table S8: the dual-duration monitors (R/20, diag7_dual_duration_sites.csv)
   dualDurationSites() {
     const rows = csv("diag7_dual_duration_sites.csv").sort((a, b) => (a.state + a.site).localeCompare(b.state + b.site));
     return {
@@ -79,7 +79,7 @@ const builders = {
                       "Day-to-day, p < 0.05", "Day-to-day, BH q < 0.05"], rows: out,
              widths: [1300, 1000, 1700, 1800, 1700, 1800] };
   },
-  // Table S11: agreement by season (R/22)
+  // Table S4: agreement by season (R/22)
   seasonal() {
     const s = csv("national_seasonal.csv"), sp = csv("national_seasonal_spatial.csv");
     const name = { DJF: "winter (DJF)", MAM: "spring (MAM)", JJA: "summer (JJA)", SON: "autumn (SON)" };
@@ -121,7 +121,7 @@ const builders = {
     return { header: ["Quantity and arm", "n", "HRRR", "TEMPO", "Difference", "r"], rows: out,
              widths: [4200, 900, 900, 900, 1100, 900] };
   },
-  // Table S8: the weighted Fisher-z models (R/20, diag8_ceiling_gap_models.csv)
+  // Table S9: the weighted Fisher-z models (R/20, diag8_ceiling_gap_models.csv)
   ceilingGapModels() {
     const rows = csv("diag8_ceiling_gap_models.csv");
     const labels = { "(Intercept)": "Intercept", log_surface: "log median surface HCHO", log_snr: "log signal-to-noise ratio",
@@ -139,7 +139,7 @@ const builders = {
     return { header: ["Term (per SD)", "M1: z(r_{obs}), six descriptors", "M2: z(E), six descriptors", "M3: z(E), without the noise terms"],
              rows: out, widths: [2300, 2250, 2250, 2250] };
   },
-  // Table S9: mixing-depth tertiles and interaction models (R/20, diag10_*.csv)
+  // Table S11: mixing-depth tertiles and interaction models (R/20, diag10_*.csv)
   pblTertiles() {
     const te = csv("diag10_pbl_tertiles.csv"), it = csv("diag10_pbl_interaction.csv");
     const strat = { "absolute HRRR mixing depth": "absolute", "mixing depth relative to site-month": "relative to site-month",

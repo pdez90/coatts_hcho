@@ -27,7 +27,21 @@ const SI = N.resolve(require("./content_amt_si.js"));
 const FIG = process.env.HCHO_FIG || path.resolve(__dirname, "../../output/figures") + path.sep;
 const OUTDIR = process.env.HCHO_OUTDIR || path.resolve(__dirname, "..");
 const FONT = "Times New Roman";
-const REFS = C.refs;
+const BASE = C.refs;
+let REFS = BASE;
+// Copernicus letters same-author, same-year references (2026a, 2026b) within one
+// reference list. Each document has its own list, so a document that cites only
+// one of a pair gets the bare year, in the citation and in the list.
+function refsFor(keys) {
+  const out = {};
+  for (const [k, r] of Object.entries(BASE)) {
+    const m = /^(\d{4})[a-z]$/.exec(r.year || "");
+    const twin = m && [...keys].some(j => j !== k && BASE[j] && BASE[j].names === r.names && String(BASE[j].year).startsWith(m[1]));
+    out[k] = (m && !twin) ? { ...r, year: m[1], label: r.label.replace(r.year, m[1]),
+                              text: r.text.replace(new RegExp(r.year + "\\.$"), m[1] + ".") } : r;
+  }
+  return out;
+}
 
 // ---------------------------------------------------------------- text
 // Copernicus sets thousands with a thin space from five digits; numbers.js
@@ -170,6 +184,7 @@ const unused = Object.keys(REFS).filter(k => !allKeys.has(k));
 if (unused.length) console.warn("  note: references never cited: " + unused.join(", "));
 
 // ---------------------------------------------------------------- main text
+REFS = refsFor(keysIn(strings(C)));
 const main = [];
 main.push(new Paragraph({ alignment: AlignmentType.LEFT, spacing: { after: 240 }, children: runs(C.title, { bold: true, size: 30 }) }));
 C.authors.forEach(a => main.push(P(a)));
@@ -181,6 +196,7 @@ main.push(H("References", 1));
 main.push(...refList(keysIn(strings(C))));
 
 // ---------------------------------------------------------------- supplement
+REFS = refsFor(keysIn(strings(SI)));
 const si = [];
 si.push(new Paragraph({ alignment: AlignmentType.LEFT, spacing: { after: 120 }, children: runs("Supplement of", { bold: true, size: 26 }) }));
 si.push(new Paragraph({ alignment: AlignmentType.LEFT, spacing: { after: 240 }, children: runs(SI.title.replace(/^Supplement of\s*/, ""), { bold: true, size: 28 }) }));

@@ -161,7 +161,10 @@ if (requireNamespace("lme4", quietly = TRUE) && n_distinct(use$site) >= 3) {
 anom <- add_month_anomalies(use, CFG$min_days_per_site_month)
 anom_stats <- bind_rows(
   anomstats(anom) |> mutate(site = "all sites", .before = 1),
-  anom |> group_by(site) |> group_modify(~ anomstats(.x)) |> ungroup()
+  # per site only with CFG$min_anom_pairs_site pairs, as in the national steps
+  # (anomstats() restores the random-number state, so dropping rows changes nothing else)
+  anom |> group_by(site) |> group_modify(~ anomstats(.x)) |> ungroup() |>
+    filter(n >= CFG$min_anom_pairs_site)
 )
 data.table::fwrite(anom_stats, file.path(P$tables, "stats_within_month_anomalies.csv"))
 print(anom_stats)

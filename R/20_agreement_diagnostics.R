@@ -87,8 +87,9 @@ smoke <- NULL
 if (file.exists(smoke_path)) {
   smoke <- read_tbl(smoke_path, colClasses = list(character = c("site", "smoke_class", "convention"))) |>
     filter(arm == "national") |>
-    transmute(site = site, start_utc = as.POSIXct(win_start_utc, tz = "UTC"), hms_available, smoke_any)
-  stopifnot(!anyDuplicated(smoke[, c("site", "start_utc")]))
+    transmute(site = site, start_utc = as.POSIXct(win_start_utc, tz = "UTC"), duration_class = convention,
+              hms_available, smoke_any)
+  stopifnot(!anyDuplicated(smoke[, c("site", "start_utc", "duration_class")]))
 }
 
 anom_r <- function(d, min_n = MIN_ANOM_PAIRS) {
@@ -99,7 +100,7 @@ anom_slope <- function(d, min_n = MIN_ANOM_PAIRS) {
   if (nrow(d) < min_n) return(NA_real_)
   coef(lm(surface_anom ~ column_anom, data = d))[[2]]
 }
-# anomalies within site x year-month x start hour (the window-stratified form of Sect. S4)
+# anomalies within site x year-month x start hour (the window-stratified form of Sect. S3)
 add_window_anomalies <- function(d, min_n) {
   d |>
     mutate(ym = floor_date(sample_date, "month")) |>
@@ -161,6 +162,8 @@ samples24 <- read_tbl(samples_path, colClasses = list(character = c("site_id", "
   filter(duration_class == "24 h", !is.na(hcho_ugm3)) |>
   mutate(start_utc = as.POSIXct(start_utc, tz = "UTC"), end_utc = as.POSIXct(end_utc, tz = "UTC"),
          sample_date = as.Date(sample_date_local), site = site_id)
+# 24 h only, so (site, start time) identifies a sample in the scan joins - checked, not assumed
+stopifnot(!anyDuplicated(samples24[, c("site", "start_utc")]))
 cells <- read_tbl(cells_path, colClasses = list(character = c("granule", "scan_start_utc", "site")))
 for (col in setdiff(names(cells), c("granule", "scan_start_utc", "site"))) {
   x <- cells[[col]]
@@ -253,7 +256,7 @@ pooled_dual <- prim |>
   ungroup()
 paired <- bind_rows(paired,
   tibble(quantity = paste0("pooled anomaly r at these sites, ", pooled_dual$duration_class), n_sites = nrow(both),
-         median_diff = pooled_dual$r, mean_diff = pooled_dual$n))
+         pooled_anom_r = pooled_dual$r, pooled_anom_n = pooled_dual$n))
 data.table::fwrite(paired, file.path(P$tables, "diag7_dual_duration_paired.csv"))
 log_msg("A. ", nrow(both), " sites with >= ", MIN_ANOM_PAIRS, " anomaly pairs at both durations; median r 24 h ",
         round(median(both$anom_r_24h), 2), ", 8 h ", round(median(both$anom_r_8h), 2),
@@ -272,7 +275,7 @@ cover <- read_tbl(cover_path, colClasses = list(character = "site")) |>
   select(site, usable_pct)
 site_env <- prim |>
   filter(duration_class == "24 h", usable) |>
-  { \(d) if (!is.null(smoke)) left_join(d, smoke, by = c("site", "start_utc")) else mutate(d, smoke_any = NA, hms_available = NA) }() |>
+  { \(d) if (!is.null(smoke)) left_join(d, smoke, by = c("site", "start_utc", "duration_class")) else mutate(d, smoke_any = NA, hms_available = NA) }() |>
   group_by(site) |>
   summarise(pbl_hrrr_km = mean(pbl_m_hrrr, na.rm = TRUE) / 1000,
             smoke_share = if (any(hms_available %in% TRUE)) mean(smoke_any[hms_available %in% TRUE] %in% TRUE) else NA_real_,
@@ -412,7 +415,7 @@ d24 <- prim |>
   group_by(site, ym) |> mutate(pbl_anom_m = pbl_m_hrrr - mean(pbl_m_hrrr)) |> ungroup() |>
   mutate(window_start_hour = 0L)
 dd <- bind_rows(d8, d24)
-if (!is.null(smoke)) dd <- left_join(dd, smoke, by = c("site", "start_utc"))
+if (!is.null(smoke)) dd <- left_join(dd, smoke, by = c("site", "start_utc", "duration_class"))
 
 tertile_r <- function(d, var, label) {
   d <- d |> mutate(tert = ntile(.data[[var]], 3))
@@ -649,7 +652,16 @@ nums2 <- tibble(
             r2(tmid("24 h", ab)),
             r2(filter(tert, sample == "8 h, start 04:00 LST", stratification == sf, tert == 3)$r))
 ) |> mutate(value = as.character(value), source = "R/20_agreement_diagnostics.R")
+# p-values the text prints whole: "p < 0.001" below the third decimal, never "p = 0.000"
+ptxt <- function(p) ifelse(p < 0.001, "p < 0.001", sprintf("p = %.3f", p))
+pint <- function(s, adjusted) filter(inter, sample == s, (model != "mixing depth only") == adjusted,
+                                     term == "col_std:pbl_std")$p
 nums <- bind_rows(nums, nums2,
+                  tibble(key = paste0("pbl_int_", c("8h4", "8h12", "24", "adj_8h4", "adj_8h12", "adj_24"), "_ptxt"),
+                         value = ptxt(c(pint("8 h, start 04:00 LST", FALSE), pint("8 h, start 12:00 LST", FALSE),
+                                        pint("24 h", FALSE), pint("8 h, start 04:00 LST", TRUE),
+                                        pint("8 h, start 12:00 LST", TRUE), pint("24 h", TRUE))),
+                         source = "R/20_agreement_diagnostics.R"),
                   tibble(key = c("ta_pairs", "ta_sites"),
                          value = c(as.character(t33$n_anomalies[1]), as.character(t33$n_sites[1])),
                          source = "R/20_agreement_diagnostics.R"))

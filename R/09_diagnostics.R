@@ -314,8 +314,10 @@ noise_rows <- map(sort(unique(variants24$block)), function(b) {
     group_by(site, ym) |> mutate(n_month = n()) |> ungroup() |>
     left_join(select(daily, site, sample_date, n_valid, var_corr, var_indep, var_med_corr, var_med_indep), by = c("site", "sample_date"))
 
+  # a site-level ceiling needs CFG$min_anom_pairs_site anomaly pairs and, for the
+  # scan noise, at least 20 successive-scan pairs - the rules of step 17
   ceiling_stats <- function(x, scan_var) {
-    if (nrow(x) < 6) return(tibble(n_anomalies = nrow(x)))
+    if (nrow(x) < CFG$min_anom_pairs_site) return(tibble(n_anomalies = nrow(x)))
     shrink <- 1 - 1 / x$n_month                     # removing the month mean also removes some noise
     obs_var <- var(x$column_anom)
     nv_corr  <- mean(x$var_corr * shrink, na.rm = TRUE) / 1e30
@@ -347,7 +349,7 @@ noise_rows <- map(sort(unique(variants24$block)), function(b) {
            scan_noise_sd_single_1e15 = sqrt(scan_var) / 1e15)
   }
   per_site <- imap(split(an, an$site), function(x, s) {
-    sv <- emp_site$scan_noise_var[emp_site$site == s]
+    sv <- emp_site$scan_noise_var[emp_site$site == s & emp_site$n_scan_pairs >= 20L]
     mutate(ceiling_stats(x, if (length(sv)) sv else NA_real_), site = s, .before = 1)
   }) |> list_rbind()
   pooled <- mutate(ceiling_stats(an, emp_all$scan_noise_var), site = "all sites", .before = 1)

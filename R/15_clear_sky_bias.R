@@ -214,6 +214,8 @@ nat_days <- function(ps) {
            end_utc   = as.POSIXct(end_utc, tz = "UTC"),
            sample_date = as.Date(sample_date_local)) |>
     filter(duration_class == "24 h", !is.na(hcho_ugm3), !is.na(start_utc))
+  # 24 h only, so (site, date) identifies a sample below - checked, not assumed
+  stopifnot(!anyDuplicated(s[, c("site_id", "sample_date")]))
   win <- data.table::as.data.table(
     transmute(s, site = site_id, sample_date, h0 = hour_key(start_utc), h1 = hour_key(end_utc)))
   hours <- win[, .(hour = seq.int(h0, h1 - 1L)), by = .(site, sample_date, h0, h1)][

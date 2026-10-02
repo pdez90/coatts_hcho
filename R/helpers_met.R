@@ -141,8 +141,8 @@ met_read_cache <- function(paths = P) {
   f <- met_cache_path(paths)
   if (!file.exists(f)) {
     stop("No HRRR cache at ", f, ".\n",
-         "  Run R/18_hrrr_met.R first, or set CFG$run_hrrr_met = FALSE and accept\n",
-         "  that H_eff cannot be computed (every correlation in the paper is unaffected).")
+         "  Run R/18_hrrr_met.R first (CFG$run_hrrr_met = TRUE): steps 04, 07 and 13\n",
+         "  need the HRRR temperature and pressure for every sample.")
   }
   m <- read_tbl(f, colClasses = list(character = "met_site_id"))
   need <- c("met_site_id", "hour", "temp_c", "press_hpa", "pbl_m")

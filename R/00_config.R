@@ -247,7 +247,7 @@ CFG <- list(
   # 3 km hourly analysis on the CONUS grid. Only the three GRIB2 messages that
   # are needed get downloaded, by byte range off each file's .idx: TMP 2 m,
   # PRES surface, HPBL surface (plus HGT surface once, for the model terrain).
-  run_hrrr_met = TRUE,
+  run_hrrr_met = TRUE,          # required: steps 04, 07 and 13 read the HRRR cache
   run_met_comparison = TRUE,
   hrrr_base_url = "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/",
   hrrr_product = "wrfsfcf00",   # the f00 surface analysis

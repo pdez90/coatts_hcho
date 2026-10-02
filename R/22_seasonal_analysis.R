@@ -148,12 +148,12 @@ pa_d <- bind_rows(
                          lo = NA_real_, hi = NA_real_, n = anom_n)) |>
   mutate(season = factor(season, levels = SEASONS)) |>
   # 8 h samples are almost all summer (PAMS season), so only 24 h is drawn by
-  # season; the 8 h rows stay in national_seasonal.csv and Table S11
+  # season; the 8 h rows stay in national_seasonal.csv and Table S4
   filter(duration_class == "24 h") |>
   # labels off the point and clear of the error bars and connecting lines:
-  # pooled below-right, day-to-day above-left
+  # pooled below-right, day-to-day directly above
   mutate(pooled = kind == "pooled (whole period)",
-         lab_hjust = ifelse(pooled, -0.3, 1.2), lab_vjust = ifelse(pooled, 1.6, -0.7))
+         lab_hjust = ifelse(pooled, -0.3, 0.5), lab_vjust = ifelse(pooled, 1.6, -1.0))
 pa <- ggplot(pa_d, aes(season, r, colour = kind, group = kind)) +
   geom_hline(yintercept = 0, colour = "grey70") +
   # the two series are dodged sideways so their points, intervals and labels
@@ -175,6 +175,8 @@ pb <- ggplot(mutate(site_season, season = factor(season, levels = SEASONS)), aes
             aes(x = -Inf, y = Inf, label = sub("^r = -", "r = \u2212", sprintf("r = %.2f (%d sites)", spatial_r, n_sites))),
             hjust = -0.1, vjust = 1.4, size = 2.8, inherit.aes = FALSE) +
   facet_wrap(~ season, nrow = 1, scales = "free") +
+  # headroom so the r label never sits on a point
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.2))) +
   labs(x = expression("Site-season mean column ("*10^15~molecules~cm^-2*")"),
        y = expression("Site-season mean surface HCHO ("*mu*g~m^-3*")"),
        title = sprintf("(b) Seasonal means across 24 h sites (\u2265 %d samples per site-season)", MIN_SEASON_SAMPLES)) +

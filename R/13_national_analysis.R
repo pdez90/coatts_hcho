@@ -37,6 +37,11 @@ samples <- read_tbl(samples_path, colClasses = list(character = c("site_id", "qu
          season = factor(season, levels = c("DJF", "MAM", "JJA", "SON"))) |>
   filter(!is.na(hcho_ugm3), !is.na(start_utc)) |>
   met_attach(what = "national")
+# A sample is identified by site, start time and duration, and every
+# sample-level join below (scans, smoke flags) uses all three. Two rows sharing
+# them would be one sample counted twice.
+if (anyDuplicated(samples[, c("site_id", "start_utc", "duration_class")]))
+  stop("Two samples share site, start time and duration - check step 11.")
 
 cells <- read_tbl(cells_path, colClasses = list(character = c("granule", "scan_start_utc", "site")))
 for (col in setdiff(names(cells), c("granule", "scan_start_utc", "site"))) {
@@ -115,7 +120,7 @@ sample_hours <- function(lag_h) {
     select(site_id, start_utc, duration_class, h0, h1) |>
     mutate(hour = map2(h0, h1, ~ seq.int(.x, .y - 1L))) |>
     tidyr::unnest(hour) |>
-    transmute(site = site_id, start_utc, hour, lag_h = lag_h)
+    transmute(site = site_id, start_utc, duration_class, hour, lag_h = lag_h)
 }
 
 variants <- expand_grid(lag_h = CFG$aqs_lags_h, max_ecf = c(0.1, 0.2, 0.3), block = c(0L, 1L, 2L)) |>
@@ -133,7 +138,7 @@ matched <- pmap(variants, function(lag_h, max_ecf, block, block_label) {
   if (is.null(sh)) return(NULL)
   per_sample <- sh |>
     inner_join(sv, by = c("site", "hour"), relationship = "many-to-many") |>
-    group_by(site, start_utc) |>
+    group_by(site, start_utc, duration_class) |>
     summarise(n_scans = n(), n_valid_scans = sum(valid),
               tempo_vc = if (any(valid)) mean(vc[valid]) else NA_real_,
               tempo_pbl_m = if (any(valid)) mean(pbl[valid], na.rm = TRUE) else NA_real_,
@@ -142,7 +147,7 @@ matched <- pmap(variants, function(lag_h, max_ecf, block, block_label) {
               .groups = "drop")
   base <- if (lag_h == 0) samples else filter(samples, duration_class != "24 h")
   base |>
-    left_join(per_sample, by = c("site_id" = "site", "start_utc")) |>
+    left_join(per_sample, by = c("site_id" = "site", "start_utc", "duration_class")) |>
     mutate(lag_h = lag_h, max_ecf = max_ecf, block = block, block_label = block_label,
            n_scans = coalesce(n_scans, 0L), n_valid_scans = coalesce(n_valid_scans, 0L))
 }) |> list_rbind() |>
@@ -519,7 +524,7 @@ if ("anom_pearson_p" %in% names(by_site)) {
               param_nominal = sum(anom_pearson_p < 0.05, na.rm = TRUE),
               param_bh      = sum(anom_pearson_q < 0.05, na.rm = TRUE),
               .groups = "drop")
-  log_msg("  day-to-day significance counts by duration (Table S3):")
+  log_msg("  day-to-day significance counts by duration (Table S2):")
   print(by_dur)
 }
 if ("anom_pearson_r" %in% names(by_site)) {
@@ -591,15 +596,16 @@ if (file.exists(sm_path)) {
     sm <- sm |>
       transmute(site_id = site,
                 start_utc = as.POSIXct(win_start_utc, tz = "UTC"),
+                duration_class = convention,     # step 08 records the national duration here
                 hms_available,
                 smoke_any,
                 smoke_class = factor(smoke_class, levels = c("none", "light", "medium/heavy")))
-    stopifnot(!anyDuplicated(sm[, c("site_id", "start_utc")]))
+    stopifnot(!anyDuplicated(sm[, c("site_id", "start_utc", "duration_class")]))
     n_before <- sum(use$lag_h == 0)
     su <- use |>
       filter(lag_h == 0) |>
       mutate(start_utc = as.POSIXct(start_utc, tz = "UTC")) |>
-      inner_join(sm, by = c("site_id", "start_utc"))
+      inner_join(sm, by = c("site_id", "start_utc", "duration_class"))
     if (nrow(su) > n_before) {
       stop("The smoke join added rows (", n_before, " -> ", nrow(su),
            "); the key is not unique and every statistic below would be wrong.")

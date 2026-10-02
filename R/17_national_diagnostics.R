@@ -53,6 +53,8 @@ samples <- read_tbl(samples_path, colClasses = list(character = c("site_id", "qu
          end_utc   = as.POSIXct(end_utc, tz = "UTC"),
          sample_date = as.Date(sample_date_local),
          site = site_id)
+# 24 h only, so (site, start time) identifies a sample here - checked, not assumed
+stopifnot(!anyDuplicated(samples[, c("site", "start_utc")]))
 variants <- read_tbl(variants_path, colClasses = list(character = c("site_id", "site", "qualifiers"))) |>
   filter(duration_class == "24 h", lag_h == 0, max_ecf == CFG$qc_max_cloud_fraction, usable) |>
   mutate(start_utc = as.POSIXct(start_utc, tz = "UTC"), sample_date = as.Date(sample_date))
