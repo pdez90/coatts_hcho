@@ -38,7 +38,10 @@ function load() {
   return map;
 }
 
-const MARK = /\{\{n:([A-Za-z0-9_]+)\}\}/g;
+// {{n:key}} writes the value; {{nw:key}} writes an integer from 0 to 9 as a
+// word (Copernicus style for counts below ten) and anything else as {{n:}}.
+const MARK = /\{\{(nw?):([A-Za-z0-9_]+)\}\}/g;
+const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
 
 // Deep-walk a content object, substituting in every string.
 function resolve(doc, opts) {
@@ -55,8 +58,11 @@ function thousands(v) {
   return t.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
-const sub = s => s.replace(MARK, (m, k) => {
-    if (map.has(k)) return thousands(map.get(k));
+const sub = s => s.replace(MARK, (m, kind, k) => {
+    if (map.has(k)) {
+      const v = String(map.get(k)).trim();
+      return kind === "nw" && /^\d$/.test(v) ? WORDS[+v] : thousands(v);
+    }
     missing.add(k);
     return m;
   });

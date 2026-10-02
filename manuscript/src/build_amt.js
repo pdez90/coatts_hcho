@@ -96,7 +96,7 @@ function figure(file, caption) {
   return [
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 120, after: 60 },
       children: [new ImageRun({ type: "png", data: fs.readFileSync(full), transformation: { width, height },
-        altText: { title: file, description: cites(caption).slice(0, 200), name: file } })] }),
+        altText: { title: file, description: thin(cites(caption)).slice(0, 200), name: file } })] }),
     new Paragraph({ children: runs(caption, { size: 20 }), spacing: { after: 240, line: 260 }, alignment: AlignmentType.LEFT })
   ];
 }

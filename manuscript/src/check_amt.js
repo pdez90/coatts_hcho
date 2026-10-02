@@ -76,7 +76,7 @@ const allowed = (tok, para) => ALLOW.has(tok) && ALLOW.get(tok).test(para);
 const derived = new Set();
 const map = N.load();
 [RAW.C, RAW.SI].forEach(doc => harvest(doc).forEach(t => {
-  for (const m of t.matchAll(/\{\{n:([A-Za-z0-9_]+)\}\}/g)) if (map.has(m[1])) derived.add(norm(map.get(m[1])));
+  for (const m of t.matchAll(/\{\{nw?:([A-Za-z0-9_]+)\}\}/g)) if (map.has(m[1])) derived.add(norm(map.get(m[1])));
 }));
 T.names.forEach(n => { const t = T.build(n); [...t.header, ...t.rows.flat()].forEach(c => (norm(c).match(NUM) || []).forEach(x => derived.add(x))); });
 

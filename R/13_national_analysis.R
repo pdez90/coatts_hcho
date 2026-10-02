@@ -22,6 +22,9 @@ source("R/helpers_stats.R")
 source("R/helpers_basemap.R")  # US/state outlines for Figure 1
 source("R/helpers_met.R")      # one definition of the near-surface meteorology
 set.seed(42)
+# Set before any figure is drawn, so every figure has the same theme whether
+# this step runs alone or after other steps in run_all.R.
+theme_set(theme_bw(base_size = 11) + theme(strip.background = element_rect(fill = "grey92")))
 
 samples_path <- file.path(P$processed, "aqs_hcho_samples.csv")
 cells_path   <- file.path(P$processed, "aqs_tempo_site_cells.csv.gz")
@@ -712,7 +715,6 @@ if (nrow(sens0)) {
 }
 
 # ---- 8. figures --------------------------------------------------------------
-theme_set(theme_bw(base_size = 11) + theme(strip.background = element_rect(fill = "grey92")))
 
 lag_curve <- by_duration_lag |>
   filter(duration_class != "24 h") |>

@@ -267,8 +267,10 @@ tod_keys <- tibble(
 log_msg("Time of day, all 24 h sites, anomalies (n = ", ta$n, "): r 06-09 ", round(ta$r_06_09, 2),
         " vs 09-12 ", round(ta$r_09_12, 2), ", Williams p = ", signif(ta$williams_p, 2), "; ",
         nrow(tod_site), " sites with >= ", TOD_MIN_PAIRS, " paired days, later window higher at ",
-        sum(tod_site$diff_09_12_minus_06_09 > 0, na.rm = TRUE), ", significant at ",
-        sum(tod_site$williams_p < 0.05, na.rm = TRUE))
+        sum(tod_site$diff_09_12_minus_06_09 > 0, na.rm = TRUE), ", significantly higher later at ",
+        sum(tod_site$williams_p < 0.05 & tod_site$diff_09_12_minus_06_09 > 0, na.rm = TRUE),
+        " and earlier at ",
+        sum(tod_site$williams_p < 0.05 & tod_site$diff_09_12_minus_06_09 < 0, na.rm = TRUE))
 
 data.table::fwrite(bind_rows(noise_keys, tod_keys) |> mutate(source = "R/17_national_diagnostics.R"),
                    file.path(P$tables, "manuscript_numbers_17.csv"))
