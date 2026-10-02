@@ -33,7 +33,8 @@
 #      an interaction model with site-clustered errors gives the same test in
 #      regression form.
 #
-# Reads what steps 11-13 and 17 wrote; downloads nothing. Screen, anomaly
+# Reads what steps 08 (smoke flags), 11-13 (with the step-18 HRRR columns) and 17
+# wrote; downloads nothing. Screen, anomaly
 # definition and bootstrap are the shared ones in helpers_*.R.
 #
 # Outputs: output/tables/diag7_dual_duration_sites.csv
@@ -248,6 +249,32 @@ paired <- bind_rows(
   paired_summary(both$r_24h_col_start4 - both$anom_r_24h, "anomaly r, 24 h sample vs 04-12 LST column minus vs all-day column"),
   paired_summary(both$r_8h_start12 - both$r_24h_col_start12, "anomaly r, 8 h 12:00 sample minus 24 h sample, both vs 12-20 LST column"),
   paired_summary(both$r_8h_start4 - both$r_24h_col_start4, "anomaly r, 8 h 04:00 sample minus 24 h sample, both vs 04-12 LST column"))
+# Same months: the 8 h records are almost all from the summer ozone season, the
+# 24 h records span the year. The paired comparison is repeated with the 24 h
+# anomalies restricted to the site-months in which the monitor also has usable
+# 8 h samples. Its bootstrap starts from the current random-number state, which
+# is then restored, so every later interval is unchanged by this addition.
+.rng_saved <- .Random.seed
+months8 <- prim |>
+  filter(site %in% both$site, duration_class == "8 h", usable) |>
+  distinct(site, ym = floor_date(sample_date, "month"))
+same_months <- prim |>
+  filter(site %in% both$site, duration_class == "24 h", usable) |>
+  mutate(ym = floor_date(sample_date, "month")) |>
+  semi_join(months8, by = c("site", "ym")) |>
+  select(-ym) |>
+  group_by(site) |>
+  group_modify(function(d, k) {
+    an <- add_month_anomalies(d, CFG$min_days_per_site_month)
+    tibble(anom_n_24h_same_months = nrow(an), anom_r_24h_same_months = anom_r(an))
+  }, .keep = TRUE) |>
+  ungroup() |>
+  inner_join(select(both, site, anom_r_8h), by = "site") |>
+  filter(is.finite(anom_r_24h_same_months))
+paired <- bind_rows(paired,
+  paired_summary(same_months$anom_r_8h - same_months$anom_r_24h_same_months,
+                 "anomaly r, 8 h minus 24 h, 24 h restricted to the site-months of the 8 h record"))
+assign(".Random.seed", .rng_saved, envir = globalenv())
 # pooled anomaly r at the dual sites, each duration, for reference
 pooled_dual <- prim |>
   filter(site %in% both$site, duration_class %in% c("24 h", "8 h"), usable) |>
@@ -506,8 +533,10 @@ t33 <- filter(ta, block == "3x3"); t11 <- filter(ta, block == "1x1"); t55 <- fil
 tr <- function(h, st, what) { x <- filter(tert, sample == h, stratification == st); x[[what]][1] }
 # Two decimals, but never "-0.00": a value that rounds to zero from below is shown
 # at three decimals, so an interval bound that excludes zero cannot read as touching it.
+# two decimals; a value that rounds to zero there is printed to three, so a bound
+# of 0.003 does not read as zero (an exact zero stays "0.00")
 r2 <- function(x) { s <- sprintf("%.2f", x); s3 <- sprintf("%.3f", x)
-  ifelse(s == "-0.00", ifelse(s3 == "-0.000", "0.00", s3), s) }
+  ifelse(!is.na(x) & abs(x) < 0.005, ifelse(s3 %in% c("0.000", "-0.000"), "0.00", s3), s) }
 nums <- tibble(
   key = c("dd_sites_total", "dd_sites_paired", "dd_median_r_24", "dd_median_r_8", "dd_diff_median", "dd_diff_lo", "dd_diff_hi",
           "dd_diff_positive", "dd_diff_p", "dd_diff12_median", "dd_diff12_lo", "dd_diff12_hi", "dd_diff12_p",
@@ -673,6 +702,13 @@ nums <- bind_rows(nums, nums2,
                                         pint("24 h", FALSE), pint("8 h, start 04:00 LST", TRUE),
                                         pint("8 h, start 12:00 LST", TRUE), pint("24 h", TRUE))),
                          source = "R/20_agreement_diagnostics.R"),
+                  local({
+                    x <- filter(paired, startsWith(quantity, "anomaly r, 8 h minus 24 h, 24 h restricted"))
+                    tibble(key = c("dd_sm_sites", "dd_sm_diff_median", "dd_sm_diff_mean", "dd_sm_lo", "dd_sm_hi", "dd_sm_p"),
+                           value = c(as.character(x$n_sites), r2(x$median_diff), r2(x$mean_diff), r2(x$mean_ci_lo),
+                                     r2(x$mean_ci_hi), r2(x$wilcoxon_p)),
+                           source = "R/20_agreement_diagnostics.R")
+                  }),
                   tibble(key = c("ta_pairs", "ta_sites"),
                          value = c(as.character(t33$n_anomalies[1]), as.character(t33$n_sites[1])),
                          source = "R/20_agreement_diagnostics.R"))

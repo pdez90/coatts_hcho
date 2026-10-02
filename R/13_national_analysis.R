@@ -9,7 +9,7 @@
 #     sample window agrees best - the one starting 04:00 local (which straddles
 #     the morning transition), 12:00 (the mixed afternoon) or 20:00 (night)?
 #   * the same by lag, so "when TEMPO looks relative to the sample" is measured
-#     on 44 sites instead of two
+#     on 40 sites instead of two
 # Scans are assigned by the hour containing their midpoint, as in steps 04 and 07;
 # matching is hourly; nearly every sample window starts on the hour, and a
 # fractional start is binned into the hour it begins in and named in the log.

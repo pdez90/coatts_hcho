@@ -103,16 +103,19 @@ main <- function() {
   add("R/12_tempo_national.R",  "coatts", aqs_t)
   add("R/13_national_analysis.R", "coatts", aqs_a)
   add("R/17_national_diagnostics.R", "coatts", diag && nat_done)   # noise ceiling and time of day at every 24 h site
-  # Fig. S1 needs the Colorado samples and the AQS inventory (step 11), not the national TEMPO arm
-  add("R/14_site_map.R",        "coatts", map_fig   && (aqs_s || file.exists(file.path("output", "tables", "aqs_samples_inventory.csv"))))
   add("R/15_clear_sky_bias.R",  "coatts", clear_sky && nat_done)
   add("R/16_toc_graphic.R",     "coatts", toc_fig   && nat_done)
   add("R/19_met_comparison.R",  "coatts", met_cmp   && hrrr)
   add("R/20_agreement_diagnostics.R", "coatts", diag && nat_done && hrrr)  # duration, noise ceiling, temporal averaging, mixing depth
   add("R/21_manuscript_tables.R", "coatts", nat_done)   # Table 1 as the build renders it
   add("R/22_seasonal_analysis.R", "coatts", nat_done)   # agreement by season (Wang et al. 2022 comparison)
-  if (!nat_done && (clear_sky || toc_fig))
-    note("SKIPPED steps 15-16: the national arm has not been run")
+  # Fig. S1 is a figure only and runs last, so a missing map package cannot stop the
+  # analysis steps; it needs the Colorado 24 h and 3 h samples and the AQS inventory
+  # (step 11), not the national TEMPO arm
+  add("R/14_site_map.R",        "coatts", map_fig && three_h &&
+        (aqs_s || file.exists(file.path("output", "tables", "aqs_samples_inventory.csv"))))
+  if (!nat_done)
+    note("SKIPPED steps 15-17 and 20-22: the national analysis (step 13) has not been run")
 
   for (k in seq_len(nrow(steps))) {
     s <- steps$script[k]; arm <- steps$arm[k]

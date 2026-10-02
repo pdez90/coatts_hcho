@@ -93,10 +93,11 @@ function check(doc, label) {
       if (tok.startsWith("-") && /\d$/.test(before)) { tok = tok.slice(1); i += 1; }
       if (allowed(tok, t) || derived.has(tok)) continue;
       // times (06:00), dates (2024-01), section and figure numbers, AQS identifiers and years are structure, not results
-      if (/:$/.test(before) || /^:\d/.test(after) || /\d{4}-$/.test(before) || /^-\d\d(?!\d)/.test(after) && /^(19|20)\d\d$/.test(tok) ||
+      if (/:$/.test(before) || /^:\d/.test(after) || (/(19|20)\d\d-$/.test(before) && /^\d\d$/.test(tok)) || /^-\d\d(?!\d)/.test(after) && /^(19|20)\d\d$/.test(tok) ||
           /\d\d-\d{3}-$/.test(before) || /^-\d{3}-\d{4}/.test(after) || /^\d\d-\d{3}$/.test(tok) ||
           /(Sect\.|Section|Fig\.|Figure|Figs\.|Table|version|Level|V0?)\s*S?$/i.test(before)) continue;
-      if (/^(19|20)\d\d$/.test(tok) && !/(n ?= ?|r ?= ?|p ?= ?)$/.test(before)) continue;
+      // years (1990-2030) are dates unless they follow n=, r= or p=; counts outside that range are checked
+      if (/^(199\d|20[0-3]\d)$/.test(tok) && !/(n ?= ?|r ?= ?|p ?= ?)$/.test(before)) continue;
       const ctx = t.slice(Math.max(0, i - 70), i + 70);
       if (inTables(tok)) {
         if (/\./.test(tok) && tablesWith(tok).length >= WEAK_TABLES) weak.push({ tok, ctx, n: tablesWith(tok).length });
@@ -124,7 +125,7 @@ const mainFigs = C.sections.filter(s => s.fig).length, mainTabs = C.sections.fil
 // "Figs. S7-S9" three; a caption's own label ("Table S5.") is not a citation.
 function siRefs(t) {
   const out = [];
-  for (const m of t.matchAll(/\b(Figs?\.|Tables?)\s+((?:S\d+[a-z]?(?:\s*(?:-|,\s*and|,|and)\s*)?)+)/g)) {
+  for (const m of t.matchAll(/\b(Figs?\.|Figures?|Tables?)\s+((?:S\d+[a-z]?(?:\s*(?:-|,\s*and|,|and)\s*)?)+)/g)) {
     const kind = m[1][0] === "F" ? "SF" : "ST";
     for (const part of m[2].split(/\s*(?:,\s*and|,|and)\s*/)) {
       const r = part.match(/S(\d+)[a-z]?(?:\s*-\s*S?(\d+))?/); if (!r) continue;
@@ -138,7 +139,7 @@ const reading = harvest(C).map(ownLabel).concat(harvest(SI).map(ownLabel));
 const cited = new Set();
 reading.forEach(t => {
   siRefs(t).forEach(k => cited.add(k));
-  for (const m of t.matchAll(/Figs?\.?\s*(\d+)(?:\s*(?:-|and|,)\s*(\d+))?(?![\d:])/g)) { const a = +m[1], b = m[2] ? +m[2] : a; for (let i = a; i <= b; i++) cited.add("F" + i); }
+  mainFigRefs(t).forEach(i => cited.add("F" + i));
   for (const m of t.matchAll(/Table\s*(\d+)(?!\d)/g)) cited.add("T" + m[1]);
 });
 const gaps = [];
@@ -162,10 +163,20 @@ for (const [kind, name] of [["SF", "Fig. S"], ["ST", "Table S"]]) {
 SI.sections.filter(s => s.fig).forEach((s, i) => { if (!s.fig.caption.startsWith("Figure S" + (i + 1) + ".")) gaps.push("figure " + (i + 1) + " of the supplement is captioned " + s.fig.caption.slice(0, 12)); });
 SI.sections.filter(s => s.table).forEach((s, i) => { if (!s.table.caption.startsWith("Table S" + (i + 1) + ".")) gaps.push("table " + (i + 1) + " of the supplement is captioned " + s.table.caption.slice(0, 11)); });
 const mainFirst = [];
-harvest(C).forEach(t => { for (const m of t.matchAll(/\bFigs?\.\s+(\d+)(?:\s*(?:-|and|,)\s*(\d+))?(?![\d:])/g)) { const a = +m[1], b = m[2] ? +m[2] : a; for (let i = a; i <= b; i++) if (!mainFirst.includes(i)) mainFirst.push(i); } });
+// Main-text figure references: "Fig. 3", "Figure 5", "Figs. 1 and 2", "Figs. 2-4". Only the plural
+// takes a list, so "Fig. 3, 24 h" is one citation; a range is a dash, a list a comma or "and".
+function mainFigRefs(t) {
+  const out = [];
+  for (const m of t.matchAll(/\b(Figs\.|Fig\.|Figures?)\s+(\d+(?:\s*(?:-|,\s*and|,|and)\s*\d+)*)(?![\d:])/g)) {
+    const list = m[1] === "Figs." || m[1] === "Figures" ? m[2].split(/\s*(?:,\s*and|,|and)\s*/) : [m[2].match(/^\d+/)[0]];
+    for (const part of list) { const r = part.match(/^(\d+)(?:\s*-\s*(\d+))?$/); if (!r) continue; const a = +r[1], b = r[2] ? +r[2] : a; for (let i = a; i <= b; i++) out.push(i); }
+  }
+  return out;
+}
+harvest(C).map(ownLabel).forEach(t => mainFigRefs(t).forEach(i => { if (!mainFirst.includes(i)) mainFirst.push(i); }));
 if (mainFirst.some((n, i) => n !== i + 1)) gaps.push("main-text figures are not in order of first citation (" + mainFirst.join(", ") + ")");
 // p-values printed from the pipeline must read "p < 0.001", never "p = 0.000"
-harvest(C).concat(harvest(SI)).forEach(t => { const m = t.match(/\bp ?= ?(?:<|p\b|0\.0+(?![\d]))/); if (m) gaps.push("malformed p-value: ..." + t.slice(Math.max(0, m.index - 40), m.index + 20) + "..."); });
+harvest(C).concat(harvest(SI)).forEach(t => { const m = t.match(/\b[pP] ?(?:=|<) ?(?:<|[pP]\b|0\.0+(?![\d]))/); if (m) gaps.push("malformed p-value: ..." + t.slice(Math.max(0, m.index - 40), m.index + 20) + "..."); });
 
 console.log("\ncross-references: main " + mainFigs + " figures / " + mainTabs + " table; supplement " + siFigs + " figures / " + siTabs + " tables; " +
             (gaps.length ? gaps.join("; ") : "all cited, none dangling"));

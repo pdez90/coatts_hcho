@@ -6,7 +6,7 @@ twice. Six files, plus the numbers and tables the pipeline wrote.
 | File | Role |
 | --- | --- |
 | `content_amt.js` | the main text as data: abstract, sections, back matter (data availability, author contributions, ...), the figure files and captions, and the reference entries in Copernicus form |
-| `content_amt_si.js` | the supplement the same way: a short methods section (S1-S6), Tables S1, S5, S6 and S7 (literal rows), Tables S2-S4 and S8-S11 (rendered from CSVs), Figures S1-S14, all numbered in order of first citation in the main text |
+| `content_amt_si.js` | the supplement the same way: a short methods section (S1-S6), Tables S1, S5, S6 and S7 (literal rows), Tables S2-S4 and S8-S11 (rendered from CSVs), Figures S1-S13, all numbered in order of first citation in the main text |
 | `numbers.js` | resolves `{{n:key}}` against `output/tables/manuscript_numbers_*.csv` and refuses to build if a key is missing |
 | `tables_amt.js` | renders the display tables that come straight from pipeline CSVs: Table 1 (`manuscript_table1.csv`, written by `R/21`), Tables S2 and S3 (steps 13 and 19), S4 (step 22) and S8-S11 (step 20) |
 | `build_amt.js` | renders both documents to `../TEMPO_HCHO_AMT_manuscript.docx` and `../TEMPO_HCHO_AMT_supplement.docx`, reading figures from `../../output/figures` |

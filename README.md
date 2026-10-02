@@ -182,8 +182,9 @@ download, so set `run_aqs_tempo = TRUE` in `R/00_config.R` first. With that flag
 on, a single `Rscript run_all.R` schedules 12 → 13 → 14–16 in the same
 invocation: each step is gated on its input being produced earlier in that run,
 not on a file that happened to exist at startup. Leave the flag off and
-everything except the national TEMPO extraction still runs end to end — the
-Colorado case study, the diagnostics, and the AQS inventory and sample pull.
+the Colorado case study, its diagnostics, the HRRR meteorology and the AQS
+inventory and sample pull still run end to end; the national analysis (steps 13,
+15-17 and 20-22) needs the national TEMPO extraction.
 Turn parts off with `run_three_hour_arm`, `run_smoke_flags`, `run_diagnostics`,
 `run_aqs_inventory`, `run_aqs_samples` and `run_aqs_tempo` in `R/00_config.R`. Every arm needs an
 AQS API key (`AQS_EMAIL`, `AQS_KEY` in `~/.Renviron`); without one `run_all.R`
