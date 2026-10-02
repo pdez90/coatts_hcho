@@ -56,11 +56,36 @@ const builders = {
     return {
       header: ["Site (state)", "AQS ID", "n_{24h}", "r_{24h}", "n_{8h}", "r_{8h}", "r_{8h} 04:00", "r_{8h} 12:00",
                "r_{24h} vs 04–12 column", "r_{24h} vs 12–20 column", "usable % 24 h / 8 h", "scans 24 h / 8 h"],
-      rows: rows.map(r => [`${r.site_name} (${r.state})`, r.site, f0(r.anom_n_24h), typo(f2(r.anom_r_24h)), f0(r.anom_n_8h), typo(f2(r.anom_r_8h)),
+      rows: rows.map(r => [`${r.site_name.replace(/\s+/g, " ").trim()} (${r.state.replace(" Of ", " of ")})`, r.site, f0(r.anom_n_24h), typo(f2(r.anom_r_24h)), f0(r.anom_n_8h), typo(f2(r.anom_r_8h)),
                            typo(f2(r.r_8h_start4)), typo(f2(r.r_8h_start12)), typo(f2(r.r_24h_col_start4)), typo(f2(r.r_24h_col_start12)),
                            `${f0(r.usable_pct_24h)} / ${f0(r.usable_pct_8h)}`, `${fh(r.median_valid_scans_24h)} / ${fh(r.median_valid_scans_8h)}`]),
       widths: [1700, 900, 500, 550, 500, 550, 650, 650, 800, 800, 800, 750]
     };
+  },
+  // Table S3: HRRR against the meteorology supplied with TEMPO (R/19). The
+  // all-arms rows count each sample once (step 19 de-duplicates the Colorado
+  // sites that are also in the national arm).
+  metComparison() {
+    const pr = csv("met_hrrr_vs_tempo_pressure.csv").filter(r => r.site === "all");
+    const pb = csv("met_hrrr_vs_tempo_pbl.csv").filter(r => r.season === "all");
+    const nn = v => Number.isFinite(num(v)) ? Math.round(num(v)).toLocaleString("en-US") : "–";
+    const f1 = v => Number.isFinite(num(v)) ? num(v).toFixed(1) : "–";
+    const arms = [["Colorado 24 h", "Colorado 24 h"], ["Colorado 3 h", "Colorado 3 h"], ["National", "national"],
+                  ["all arms", "all arms, each sample once"]];
+    const out = [];
+    for (const [a, lab] of arms) {
+      const x = pr.find(r => r.arm === a); if (!x) continue;
+      out.push([`Surface pressure (hPa), ${lab}`, nn(x.n), f1(x.median_a), f1(x.median_b), typo(sgn(x.median_diff, 1)), num(x.r).toFixed(4)]);
+    }
+    for (const [a, lab] of arms) {
+      const x = pb.find(r => r.arm === a && r.hrrr_hours === "TEMPO scan hours"); if (!x) continue;
+      out.push([`Boundary-layer depth (m), ${lab}`, nn(x.n), f0(x.median_a), f0(x.median_b), typo(sgn(x.median_diff, 0)), f2(x.r)]);
+    }
+    const w = pb.find(r => r.arm === "all arms" && r.hrrr_hours === "whole sampling window");
+    if (w) out.push(["Boundary-layer depth (m), all arms, HRRR over the whole sampling window instead", nn(w.n),
+                     f0(w.median_a), f0(w.median_b), typo(sgn(w.median_diff, 0)), f2(w.r)]);
+    return { header: ["Quantity and arm", "n", "HRRR", "TEMPO", "Difference", "r"], rows: out,
+             widths: [4200, 900, 900, 900, 1100, 900] };
   },
   // Table S8: the weighted Fisher-z models (R/20, diag8_ceiling_gap_models.csv)
   ceilingGapModels() {

@@ -109,17 +109,7 @@ add_window_anomalies <- function(d, min_n) {
            column_anom = tempo_vc_1e15 - mean(tempo_vc_1e15)) |>
     ungroup()
 }
-# CR1 cluster-robust covariance for an lm
-cluster_vcov <- function(fit, cl) {
-  X <- model.matrix(fit); e <- residuals(fit); n <- nrow(X); k <- ncol(X)
-  cl <- as.character(cl); G <- n_distinct(cl)
-  bread <- solve(crossprod(X))
-  meat <- Reduce(`+`, lapply(split(seq_len(n), cl), function(i) {
-    s <- crossprod(X[i, , drop = FALSE], e[i]); s %*% t(s)
-  }))
-  adj <- (G / (G - 1)) * ((n - 1) / (n - k))
-  adj * bread %*% meat %*% bread
-}
+# cluster_vcov() (CR1) lives in R/helpers_stats.R, shared with step 13
 
 # ============================================================================
 # A. 24 h versus 8 h within the same monitors
@@ -737,8 +727,8 @@ if (HAS_GG) {
 
   # fig22: r against scans averaged, by block. Bands are the 2.5-97.5 % range of
   # the pooled r over the random draws; "all" uses every valid scan.
-  ta_plot <- ta |> mutate(k = factor(ifelse(k_scans == "all", sprintf("all\n(median %d)", median_valid_scans_all[block == "3x3"][1]), k_scans),
-                                    levels = c(as.character(seq_len(KMIN)), sprintf("all\n(median %d)", median_valid_scans_all[block == "3x3"][1]))),
+  ta_plot <- ta |> mutate(k = factor(ifelse(k_scans == "all", "all", k_scans),
+                                    levels = c(as.character(seq_len(KMIN)), "all")),
                           block = factor(block, levels = c("1x1", "3x3", "5x5"), labels = c("1 × 1 cell", "3 × 3 cells", "5 × 5 cells")))
   p22 <- ggplot(ta_plot, aes(k, r_pooled, group = block, colour = block)) +
     geom_ribbon(aes(ymin = r_pooled_lo, ymax = r_pooled_hi, fill = block), alpha = 0.18, colour = NA) +

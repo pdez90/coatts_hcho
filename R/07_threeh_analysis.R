@@ -145,8 +145,10 @@ matched <- pmap(variants, function(lag_h, max_ecf, block, block_label) {
          hcho_ppb_std = ugm3_std_to_ppb(hcho_ugm3),
          hcho_molec_cm3_local = ppb_to_molec_cm3(hcho_ppb_std, temp_c_hrrr, press_hpa_hrrr),
          h_eff_std_km = ifelse(tempo_vc > 0 & hcho_molec_cm3 > 0, tempo_vc / hcho_molec_cm3 / 1e5, NA_real_),
+         # One basis only, as in steps 04 and 13: no standard-condition fallback
+         # (it fired for 0 of 362 usable rows, so outputs are unchanged).
          h_eff_km = ifelse(tempo_vc > 0 & hcho_molec_cm3_local > 0,
-                           tempo_vc / hcho_molec_cm3_local / 1e5, h_eff_std_km),
+                           tempo_vc / hcho_molec_cm3_local / 1e5, NA_real_),
          tempo_pbl_km = tempo_pbl_m / 1000,
          usable = !is.na(tempo_vc) & !is.na(hcho_ugm3))
 

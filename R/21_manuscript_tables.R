@@ -58,7 +58,7 @@ cells <- map(DUR, function(dc) {
   u  <- filter(d, usable)
   r  <- filter(dur, duration_class == dc)
   # the site distribution exactly as step 13 summarises it: sites with >= 10
-  # matched samples, anomaly r where at least 6 anomaly pairs exist
+  # matched samples and >= 6 anomaly pairs (step 13 reports no others)
   s  <- filter(bys, duration_class == dc, !is.na(anom_pearson_r))
   e  <- filter(fx, duration_class == dc)
   c("Sites (states)" = sites_states(d),
@@ -69,7 +69,7 @@ cells <- map(DUR, function(dc) {
     "Pearson r" = f2(r$pearson_r),
     "Spearman ρ" = f2(r$spearman_rho),
     "Within-month anomaly r (n)^{a}" = sprintf("%s (%d)", f2(r$anom_pearson_r), r$anom_n),
-    "Column coefficient (µg m^{−3} per 10^{15} molecules cm^{−2})" = sprintf("%.3f ± %.3f", e$estimate, e$std_error),
+    "Column coefficient (µg m^{−3} per 10^{15} molecules cm^{−2})" = sprintf("%.3f ± %.3f", e$estimate, e$std_error_site_clustered),   # site-clustered SE
     "Median surface HCHO (µg m^{−3})" = f2(r$median_surface_ugm3),
     "Median column (10^{15} molecules cm^{−2})" = f2(r$median_tempo_1e15),
     "Median H_{eff} / median TEMPO PBL height (km)" = sprintf("%s / %s", f2(r$median_h_eff_km), f2(r$median_tempo_pbl_km)),

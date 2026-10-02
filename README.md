@@ -157,17 +157,20 @@ it covers every national site. Two different numbers describe its size and they
 are not in conflict: step 11 prints a **pre-flight estimate** — 58 clusters and
 roughly 85,000 requests, being every site that has samples times a
 scans-per-day guess (`aqs_scans_per_day_guess`) — while the extraction that
-produced the published outputs covered **50 clusters and 88,622 cluster-scans**
-(Text S3), because step 12 drops sites without coordinates or without granules
-and counts the scans it actually retrieves. Either way, expect many hours. It is
+produced the published outputs is summarised in
+`output/tables/manuscript_numbers_13_extraction.csv` (clusters and cluster-scans
+that returned data), because step 12 drops sites without coordinates or without
+granules and counts the scans it actually retrieves. Either way, expect many hours. It is
 off by default (`run_aqs_tempo = FALSE`), and it reuses the grid layout cached
 by step 3, so run step 3 at least once first.
 
 `run_all.R` order: 01 → 02 → 03 → 04 (24-h data) → 06 → 02 → 03 (3-h data) →
 08 (smoke) → 05 → 07 (analyses) → 09 (diagnostics) → 10, 11 (national data) →
-12 (national TEMPO) → 13 (national analysis) → 14 (site map) → 15 (observability
-bias) → 16 (TOC graphic). Steps 11–16 are skipped, with a message, when AQS
-credentials are absent.
+12 (national TEMPO) → 13 (national analysis) → 17 (national noise ceiling and
+time of day) → 14 (site map) → 15 (observability bias) → 16 (TOC graphic) → 19
+(HRRR against TEMPO meteorology) → 20 (agreement diagnostics) → 21 (Table 1);
+step 18 (HRRR meteorology) runs before each arm's matching. Every arm reads AQS,
+so `run_all.R` stops at once if AQS credentials are absent.
 
 **Reproducing the national arm from a clean clone takes one edit and one
 command, not one command.** Step 12 is off by default because it is a multi-hour
@@ -178,10 +181,9 @@ not on a file that happened to exist at startup. Leave the flag off and
 everything except the national TEMPO extraction still runs end to end — the
 Colorado case study, the diagnostics, and the AQS inventory and sample pull.
 Turn parts off with `run_three_hour_arm`, `run_smoke_flags`, `run_diagnostics`,
-`run_aqs_inventory`, `run_aqs_samples` and `run_aqs_tempo` in `R/00_config.R`. Step 11 needs an
+`run_aqs_inventory`, `run_aqs_samples` and `run_aqs_tempo` in `R/00_config.R`. Every arm needs an
 AQS API key (`AQS_EMAIL`, `AQS_KEY` in `~/.Renviron`); without one `run_all.R`
-reports that the national arm (steps 11-16) is being skipped and runs the
-Colorado case study (steps 01-09) normally.
+stops before any download and says how to get one.
 
 Every step caches what it has done. If step 3 is interrupted (it makes roughly
 one request per TEMPO scan, on the order of 2,000), run it again and it

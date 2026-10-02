@@ -293,8 +293,14 @@ by_hour <- use |>
   filter(n() >= 12) |>
   group_modify(~ {
     an <- anom_of(.x)
-    bind_cols(relstats(.x, cluster = "site"),
-              if (nrow(an) >= 6) rename_with(anomstats(an), ~ paste0("anom_", .x)) else tibble())
+    rs <- relstats(.x, cluster = "site")
+    # A group is reported only if at least six within-month anomaly pairs remain.
+    # The rule used to be implicit (bind_cols() of a one-row summary and an empty
+    # tibble returns zero rows, so such groups vanished); it is now written out.
+    # relstats() is still evaluated first, so the random-number stream - and every
+    # bootstrap interval downstream - is unchanged.
+    if (nrow(an) < 6) return(tibble())
+    bind_cols(rs, rename_with(anomstats(an), ~ paste0("anom_", .x)))
   }) |>
   ungroup() |>
   arrange(duration_class, window_start_hour)
@@ -309,8 +315,14 @@ by_site <- use |>
   filter(n() >= 10) |>
   group_modify(~ {
     an <- anom_of(.x)
-    bind_cols(relstats(.x, nboot = 200),
-              if (nrow(an) >= 6) rename_with(anomstats(an), ~ paste0("anom_", .x)) else tibble())
+    rs <- relstats(.x, nboot = 200)
+    # A group is reported only if at least six within-month anomaly pairs remain.
+    # The rule used to be implicit (bind_cols() of a one-row summary and an empty
+    # tibble returns zero rows, so such groups vanished); it is now written out.
+    # relstats() is still evaluated first, so the random-number stream - and every
+    # bootstrap interval downstream - is unchanged.
+    if (nrow(an) < 6) return(tibble())
+    bind_cols(rs, rename_with(anomstats(an), ~ paste0("anom_", .x)))
   }) |>
   ungroup() |>
   arrange(duration_class, desc(pearson_r))
@@ -524,12 +536,27 @@ month_fx <- use |>
   group_modify(~ {
     d <- .x
     if (nrow(d) < 30 || n_distinct(d$site) < 2) return(tibble())
-    co <- summary(lm(hcho_ugm3 ~ tempo_vc_1e15 + factor(month(sample_date)) + site, data = d))$coefficients
+    fit <- lm(hcho_ugm3 ~ tempo_vc_1e15 + factor(month(sample_date)) + site, data = d)
+    co <- summary(fit)$coefficients
+    # Repeated samples at one monitor are not independent, so the coefficient also
+    # carries a CR1 standard error clustered by site (helpers_stats.R). With few
+    # sites (3 h: four) that error is itself imprecise.
+    mf <- model.frame(fit)
+    se_cl <- sqrt(diag(cluster_vcov(fit, mf$site)))[["tempo_vc_1e15"]]
     tibble(n = nrow(d), estimate = co["tempo_vc_1e15", 1], std_error = co["tempo_vc_1e15", 2],
-           p_value = co["tempo_vc_1e15", 4])
+           p_value = co["tempo_vc_1e15", 4],
+           n_sites = n_distinct(mf$site), std_error_site_clustered = se_cl,
+           p_value_site_clustered = 2 * pt(-abs(co["tempo_vc_1e15", 1] / se_cl), df = n_distinct(mf$site) - 1))
   }) |>
   ungroup()
 data.table::fwrite(month_fx, file.path(P$tables, "national_month_effects_lm.csv"))
+fx0 <- filter(month_fx, lag_h == 0) |> mutate(tag = sub(" h", "", duration_class))
+data.table::fwrite(
+  tibble(key = c(paste0("colcoef_", fx0$tag), paste0("colcoef_se_cl_", fx0$tag), paste0("colcoef_se_iid_", fx0$tag)),
+         value = c(sprintf("%.3f", fx0$estimate), sprintf("%.3f", fx0$std_error_site_clustered),
+                   sprintf("%.3f", fx0$std_error)),
+         source = "R/13_national_analysis.R"),
+  file.path(P$tables, "manuscript_numbers_13_fx.csv"))
 print(month_fx)
 
 # ---- 7. sensitivity to screening --------------------------------------------
@@ -630,7 +657,8 @@ if (file.exists(sm_path)) {
                        "smoke_r_24_none", "smoke_r_24_light", "smoke_r_24_heavy",
                        "smoke_r_8_none",  "smoke_r_8_light",  "smoke_r_8_heavy",
                        "smoke_dd_24_all", "smoke_dd_24_nosmoke", "smoke_dd_8_all", "smoke_dd_8_nosmoke",
-                       "smoke_col_24_none", "smoke_col_24_light",
+                       "smoke_col_24_none", "smoke_col_24_light", "smoke_col_24_heavy",
+                       "smoke_col_8_none", "smoke_col_8_light", "smoke_col_8_heavy",
                        "smoke_n_3_none", "smoke_n_3_light", "smoke_n_3_heavy"),
                value = c(nrow(su), sum(su$smoke_any %in% TRUE),
                          sprintf("%.2f", g("24 h", "none", "pearson_r")), sprintf("%.2f", g("24 h", "light", "pearson_r")), sprintf("%.2f", g("24 h", "medium/heavy", "pearson_r")),
@@ -638,6 +666,9 @@ if (file.exists(sm_path)) {
                          sprintf("%.2f", dd("24 h", "all days")), sprintf("%.2f", dd("24 h", "smoke days excluded")),
                          sprintf("%.2f", dd("8 h", "all days")),  sprintf("%.2f", dd("8 h", "smoke days excluded")),
                          sprintf("%.2f", g("24 h", "none", "median_tempo_1e15")), sprintf("%.2f", g("24 h", "light", "median_tempo_1e15")),
+                         sprintf("%.2f", g("24 h", "medium/heavy", "median_tempo_1e15")),
+                         sprintf("%.2f", g("8 h", "none", "median_tempo_1e15")), sprintf("%.2f", g("8 h", "light", "median_tempo_1e15")),
+                         sprintf("%.2f", g("8 h", "medium/heavy", "median_tempo_1e15")),
                          g("3 h", "none", "n"), g("3 h", "light", "n"), g("3 h", "medium/heavy", "n")),
                source = "R/13_national_analysis.R"),
         file.path(P$tables, "manuscript_numbers_13_smoke.csv"))
@@ -713,7 +744,7 @@ if (nrow(by_hour)) {
     labs(x = "Local standard hour the sample started",
          y = "Pearson r with surface HCHO", colour = NULL, shape = NULL,
          title = "Which sampling windows does TEMPO track?",
-         subtitle = "Scans inside the sampling window; labels are the number of matched samples") +
+         subtitle = "Scans inside the sampling window; labels are the number of samples in each series") +
     theme(legend.position = "bottom")
   ggsave(file.path(P$figures, "fig12_national_by_start_hour.png"), p12, width = 8, height = 4.6, dpi = 300)
   log_msg("  figure: fig12_national_by_start_hour.png")

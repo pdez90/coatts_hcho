@@ -74,6 +74,14 @@ d <- bind_cols(d, met_mean_at_hours(d$met_site_id, d$scan_hours, met_read_cache(
 log_msg("HRRR at TEMPO's own scan hours: ", sum(!is.na(d$pbl_m_hrrr_scan)), " of ", nrow(d),
         " samples; median ", round(median(d$n_scan_hours, na.rm = TRUE)), " scan-hours each")
 
+# The Colorado sites that report to AQS (six 24 h sites, Chatfield, Platteville)
+# are in a Colorado arm and in the national arm, so the stacked table holds those
+# samples twice. The pooled "all arms" rows count each sample once; the per-arm
+# rows are unaffected.
+d_once <- distinct(d, met_site_id, start_utc, .keep_all = TRUE)
+log_msg("Pooled comparison: ", nrow(d_once), " distinct samples (", nrow(d) - nrow(d_once),
+        " appear in two arms and are counted once)")
+
 # a difference summary that is the same shape everywhere it is used
 diff_stats <- function(d, a, b, ...) {
   d <- d |> filter(is.finite(.data[[a]]), is.finite(.data[[b]]))
@@ -100,7 +108,7 @@ terr <- if (file.exists(terr_path)) read_tbl(terr_path, colClasses = list(charac
 press <- bind_rows(
   diff_stats(d, "press_hpa_hrrr_scan", "tempo_press_hpa", arm, site, site_name),
   diff_stats(d, "press_hpa_hrrr_scan", "tempo_press_hpa", arm) |> mutate(site = "all", site_name = ""),
-  diff_stats(d, "press_hpa_hrrr_scan", "tempo_press_hpa") |> mutate(arm = "all arms", site = "all", site_name = "")
+  diff_stats(d_once, "press_hpa_hrrr_scan", "tempo_press_hpa") |> mutate(arm = "all arms", site = "all", site_name = "")
 ) |> relocate(arm, site, site_name)
 if (!is.null(terr)) {
   press <- left_join(press, select(terr, site = sites, terrain_m), by = "site")
@@ -114,9 +122,9 @@ log_msg("Surface pressure, TEMPO minus HRRR: median ", pa$median_diff, " hPa (5-
 pbl <- bind_rows(
   diff_stats(d, "pbl_m_hrrr_scan", "tempo_pbl_m", arm, season),
   diff_stats(d, "pbl_m_hrrr_scan", "tempo_pbl_m", arm) |> mutate(season = "all"),
-  diff_stats(d, "pbl_m_hrrr_scan", "tempo_pbl_m") |> mutate(arm = "all arms", season = "all")
+  diff_stats(d_once, "pbl_m_hrrr_scan", "tempo_pbl_m") |> mutate(arm = "all arms", season = "all")
 ) |> relocate(arm, season) |> mutate(hrrr_hours = "TEMPO scan hours")
-d_all <- mutate(d, arm = "all arms")
+d_all <- mutate(d_once, arm = "all arms")
 # The same contrast computed on the window mean, kept only to show how much of
 # a naive comparison is sampling rather than model disagreement.
 pbl_window <- diff_stats(bind_rows(d, d_all), "pbl_m_hrrr", "tempo_pbl_m", arm) |>
@@ -159,11 +167,18 @@ g <- function(d, ...) { r <- filter(d, ...); if (nrow(r) != 1) NA_real_ else r }
 keys <- tibble(
   key = c("met_press_tempo_minus_hrrr", "met_press_tempo_hrrr_r", "met_press_n",
           "met_pbl_hrrr_median", "met_pbl_tempo_median", "met_pbl_tempo_minus_hrrr",
-          "met_pbl_r", "met_pbl_hrrr_window_median"),
-  value = c(sprintf("%.1f", pa$median_diff), sprintf("%.2f", pa$r), sprintf("%.0f", pa$n),
+          "met_pbl_r", "met_pbl_hrrr_window_median",
+          "met_pbl_pct_deeper", "met_pbl_window_diff", "met_pbl_nat_djf_diff", "met_pbl_nat_son_diff",
+          "met_pbl_co24_diff"),
+  value = c(sprintf("%.1f", pa$median_diff), sprintf("%.4f", pa$r), sprintf("%.0f", pa$n),
             sprintf("%.0f", ba$median_a), sprintf("%.0f", ba$median_b),
             sprintf("%.0f", ba$median_diff), sprintf("%.2f", ba$r),
-            sprintf("%.0f", filter(pbl_window, arm == "all arms")$median_a[1])),
+            sprintf("%.0f", filter(pbl_window, arm == "all arms")$median_a[1]),
+            sprintf("%.0f", 100 * ba$median_diff / ba$median_a),
+            sprintf("%+.0f", filter(pbl_window, arm == "all arms")$median_diff[1]),
+            sprintf("%+.0f", filter(pbl, arm == "National", season == "DJF", hrrr_hours == "TEMPO scan hours")$median_diff[1]),
+            sprintf("%+.0f", filter(pbl, arm == "National", season == "SON", hrrr_hours == "TEMPO scan hours")$median_diff[1]),
+            sprintf("%+.0f", filter(pbl, arm == "Colorado 24 h", season == "all", hrrr_hours == "TEMPO scan hours")$median_diff[1])),
   source = "R/19_met_comparison.R")
 if (!is.null(cmp)) {
   tt <- filter(cmp, quantity == "temperature (C)", site == "all")

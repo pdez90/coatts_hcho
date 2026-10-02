@@ -173,6 +173,21 @@ dep_cor_test <- function(y, x1, x2, nboot = 2000L) {
          williams_t = t, df = n - 3, williams_p = 2 * pt(-abs(t), df = n - 3))
 }
 
+# CR1 cluster-robust covariance for an lm (one definition: steps 13 and 20)
+cluster_vcov <- function(fit, cl) {
+  # aliased (NA) coefficients have no column in the covariance; drop them so
+  # solve() cannot fail on a rank-deficient fixed-effects design
+  X <- model.matrix(fit)[, !is.na(coef(fit)), drop = FALSE]
+  e <- residuals(fit); n <- nrow(X); k <- ncol(X)
+  cl <- as.character(cl); G <- n_distinct(cl)
+  bread <- solve(crossprod(X))
+  meat <- Reduce(`+`, lapply(split(seq_len(n), cl), function(i) {
+    s <- crossprod(X[i, , drop = FALSE], e[i]); s %*% t(s)
+  }))
+  adj <- (G / (G - 1)) * ((n - 1) / (n - k))
+  adj * bread %*% meat %*% bread
+}
+
 # Correlation of anomalies. pearson_p is the ordinary test and is optimistic for
 # the reason given above; pearson_p_perm is the within-site-month permutation
 # p-value and is the one to quote.
