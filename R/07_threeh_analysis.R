@@ -338,7 +338,7 @@ if (nrow(lag_curve)) {
          # Where it falls is an empirical result that a screening change can move,
          # and did - the 2023 extension split the two sites. The manuscript states it.
          title = "TEMPO-surface agreement by lag from the 3-hour sampling window",
-         subtitle = "Point labels are the number of matched samples") +
+         subtitle = "Point labels are the number of samples in each series") +
     theme(legend.position = "bottom")
   ggsave(file.path(P$figures, "fig10_threeh_lag_curve.png"), p10, width = 7, height = 4.6, dpi = 300)
   log_msg("  figure: fig10_threeh_lag_curve.png")

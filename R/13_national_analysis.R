@@ -644,7 +644,7 @@ if (file.exists(sm_path)) {
         facet_wrap(~ duration_class) +
         labs(x = "HMS smoke class over the site during the sampling window",
              y = "Pearson r, surface HCHO vs TEMPO column",
-             title = "Agreement rises with smoke, at every duration with enough samples",
+             title = "Agreement by smoke class; 24 h and 8 h rise with smoke (3 h: too few smoke samples)",
              subtitle = "Labels are matched samples; the 3 h medium/heavy class has too few to interpret")
       ggsave(file.path(P$figures, "fig17_national_smoke.png"), p_smoke, width = 8, height = 3.8, dpi = 300)
       log_msg("  figure: fig17_national_smoke.png")
@@ -719,7 +719,7 @@ if (nrow(lag_curve)) {
     labs(x = "Lag of the TEMPO window from the sampling window (h)",
          y = "Pearson r with surface HCHO", colour = NULL, shape = NULL,
          title = "National sub-daily samples: agreement against lag",
-         subtitle = "Labels are the number of matched samples") +
+         subtitle = "Labels are the number of samples in each series") +
     theme(legend.position = "bottom")
   ggsave(file.path(P$figures, "fig11_national_lag_curve.png"), p11, width = 8, height = 4.6, dpi = 300)
   log_msg("  figure: fig11_national_lag_curve.png")

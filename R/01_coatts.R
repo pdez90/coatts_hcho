@@ -24,13 +24,11 @@
 # crosswalk below; it falls back to the CDPHE packet and is labelled
 # source = "CDPHE packet". Nothing else needs to change.
 #
-# The packets are still downloaded and parsed for ONE reason: the per-sample
-# detection limit and the sampling temperature and pressure. AQS does not
-# publish those, and Colorado's effective mixing height is computed from the
-# measured temperature and pressure where they exist, which makes it a better
-# estimate than the national arm can produce. Step 04 also carries the national
-# convention alongside, so the difference between the two is measured rather
-# than assumed. Concentrations are never taken from the packets.
+# The packets are still downloaded and parsed, but nothing in the paper uses
+# them: since Sept 2026 every arm takes temperature and pressure from HRRR
+# (R/18_hrrr_met.R), and concentrations are never taken from the packets. Their
+# detection limits and sensor readings are kept in data/processed/coatts_hcho.csv
+# for the record; step 19 still compares the packet sensors with HRRR.
 #
 # Packet layouts parsed:
 #   * 2025+ "AQDxLite" long format  (sheet Carbonyls_data)

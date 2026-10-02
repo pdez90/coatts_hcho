@@ -223,10 +223,21 @@ fetch_day <- function(day, want_terrain) {
 terr_path <- file.path(P$processed, "hrrr_site_terrain.csv")
 want_terrain <- !file.exists(terr_path) || isTRUE(CFG$hrrr_refresh)
 n_new <- 0L
+# A day's cache holds the sites and hours that were needed when it was written.
+# run_all.R runs this step once per arm (Colorado 24 h, then 3 h, then national),
+# so a day cached for an earlier arm can lack the later arms' sites or hours. It
+# is reused only if it covers every site-hour needed now; otherwise the day is
+# fetched again for all current sites.
+day_complete <- function(f, d) {
+  have <- read_tbl(f, colClasses = list(character = "met_site_id")) |>
+    distinct(met_site_id, hour)
+  want <- need |> filter(.data$day == .env$d) |> distinct(met_site_id, hour)
+  nrow(anti_join(want, have, by = c("met_site_id", "hour"))) == 0L
+}
 for (day in days) {
   day <- as.Date(day, origin = "1970-01-01")
   f <- file.path(P$raw_hrrr, sprintf("hrrr_points_%s.csv.gz", format(day, "%Y%m%d")))
-  if (file.exists(f) && !isTRUE(CFG$hrrr_refresh)) next
+  if (file.exists(f) && !isTRUE(CFG$hrrr_refresh) && day_complete(f, day)) next
   res <- fetch_day(day, want_terrain)
   if (is.null(res)) { log_msg("  ", format(day), ": nothing retrieved"); next }
   tmp <- paste0(f, ".part")

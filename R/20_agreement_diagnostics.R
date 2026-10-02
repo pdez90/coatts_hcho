@@ -70,7 +70,7 @@ for (f in c(primary_path, samples_path, cells_path, man_path, noise_path, bysite
   if (!file.exists(f)) stop("Missing ", f, " - run steps 11-13 and 17 first.")
 }
 
-MIN_ANOM_PAIRS <- 10L    # anomaly pairs for a site-level correlation (as in steps 13, 17)
+MIN_ANOM_PAIRS <- 10L    # anomaly pairs for a site-level correlation (as in step 17; step 13 reports sites from six)
 NBOOT          <- 2000L
 KMIN           <- 4L     # valid scans a 24 h sample needs to enter the temporal-averaging draw
 NDRAW          <- 200L   # random draws per (block, k)
@@ -621,7 +621,7 @@ nums <- tibble(
 ) |> mutate(value = as.character(value), source = "R/20_agreement_diagnostics.R")
 # the remaining numbers the text quotes, so that every value in Sect. 3.6 is derived
 nc_all <- read_tbl(noise_path, colClasses = list(character = c("site", "block_label"))) |>
-  filter(is.finite(scan_noise_sd_single_1e15)) |> group_by(block_label) |>
+  filter(site != "all sites", is.finite(scan_noise_sd_single_1e15)) |> group_by(block_label) |>   # site medians only
   summarise(med = median(scan_noise_sd_single_1e15), .groups = "drop")
 ncm <- function(b) sprintf("%.1f", nc_all$med[nc_all$block_label == b])
 p_same12 <- filter(paired, startsWith(quantity, "anomaly r, 8 h 12:00 sample minus 24 h sample"))

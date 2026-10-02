@@ -52,15 +52,15 @@ Scripts can also be run one at a time (each sources `R/00_config.R`):
 
 | Step | Script | What it does | Main output |
 |---|---|---|---|
-| 1 | `R/01_coatts.R` | Reads the CDPHE repository page, downloads the annual packets for COATTS (and ozone-precursor) sites, extracts formaldehyde from both the 2024 wide and 2025 AQDx layouts, records checksums | `data/processed/coatts_hcho.csv`, `data/raw/coatts/download_manifest.csv` |
+| 1 | `R/01_coatts.R` | Reads the seven Colorado 24 h sites' formaldehyde from EPA AQS (selected by site ID, so Wheat Ridge is included despite its short record). Also downloads CDPHE's annual packets and records their checksums; nothing in the paper uses the packet fields | `data/processed/coatts_hcho.csv`, `data/raw/coatts/download_manifest.csv` |
 | 2 | `R/02_tempo_manifest.R` | Lists TEMPO granules (CMR, no login) whose scan midpoint falls in each 00–24 MST sample day | `data/processed/tempo_manifest.csv` |
 | 3 | `R/03_tempo_extract.R` | Server-side OPeNDAP (DAP4) subset of each granule to a box around the sites; keeps an unscreened 5×5 cell block per site | `data/processed/tempo_site_cells.csv.gz`, `tempo_request_spec.txt` |
 | 4 | `R/04_match.R` | Quality screening, hourly → daily aggregation, join to COATTS, 18 screening variants | `data/processed/matched_primary.csv`, `matched_variants.csv` |
 | 5 | `R/05_analysis.R` | Coverage, correlations, OLS/RMA slopes (bootstrap CIs), mixed model, sensitivity, figures | `output/tables/*.csv`, `output/figures/*.png` |
 
 **Check each step before the long download.** Run `source("R/01_coatts.R")` and
-compare `output/tables/coatts_hcho_inventory.csv` with the packets (e.g. ADCO 2024:
-62 sample days, median ≈2.9 µg/m³; ADCO 2025: 63 days, median ≈3.0). Then run
+check that `output/tables/coatts_hcho_inventory.csv` lists the seven sites with
+the sample counts of Table S1. Then run
 step 2, set `max_granules = 5` in `R/00_config.R`, run step 3 and open
 `data/processed/tempo_request_spec.txt` and one CSV in `data/interim/tempo_cells/`
 (column values ~10¹⁵–10¹⁶ molec/cm², cell_lat/cell_lon next to the site). Set
@@ -70,14 +70,13 @@ step 2, set `max_granules = 5` in `R/00_config.R`, run step 3 and open
 
 These two sites belong to CDPHE's COOPs (ozone precursor) network, which was
 discontinued at the end of June 2026; the historical data remain available.
-Their formaldehyde samples are 3-hour samples stamped 09:00 — explicit
-(duration 10,800 s) in the 2025 AQDx packets, and confirmed by CDPHE for the
-2024 wide packets, which have no duration field. `run_all.R` runs this arm after the 24-h arm
+Their formaldehyde samples are 3-hour samples that AQS records as starting at
+06:00 MST with a 3 h duration. `run_all.R` runs this arm after the 24-h arm
 (`run_three_hour_arm = TRUE`):
 
 | Step | Script | What it does | Main output |
 |---|---|---|---|
-| 6 | `R/06_threeh_samples.R` | Downloads the 2024 and 2025 site packets, keeps ambient 3-h formaldehyde (QC samples and null-qualified rows removed), one row per sample | `data/processed/threeh_hcho.csv`, `output/tables/threeh_inventory.csv` |
+| 6 | `R/06_threeh_samples.R` | Reads the two sites' 3-h formaldehyde from EPA AQS (null-qualified rows removed), one row per sample, window end = AQS start + duration | `data/processed/threeh_hcho.csv`, `output/tables/threeh_inventory.csv` |
 | 2, 3 | same scripts, arm `threeh` | TEMPO scans 03–19 MST on sample days; cells around the two sites (separate caches) | `threeh_tempo_manifest.csv`, `threeh_tempo_site_cells.csv.gz` |
 | 7 | `R/07_threeh_analysis.R` | Averages screened scans in the sampling window and in windows lagged from it; correlations, within-month anomalies, month-effects regression, sensitivity, and agreement against lag | `output/tables/threeh_*.csv`, `fig7_threeh_scatter.png`, `fig8_threeh_sensitivity.png`, `fig10_threeh_lag_curve.png` |
 
@@ -88,10 +87,8 @@ windows shifted by `threeh_lags_h` (default −3, 0, +3, +6, +9 h), which measur
 how agreement depends on the delay between sampling and the satellite view;
 `fig10_threeh_lag_curve.png` is that curve. Scans are assigned by their granule
 midpoint, which can be ~30 min off the time TEMPO actually viewed Colorado.
-`threeh_include_2024 = TRUE` (default) uses the 2024 packets. Two 2025 samples
-(CHCO and PVCO, 2025-06-12) are stamped 23:59 rather than 09:00 in the packets —
-AQS shows no such stamps — so they stay in `threeh_hcho.csv` with
-`stamp_time_unusual = TRUE` and are left out of the matching
+Every sample in the AQS record begins at 06:00 MST; a sample that did not would
+be flagged `stamp_time_unusual = TRUE` and left out of the matching
 (`threeh_exclude_unusual_stamps`).
 To run one step of this arm by hand: `options(hcho.arm = "threeh"); source("R/03_tempo_extract.R")`.
 
@@ -99,7 +96,7 @@ To run one step of this arm by hand: `options(hcho.arm = "threeh"); source("R/03
 
 | Step | Script | What it does | Main output |
 |---|---|---|---|
-| 8 | `R/08_smoke_hms.R` | Downloads the daily HMS smoke polygon shapefiles for every sample day, finds polygons covering each site, and flags a sample when a covering polygon's Start–End time overlaps its sampling window (00–24 MST for 24-h; the 3-h window for each stamp convention), widened by `hms_time_pad_hours` (3 h) on each side because HMS polygons are analyst delineations from discrete visible imagery, so an hour with no covering polygon is not established as smoke-free. The widening changes two windows of 686 (`output/tables/smoke_pad_sensitivity.csv`). `smoke_any_day` ignores times altogether. Density: none / light / medium-heavy. A day without an HMS file gets `hms_available = FALSE` and missing flags, not "no smoke". | `data/processed/smoke_flags.csv`, `output/tables/smoke_inventory.csv` |
+| 8 | `R/08_smoke_hms.R` | Downloads the daily HMS smoke polygon shapefiles for every sample day, finds polygons covering each site, and flags a sample when a covering polygon's Start–End time overlaps its sampling window (00–24 MST for 24-h; the 3-h window for each stamp convention), widened by `hms_time_pad_hours` (3 h) on each side because HMS polygons are analyst delineations from discrete visible imagery, so an hour with no covering polygon is not established as smoke-free. Its effect is in `output/tables/smoke_pad_sensitivity.csv`; nationally the widening raises the smoke-affected share of windows from 30 % to 38 %. `smoke_any_day` ignores times altogether. Density: none / light / medium-heavy. A day without an HMS file gets `hms_available = FALSE` and missing flags, not "no smoke". | `data/processed/smoke_flags.csv`, `output/tables/smoke_inventory.csv` |
 
 Step 5 then adds `smoke_coverage.csv` (TEMPO data loss by smoke class), `smoke_by_season.csv`,
 `stats_by_smoke.csv`, `stats_within_month_anomalies_smoke_sensitivity.csv` and
