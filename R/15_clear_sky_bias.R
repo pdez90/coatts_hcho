@@ -348,7 +348,7 @@ plot_d <- d |>
                       levels = c("TEMPO usable", "screened out")))
 
 lab <- bias |> filter(stratum == "all") |>
-  transmute(arm, txt = sprintf("adjusted difference %+.2f µg m⁻³ (95 %% CI %.2f to %.2f)",
+  transmute(arm, txt = sprintf("site-month difference %+.2f µg m⁻³ (95 %% CI %.2f to %.2f)",
                                paired_observable_minus_screened, boot_lo, boot_hi))
 
 p <- ggplot(plot_d, aes(sky, anom, fill = sky)) +

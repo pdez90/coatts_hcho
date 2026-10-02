@@ -61,9 +61,11 @@ CFG <- list(
                                    "BM", "BR", "EC", "MB", "SC", "SV", "TS", "XX"),
   coatts_exclude_flags = character(),
   min_days_per_site_month = 3L,     # for the within-month (deseasonalised) analysis
-  # A site-level correlation (by-site tables, Table 1 site medians, the noise
-  # ceiling, the step-20 diagnostics) needs at least this many within-month
-  # anomaly pairs. One value for every step.
+  # A site-level correlation reported in the paper (by-site tables, Table 1 site
+  # medians, the noise ceilings of steps 09 and 17, the step-20 diagnostics, the
+  # Colorado per-site table of step 05) needs at least this many within-month
+  # anomaly pairs. Diagnostic tables of smaller subsets (site x season in step 09,
+  # site x lag in step 07) list groups from six pairs for inspection; none is quoted.
   min_anom_pairs_site = 10L,
 
   # CDPHE Air Toxics & Ozone Precursor Data Repository

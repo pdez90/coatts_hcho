@@ -25,8 +25,8 @@
 # definition and Williams' test; the manuscript quotes the national versions.
 # This step keeps the Colorado versions for what only the Colorado extraction
 # carries: the reported-uncertainty ceilings (Test 3), the terrain index (Test
-# 4) and the 3 h window diagnostics (Tests 1-2). SI S8 cross-checks that the
-# two implementations give the same ceilings at the Colorado sites.
+# 4) and the 3 h window diagnostics (Tests 1-2). The Colorado noise-corrected
+# correlations of SI S6 come from here (r_corrected_* in manuscript_numbers_09.csv).
 source("R/00_config.R")
 source("R/helpers_screen.R")   # one definition of the TEMPO cell screen
 source("R/helpers_stats.R")

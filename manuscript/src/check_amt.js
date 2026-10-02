@@ -6,7 +6,7 @@
 //               every cell of a table that tables_amt.js renders from a CSV.
 //               These cannot be transcribed wrongly and are not re-checked.
 //   verified  - literals in prose, captions and the literal supplement tables
-//               (S1, S5, S6, S7). Each must occur in at least one output table, rounded
+//               (S1, S5, S6, S7). Each must equal a whole number in at least one output table, rounded
 //               to the precision the text uses; a decimal found in five or more
 //               tables is reported as weakly verified.
 //   exempt    - physical constants and procedural counts, each pinned to the
@@ -50,8 +50,11 @@ const perTable = tableFiles.map(f => [f,
     return [v.toFixed(0), v.toFixed(1), v.toFixed(2), v.toFixed(3), v.toFixed(4), m,
             (Math.round(v * 100) / 100).toString(), (Math.round(v * 1000) / 1000).toString()].join(" ");
   })]);
-const tableText = perTable.map(x => x[1]).join("  ");
-const tablesWith = tok => perTable.filter(x => x[1].includes(tok)).map(x => x[0]);
+// Whole numbers only: a literal is found when it is one of a table's numbers (or
+// that number rounded as the text prints it), never as a fragment of a longer one.
+perTable.forEach(x => { x[1] = new Set(x[1].match(/-?\d+(?:\.\d+)?/g) || []); });
+const inTables = tok => perTable.some(x => x[1].has(tok));
+const tablesWith = tok => perTable.filter(x => x[1].has(tok)).map(x => x[0]);
 const WEAK_TABLES = 5;
 console.log("  reading " + tableFiles.length + " output tables from " + TABLE_DIR);
 
@@ -65,6 +68,7 @@ const ALLOW = new Map([
   ["10.5067", /doi\.org|Science Data Center/i],
   ["0.02",   /grid/i],                                 // the L3 grid spacing in degrees
   ["0.999",  /capped|transformation/i],                // the cap on E before Fisher transformation
+  ["43502",  /parameter code/i],                       // the AQS parameter code for formaldehyde
 ]);
 const allowed = (tok, para) => ALLOW.has(tok) && ALLOW.get(tok).test(para);
 
@@ -79,20 +83,27 @@ T.names.forEach(n => { const t = T.build(n); [...t.header, ...t.rows.flat()].for
 function check(doc, label) {
   const misses = [], weak = [];
   harvest(doc).forEach(t => {
-    (t.match(NUM) || []).forEach(tok => {
-      if (allowed(tok, t) || derived.has(tok)) return;
-      // times (06:00), dates, section and figure numbers, AQS identifiers and years are structure, not results
-      const i = t.indexOf(tok);
+    // URLs and AQS site identifiers (08-077-0018) are structure, not results
+    const spans = [...t.matchAll(/https?:\/\/\S+|\b\d\d-\d{3}-\d{4}\b/g)].map(m => [m.index, m.index + m[0].length]);
+    for (const mt of t.matchAll(NUM)) {
+      let tok = mt[0], i = mt.index;
+      if (spans.some(([a, b]) => i >= a && i < b)) continue;
       const before = t.slice(Math.max(0, i - 12), i), after = t.slice(i + tok.length, i + tok.length + 8);
-      if (/[:\-]$/.test(before) || /^[:\-]\d/.test(after) || /(Sect\.|Section|Fig\.|Figure|Figs\.|Table|version|Level|V0?)\s*S?$/i.test(before)) return;
-      if (/^(19|20)\d\d$/.test(tok) && !/(n ?= ?|r ?= ?|p ?= ?)$/.test(before)) return;
+      // the second number of a range ("0.35-0.70") is not negative
+      if (tok.startsWith("-") && /\d$/.test(before)) { tok = tok.slice(1); i += 1; }
+      if (allowed(tok, t) || derived.has(tok)) continue;
+      // times (06:00), dates (2024-01), section and figure numbers, AQS identifiers and years are structure, not results
+      if (/:$/.test(before) || /^:\d/.test(after) || /\d{4}-$/.test(before) || /^-\d\d(?!\d)/.test(after) && /^(19|20)\d\d$/.test(tok) ||
+          /\d\d-\d{3}-$/.test(before) || /^-\d{3}-\d{4}/.test(after) || /^\d\d-\d{3}$/.test(tok) ||
+          /(Sect\.|Section|Fig\.|Figure|Figs\.|Table|version|Level|V0?)\s*S?$/i.test(before)) continue;
+      if (/^(19|20)\d\d$/.test(tok) && !/(n ?= ?|r ?= ?|p ?= ?)$/.test(before)) continue;
       const ctx = t.slice(Math.max(0, i - 70), i + 70);
-      if (tableText.includes(tok)) {
+      if (inTables(tok)) {
         if (/\./.test(tok) && tablesWith(tok).length >= WEAK_TABLES) weak.push({ tok, ctx, n: tablesWith(tok).length });
-        return;
+        continue;
       }
       misses.push({ tok, ctx });
-    });
+    }
   });
   const uniq = a => { const seen = new Set(); return a.filter(x => seen.has(x.tok + x.ctx) ? false : (seen.add(x.tok + x.ctx), true)); };
   const m = uniq(misses), w = uniq(weak);
@@ -122,8 +133,8 @@ function siRefs(t) {
   }
   return out;
 }
-const ownLabel = t => t.replace(/^(Table|Figure) S\d+\.\s*/, "");
-const reading = harvest(C).concat(harvest(SI).map(ownLabel));
+const ownLabel = t => t.replace(/^(Table|Figure) S?\d+\.\s*/, "");
+const reading = harvest(C).map(ownLabel).concat(harvest(SI).map(ownLabel));
 const cited = new Set();
 reading.forEach(t => {
   siRefs(t).forEach(k => cited.add(k));

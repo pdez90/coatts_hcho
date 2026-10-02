@@ -526,6 +526,12 @@ if ("anom_pearson_p" %in% names(by_site)) {
               .groups = "drop")
   log_msg("  day-to-day significance counts by duration (Table S2):")
   print(by_dur)
+  # the Table S2 caption compares the two tests over all site-duration rows
+  data.table::fwrite(tibble(
+    key = c("sig_dd_perm_nominal", "sig_dd_perm_bh", "sig_dd_ord_nominal", "sig_dd_ord_bh"),
+    value = as.character(c(sum(by_site$anom_pearson_p_perm < 0.05, na.rm = TRUE), sum(by_site$anom_pearson_q_perm < 0.05, na.rm = TRUE),
+                           sum(by_site$anom_pearson_p < 0.05, na.rm = TRUE), sum(by_site$anom_pearson_q < 0.05, na.rm = TRUE))),
+    source = "R/13_national_analysis.R"), file.path(P$tables, "manuscript_numbers_13_sig.csv"))
 }
 if ("anom_pearson_r" %in% names(by_site)) {
   log_msg("Median within-month anomaly r across sites: ",
@@ -647,7 +653,7 @@ if (file.exists(sm_path)) {
         scale_size_continuous(range = c(1.5, 5), guide = "none") +
         scale_y_continuous(expand = expansion(mult = c(0.1, 0.2))) +
         facet_wrap(~ duration_class) +
-        labs(x = "HMS smoke class over the site during the sampling window",
+        labs(x = "HMS smoke class over the site, sampling window \u00b1 3 h",
              y = "Pearson r, surface HCHO vs TEMPO column",
              title = "Agreement by smoke class; 24 h and 8 h rise with smoke (3 h: too few smoke samples)",
              subtitle = "Labels are matched samples; the 3 h medium/heavy class has too few to interpret")

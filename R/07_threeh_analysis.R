@@ -48,7 +48,7 @@ samples <- samples |>
 manifest <- read_tbl(A3$manifest) |>
   mutate(mid_utc = as.POSIXct(mid_utc, tz = "UTC")) |>
   distinct(granule, mid_utc)
-# Manifest size for SI S3, from the manifest itself rather than a run log.
+# Manifest size for SI S2, from the manifest itself rather than a run log.
 man_raw <- read_tbl(A3$manifest) |> mutate(sample_date = as.Date(sample_date))
 th_dates <- n_distinct(samples$sample_date)
 th_gdates <- n_distinct(man_raw$sample_date[man_raw$sample_date %in% samples$sample_date])

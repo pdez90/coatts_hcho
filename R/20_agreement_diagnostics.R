@@ -443,7 +443,18 @@ tert <- map_dfr(c(4L, 12L, 0L), function(h) {
   out <- bind_rows(tertile_r(d, "pbl_m_hrrr", "absolute HRRR mixing depth") |> mutate(sample = lab),
                    tertile_r(d, "pbl_anom_m", "mixing depth relative to site-month") |> mutate(sample = lab))
   if (!is.null(smoke)) {
-    ds <- filter(d, hms_available %in% TRUE, !(smoke_any %in% TRUE))
+    # smoke-free samples only, with all three anomalies (surface, column, mixing
+    # depth) recomputed from them, as the smoke exclusion is done elsewhere
+    # (steps 05 and 13); otherwise smoke days would still set the site-month means
+    ds <- filter(d, hms_available %in% TRUE, !(smoke_any %in% TRUE)) |>
+      select(-any_of(c("surface_anom", "column_anom", "pbl_anom_m")))
+    ds <- if (h == 0L) {
+      add_month_anomalies(ds, CFG$min_days_per_site_month) |>
+        group_by(site, ym) |> mutate(pbl_anom_m = pbl_m_hrrr - mean(pbl_m_hrrr)) |> ungroup()
+    } else {
+      add_window_anomalies(ds, CFG$min_days_per_site_month) |>
+        group_by(site, ym, window_start_hour) |> mutate(pbl_anom_m = pbl_m_hrrr - mean(pbl_m_hrrr)) |> ungroup()
+    }
     out <- bind_rows(out, tertile_r(ds, "pbl_anom_m", "relative to site-month, smoke-free days only") |> mutate(sample = lab))
   }
   out

@@ -39,7 +39,7 @@ coverage_season <- primary |>
 data.table::fwrite(coverage_season, file.path(P$tables, "coverage_by_season.csv"))
 print(coverage_season)
 # How many granules the Colorado 24 h manifest holds and how many sampling dates
-# they cover (SI S3), read from the manifest rather than copied from a run log.
+# they cover (SI S2), read from the manifest rather than copied from a run log.
 man_co <- read_tbl(file.path(P$processed, "tempo_manifest.csv")) |>
   mutate(sample_date = as.Date(sample_date))
 co_dates <- n_distinct(primary$sample_date)
