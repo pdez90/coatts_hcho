@@ -41,7 +41,7 @@ for (f in c(samples_path, variants_path, cells_path, man_path)) {
   if (!file.exists(f)) stop("Missing ", f, " - run steps 11-13 first.")
 }
 
-MIN_ANOM_PAIRS <- 10L   # anomaly pairs a site needs for a site-level ceiling
+MIN_ANOM_PAIRS <- CFG$min_anom_pairs_site   # anomaly pairs a site needs for a site-level ceiling (00_config.R)
 MIN_SCAN_PAIRS <- 20L   # successive-scan pairs a site needs for its own noise estimate
 MAX_GAP_H      <- 1.6   # successive scans further apart than this are not "successive"
 TOD_MIN_PAIRS  <- 20L   # site-days with both windows, for a site-level time-of-day contrast

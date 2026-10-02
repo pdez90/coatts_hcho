@@ -58,7 +58,7 @@ cells <- map(DUR, function(dc) {
   u  <- filter(d, usable)
   r  <- filter(dur, duration_class == dc)
   # the site distribution exactly as step 13 summarises it: sites with >= 10
-  # matched samples and >= 6 anomaly pairs (step 13 reports no others)
+  # matched samples and >= CFG$min_anom_pairs_site anomaly pairs
   s  <- filter(bys, duration_class == dc, !is.na(anom_pearson_r))
   e  <- filter(fx, duration_class == dc)
   c("Sites (states)" = sites_states(d),

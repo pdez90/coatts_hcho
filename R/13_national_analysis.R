@@ -316,12 +316,11 @@ by_site <- use |>
   group_modify(~ {
     an <- anom_of(.x)
     rs <- relstats(.x, nboot = 200)
-    # A group is reported only if at least six within-month anomaly pairs remain.
-    # The rule used to be implicit (bind_cols() of a one-row summary and an empty
-    # tibble returns zero rows, so such groups vanished); it is now written out.
-    # relstats() is still evaluated first, so the random-number stream - and every
-    # bootstrap interval downstream - is unchanged.
-    if (nrow(an) < 6) return(tibble())
+    # A site is reported only with at least CFG$min_anom_pairs_site (10) within-
+    # month anomaly pairs, the threshold steps 17 and 20 use. relstats() is still
+    # evaluated first, so the random-number stream - and every bootstrap interval
+    # of the sites that remain - is unchanged.
+    if (nrow(an) < CFG$min_anom_pairs_site) return(tibble())
     bind_cols(rs, rename_with(anomstats(an), ~ paste0("anom_", .x)))
   }) |>
   ungroup() |>

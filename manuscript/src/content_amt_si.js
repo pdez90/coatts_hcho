@@ -58,7 +58,7 @@ module.exports = {
       "p": [
         "We estimated retrieval noise from pairs of successive valid TEMPO scans of the same site on the same day, separated by no more than 1.6 h. The root mean square of the differences between successive scans, divided by √2, estimates the random error of a single scan. This should be treated as an upper bound because the atmospheric HCHO column can genuinely change between scans; conversely, the method cannot detect retrieval errors that persist throughout the day.",
         "We then squared this quantity to obtain the single-scan noise variance and divided by the number of valid scans contributing to each daily mean. Because the analysis uses within-site-month anomalies, we additionally scaled this variance by 1–1/n, where n is the number of days contributing to that site-month mean. Comparing the resulting noise variance with the observed variance of the within-month TEMPO anomalies gives the fraction of day-to-day variance attributable to retrieval noise. From that fraction we calculate the maximum correlation that would be expected if retrieval noise were the only source of disagreement, (r_{\\mathrm{ceiling}}=\\sqrt{1-\\text{noise fraction}}).",
-        "We applied this estimator to every 24 h site in the national analysis (Fig. S6). A site was included when it had at least 20 successive-scan pairs and 10 anomaly pairs. Of the 97 24 h sites with a site-level correlation (Table S2), 90 met these criteria and had a defined correlation ceiling. At two additional sites, the estimated noise variance exceeded the observed anomaly variance, making the ceiling undefined; these sites were excluded from the site-level ceiling summaries. We computed the same quantity from the uncertainties reported in the product at the Colorado sites, treating the block cells as fully correlated and as independent. Those bounds imply ceilings between 0 and 0.44 depending on the assumption, all below the 0.72 that the empirical estimate gives there, which is why the reported uncertainties are not taken at face value."
+        "We applied this estimator to every 24 h site in the national analysis (Fig. S6). A site was included when it had at least 20 successive-scan pairs and 10 anomaly pairs. Of the {{n:n_sites_24}} 24 h sites with a site-level correlation (Table S2), {{n:nat_sites_scored}} met these criteria and had a defined correlation ceiling. At two additional sites, the estimated noise variance exceeded the observed anomaly variance, making the ceiling undefined; these sites were excluded from the site-level ceiling summaries. We computed the same quantity from the uncertainties reported in the product at the Colorado sites, treating the block cells as fully correlated and as independent. Those bounds imply ceilings between 0 and 0.44 depending on the assumption, all below the 0.72 that the empirical estimate gives there, which is why the reported uncertainties are not taken at face value."
       ]
     },
     {
@@ -106,6 +106,12 @@ module.exports = {
       "p": [
         "Sect. 2.3.3 of the main text describes four analyses that ask why agreement differs between samples and sites; Sect. 3.6 reports them. This section gives the underlying tables. Table S7 lists the {{n:dd_sites_total}} monitors that report both 24 h and 8 h formaldehyde, with the within-month anomaly correlation at each duration, by 8 h block, and for the 24 h sample against the column restricted to each block's hours; Fig. S12 plots the paired values. Table S8 gives the weighted Fisher-z models of the observed site correlation and of the noise-corrected ratio E = r_{obs}/r_{ceiling} against the six site descriptors, and Fig. S13 the observed correlations against their ceilings and E against each descriptor. Table S9 gives the correlation by tertile of HRRR mixing depth, with the site-clustered bootstrap interval for the difference between the deepest and shallowest tertile, and the interaction coefficients. Table S10 gives the temporal-averaging curve of Fig. 4 by spatial block, with the single-scan noise implied by the variance of the column anomaly against 1/k.",
         "Two details of the mixing-depth analysis deserve mention. The tertiles defined relative to the site-month compare days on which the mixed layer was deeper or shallower than usual for that monitor and month, so that the contrast is not a contrast between climates. The competing-moderator model lets the column–surface slope vary with the number of valid scans (more averaging, less noise) and with the site-month column level (more signal); the mixing-depth interaction that survives that adjustment is what the main text reports as the adjusted value. For 24 h samples the mixing depth is a daily mean over a window that is half night, which is why its effect is weak and does not survive the adjustment."
+      ]
+    },
+    {
+      "h1": "S10. Agreement by season",
+      "p": [
+        "For comparison with {{@wang2022}}, who related seasonal mean OMI columns to surface HCHO at 45 AQS sites, we computed four seasonal summaries (step 22; Table S11, Fig. S14). The pooled correlation within each season uses every usable matched sample, with a site-clustered bootstrap interval (2000 replicates). The day-to-day correlation within each season uses the within-month anomalies of Sect. 2.3, grouped by the season of the month, with the within-site-month permutation p-value. The correlation across sites relates each 24 h site's mean column to its mean surface concentration in the season, for sites with at least {{n:seas_min_samples}} matched samples in that season, the threshold Wang et al. used. Finally, at the {{n:seas_amp_sites}} sites with at least {{n:seas_min_samples}} samples in every season, the seasonal amplitude of the column and of the surface concentration is the range of the four seasonal means divided by their mean. Seasons are those of the sampling date (DJF, MAM, JJA, SON). The 8 h samples come almost entirely from the summer ozone-precursor season ({{n:seas_n_8_jja}} of 3509 usable samples), so Table S11 lists them for completeness but they are not interpreted by season."
       ]
     },
     {
@@ -251,49 +257,8 @@ module.exports = {
     },
     {
       "table": {
-        "caption": "Table S2. Site-level correlations reaching nominal and false-discovery-rate significance, by sample duration. Counts are over site-duration combinations with at least 10 matched samples and six anomaly pairs, at the primary screening and with scans inside the sampling window. The Benjamini-Hochberg correction is applied across all 141 tests in each family. Whole-period counts use the ordinary correlation test; day-to-day counts use the within-site-month permutation test (Sect. S4), which is the stricter of the two - the ordinary test applied to the same anomalies would give 103 and 102 rather than 96 and 93. These counts are reported for completeness; the distribution of the correlations themselves is more informative, and no conclusion in the paper depends on a count.",
-        "header": [
-          "Duration",
-          "Sites",
-          "Whole period, p < 0.05",
-          "Whole period, BH q < 0.05",
-          "Day-to-day, p < 0.05",
-          "Day-to-day, BH q < 0.05"
-        ],
-        "rows": [
-          [
-            "24 h",
-            "97",
-            "85",
-            "84",
-            "61",
-            "58"
-          ],
-          [
-            "8 h",
-            "40",
-            "34",
-            "34",
-            "33",
-            "33"
-          ],
-          [
-            "3 h",
-            "4",
-            "3",
-            "3",
-            "2",
-            "2"
-          ],
-          [
-            "All",
-            "141",
-            "122",
-            "121",
-            "96",
-            "93"
-          ]
-        ]
+        "caption": "Table S2. Site-level correlations reaching nominal and false-discovery-rate significance, by sample duration. Counts are over site-duration combinations with at least 10 matched samples and 10 anomaly pairs, at the primary screening and with scans inside the sampling window. The Benjamini-Hochberg correction is applied across all site-duration tests in each family (the All row). Whole-period counts use the ordinary correlation test; day-to-day counts use the within-site-month permutation test (Sect. S4), which is the stricter of the two - the ordinary test applied to the same anomalies would give 103 and 102 rather than 96 and 93. These counts are reported for completeness; the distribution of the correlations themselves is more informative, and no conclusion in the paper depends on a count.",
+        "builder": "siteSignificance"
       },
       "p": []
     },
@@ -558,6 +523,13 @@ module.exports = {
       "p": []
     },
     {
+      "table": {
+        "caption": "Table S11. Agreement by season (Sect. S10). n and Sites are usable matched samples and monitors in the season (primary screening, scans inside the sampling window). Pooled r carries a site-clustered bootstrap 95% interval (2000 replicates). Day-to-day r is the within-month anomaly correlation, with the number of anomaly pairs and the within-site-month permutation p-value (the smallest attainable is 0.0005). Across sites r relates site-season mean column and surface concentration over 24 h sites with at least {{n:seas_min_samples}} matched samples in the season, with the number of sites and the ordinary p-value. The 8 h samples are almost all from summer and are not interpreted by season.",
+        "builder": "seasonal"
+      },
+      "p": []
+    },
+    {
       "fig": {
         "file": "fig0_site_map.png",
         "caption": "Figure S1. The Colorado sites: seven COATTS sites sampling 24 h integrated formaldehyde (circles) and two COOPs sites sampling 3 h integrated formaldehyde (triangles), over terrain and county boundaries. Inset: the 123 sites across the contiguous United States that reported formaldehyde to AQS in 2024–2025, colored by sample duration, with Colorado outlined. Elevation is from AWS terrain tiles; boundaries are US Census cartographic files."
@@ -645,6 +617,13 @@ module.exports = {
       "fig": {
         "file": "fig21_ceiling_gap.png",
         "caption": "Figure S13. (a) Observed within-month anomaly correlation at each of the {{n:gap_sites}} 24 h sites with a retrieval-noise ceiling, against that ceiling; the dashed line is equality and the dotted line half the ceiling. Color is the site's median surface HCHO. (b) The noise-corrected ratio E = r_{obs}/r_{ceiling} against the six site descriptors of Table S8, on their natural scales with unweighted linear fits for illustration; the Table S8 models are weighted and use the logarithms of surface HCHO, signal-to-noise ratio and scan count."
+      },
+      "p": []
+    },
+    {
+      "fig": {
+        "file": "fig24_seasonal.png",
+        "caption": "Figure S14. Agreement by season (Sect. S10). (a) Pooled (whole-period, with site-clustered 95% intervals) and day-to-day (within-month anomaly) correlation between surface HCHO and the TEMPO column for 24 h samples; labels give samples or anomaly pairs. (b) Site-season mean surface HCHO against site-season mean column for 24 h sites with at least {{n:seas_min_samples}} matched samples in the season, with the across-site correlation and number of sites; lines are least-squares fits."
       },
       "p": []
     }

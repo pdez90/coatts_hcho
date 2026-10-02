@@ -62,6 +62,38 @@ const builders = {
       widths: [1700, 900, 500, 550, 500, 550, 650, 650, 800, 800, 800, 750]
     };
   },
+  // Table S2: site-level significance counts (R/13 national_stats_by_site.csv)
+  siteSignificance() {
+    const rows = csv("national_stats_by_site.csv");
+    const lt = v => Number.isFinite(num(v)) && num(v) < 0.05;
+    const tot = [0, 0, 0, 0, 0], out = [];
+    for (const dc of ["24 h", "8 h", "3 h"]) {
+      const g = rows.filter(r => r.duration_class === dc);
+      const c = [g.length, g.filter(r => lt(r.pearson_p)).length, g.filter(r => lt(r.pearson_q)).length,
+                 g.filter(r => lt(r.anom_pearson_p_perm)).length, g.filter(r => lt(r.anom_pearson_q_perm)).length];
+      c.forEach((v, i) => { tot[i] += v; });
+      out.push([dc, ...c.map(String)]);
+    }
+    out.push(["All", ...tot.map(String)]);
+    return { header: ["Duration", "Sites", "Whole period, p < 0.05", "Whole period, BH q < 0.05",
+                      "Day-to-day, p < 0.05", "Day-to-day, BH q < 0.05"], rows: out,
+             widths: [1300, 1000, 1700, 1800, 1700, 1800] };
+  },
+  // Table S11: agreement by season (R/22)
+  seasonal() {
+    const s = csv("national_seasonal.csv"), sp = csv("national_seasonal_spatial.csv");
+    const name = { DJF: "winter (DJF)", MAM: "spring (MAM)", JJA: "summer (JJA)", SON: "autumn (SON)" };
+    const out = s.map(r => {
+      const pooled = Number.isFinite(num(r.pearson_r)) ? typo(`${f2(r.pearson_r)} (${f2(r.r_lo)}, ${f2(r.r_hi)})`) : "–";
+      const dd = Number.isFinite(num(r.anom_pearson_r)) ? typo(`${f2(r.anom_pearson_r)} (${f0(r.anom_n)}), ${pfmt(r.anom_pearson_p_perm)}`) : "–";
+      const x = r.duration_class === "24 h" ? sp.find(q => q.season === r.season) : null;
+      const across = x && Number.isFinite(num(x.spatial_r)) ? typo(`${f2(x.spatial_r)} (${f0(x.n_sites)}), ${pfmt(x.spatial_p)}`) : "–";
+      return [r.duration_class, name[r.season] || r.season, f0(r.n), f0(r.n_sites), pooled, dd, across];
+    });
+    return { header: ["Samples", "Season", "n", "Sites", "Pooled r (95% CI)", "Day-to-day r (pairs), p",
+                      "Across sites r (sites), p"], rows: out,
+             widths: [900, 1400, 900, 800, 1900, 2100, 1900] };
+  },
   // Table S3: HRRR against the meteorology supplied with TEMPO (R/19). The
   // all-arms rows count each sample once (step 19 de-duplicates the Colorado
   // sites that are also in the national arm).

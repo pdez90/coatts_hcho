@@ -61,6 +61,10 @@ CFG <- list(
                                    "BM", "BR", "EC", "MB", "SC", "SV", "TS", "XX"),
   coatts_exclude_flags = character(),
   min_days_per_site_month = 3L,     # for the within-month (deseasonalised) analysis
+  # A site-level correlation (by-site tables, Table 1 site medians, the noise
+  # ceiling, the step-20 diagnostics) needs at least this many within-month
+  # anomaly pairs. One value for every step.
+  min_anom_pairs_site = 10L,
 
   # CDPHE Air Toxics & Ozone Precursor Data Repository
   coatts_repo_url = "https://www.colorado.gov/airquality/air_toxics_repo.aspx",

@@ -70,7 +70,7 @@ for (f in c(primary_path, samples_path, cells_path, man_path, noise_path, bysite
   if (!file.exists(f)) stop("Missing ", f, " - run steps 11-13 and 17 first.")
 }
 
-MIN_ANOM_PAIRS <- 10L    # anomaly pairs for a site-level correlation (as in step 17; step 13 reports sites from six)
+MIN_ANOM_PAIRS <- CFG$min_anom_pairs_site   # anomaly pairs for a site-level correlation (00_config.R; same in steps 13, 17)
 NBOOT          <- 2000L
 KMIN           <- 4L     # valid scans a 24 h sample needs to enter the temporal-averaging draw
 NDRAW          <- 200L   # random draws per (block, k)

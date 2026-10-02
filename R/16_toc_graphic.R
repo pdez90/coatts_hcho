@@ -38,11 +38,9 @@ TOC_H <- 1.75
 # showed. The 24 h arm is the one the abstract summarises, so the graphic shows
 # exactly that and nothing is chosen implicitly.
 #
-# The site threshold is n >= 10 MATCHED SAMPLES, which is the rule behind the
-# site set the manuscript quotes - not anom_n >= 10. The two differ: Medford,
-# Oregon has 14 matched samples but only 8 within-month anomalies, and it holds
-# the maximum correlation of 0.89, so screening on anom_n quietly removed the
-# top of the range the abstract reports.
+# Step 13 already restricts national_stats_by_site.csv to sites with >= 10
+# matched samples and >= CFG$min_anom_pairs_site anomaly pairs, which is the
+# site set the manuscript quotes; the filters below only pick the 24 h rows.
 stats <- read_tbl(file.path(P$tables, "national_stats_by_site.csv")) |>
   dplyr::mutate(dplyr::across(c(lat, lon, anom_n, anom_pearson_r), as.numeric)) |>
   dplyr::filter(duration_class == "24 h",
@@ -60,7 +58,9 @@ log_msg("TOC graphic: ", nrow(stats), " monitors sampling 24 h; day-to-day r fro
 # The manuscript quotes these three numbers for the 24 h arm. The label below is
 # generated from the data, so graphic and caption cannot drift apart; this check
 # catches the other case - the DATA moving, leaving the manuscript text stale.
-QUOTED <- c(min = -0.24, max = 0.89, med = 0.48)
+qk <- read_tbl(file.path(P$tables, "manuscript_numbers_13_sites.csv"))
+qv <- function(k) as.numeric(qk$value[qk$key == k][1])
+QUOTED <- c(min = qv("site_dd_min_24"), max = qv("site_dd_max_24"), med = qv("site_dd_median_24"))
 drift <- c(abs(r_min - QUOTED[["min"]]), abs(r_max - QUOTED[["max"]]),
            abs(r_med - QUOTED[["med"]]))
 if (any(drift > 0.005)) {
