@@ -33,7 +33,8 @@ function csv(name) {
 const num = v => (v === "" || v === "NA" || v === undefined) ? NaN : Number(v);
 const f0 = v => Number.isFinite(num(v)) ? num(v).toFixed(0) : "–";
 // two decimals, but never "-0.00" (three decimals then), matching r2() in R/20
-const f2 = v => { if (!Number.isFinite(num(v))) return "–"; const s = num(v).toFixed(2); return s === "-0.00" ? num(v).toFixed(3) : s; };
+// a non-zero value that rounds to 0.00 keeps a third decimal, as the R keys do
+const f2 = v => { if (!Number.isFinite(num(v))) return "–"; const s = num(v).toFixed(2); return (s === "-0.00" || s === "0.00") && num(v) !== 0 ? num(v).toFixed(3) : s; };
 // a median of counts can be x.5: show it, rather than rounding half up
 const fh = v => Number.isFinite(num(v)) ? (Number.isInteger(num(v)) ? String(num(v)) : num(v).toFixed(1)) : "–";
 const pfmt = v => Number.isFinite(num(v)) ? (num(v) < 0.001 ? "p < 0.001" : `p = ${num(v).toFixed(3)}`) : "–";   // as the R keys (ptxt, pkey)
