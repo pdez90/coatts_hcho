@@ -149,17 +149,23 @@ ui <- page_navbar(
             checkboxInput("tox_log", "Logarithmic axis", FALSE),
             checkboxInput("tox_cmp", "Compare with the other Colorado sites", TRUE)))
       ),
-      layout_columns(col_widths = breakpoints(sm = 12, xl = c(5, 7)),
+      # the map spans the full width, with the site panel below it
+      layout_columns(col_widths = 12,
         card(full_screen = TRUE,
-             card_header(class = "d-flex justify-content-between align-items-center",
-                         "Monitors: click one to select it",
-                         actionLink("zoom_co", "Zoom to Colorado")),
-             leafletOutput("map", height = 620),
+             card_header(class = "d-flex flex-wrap justify-content-between align-items-center gap-2",
+                         span("Monitors: click one to select it. Scroll or use + / \u2212 to zoom."),
+                         div(class = "d-flex gap-3",
+                             span(class = "text-muted", "Zoom to:"),
+                             actionLink("zoom_us", "Whole US"),
+                             actionLink("zoom_co", "Colorado"),
+                             actionLink("zoom_site", "Selected site"))),
+             leafletOutput("map", height = 560),
              card_footer(class = "small text-muted",
                          "Colour: day-to-day correlation with TEMPO of each site's longest-duration record ",
                          "(sampling window), for the smoke and season filters at left. Grey: fewer than 10 ",
                          "within-month anomaly pairs. Black outline: Colorado sites with CDPHE air-toxics data. ",
-                         "Background layers are in the control at the top right of the map.")),
+                         "Background layers are in the control at the top right of the map; the expand ",
+                         "icon at the bottom right of this card shows the map full screen.")),
         navset_card_tab(id = "tab", full_screen = TRUE,
           nav_panel("TEMPO vs surface HCHO", value = "tempo",
             uiOutput("tempo_boxes"),
@@ -227,9 +233,10 @@ server <- function(input, output, session) {
       hideGroup(setdiff(base, base[1])) |>
       fitBounds(-124.5, 24.5, -67, 49.5)
   })
+  clicked <- reactiveVal(NULL)   # the site last chosen by clicking its marker
   observeEvent(input$map_marker_click, {
     id <- input$map_marker_click$id
-    if (!is.null(id) && id %in% SITES$site_id) updateSelectInput(session, "site", selected = id)
+    if (!is.null(id) && id %in% SITES$site_id) { clicked(id); updateSelectInput(session, "site", selected = id) }
   })
   # markers re-coloured when the smoke or season filter changes (same layerIds,
   # so each marker and the legend are replaced, not duplicated)
@@ -249,6 +256,19 @@ server <- function(input, output, session) {
                        weight = 3, opacity = 1, group = "selected", layerId = "selected_ring")
   })
   observeEvent(input$zoom_co, leafletProxy("map") |> fitBounds(-109.1, 36.9, -102.0, 41.1))
+  observeEvent(input$zoom_us, leafletProxy("map") |> fitBounds(-124.5, 24.5, -67, 49.5))
+  zoom_to_site <- function() {
+    s <- site()
+    leafletProxy("map") |> flyTo(s$lon, s$lat, zoom = max(input$map_zoom %or% 0, 9))
+  }
+  observeEvent(input$zoom_site, zoom_to_site())
+  # a site chosen from the drop-down list is brought into view; one chosen by
+  # clicking its marker is already in view, so the map stays where it is
+  observeEvent(input$site, {
+    req(map_ready())
+    if (!identical(input$site, clicked())) zoom_to_site()
+    clicked(NULL)
+  }, ignoreInit = TRUE)
 
   # ---- TEMPO controls: data set, duration and lag available at this site
   arms_here <- reactive({
