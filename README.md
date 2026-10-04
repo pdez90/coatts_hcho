@@ -155,6 +155,7 @@ Colorado samples. To get a key, run
 | 21 | `R/21_manuscript_tables.R` | Table 1 of the manuscript, cell by cell, from the step-13 outputs, so the document renders a CSV rather than a transcription. The supplement's Tables S2-S4 and S8-S11 are rendered from the CSVs of steps 13, 19, 22 and 20 directly by `manuscript/src/tables_amt.js` | `output/tables/manuscript_table1.csv` |
 | 22 | `R/22_seasonal_analysis.R` | Agreement by season nationally (main Sect. 3.1; supplement Table S4, Fig. S5): pooled and day-to-day correlation by season (24 h, 8 h), the spatial correlation of site-season means (>= 6 samples per site-season, as in Wang et al. 2022) and the column-to-surface seasonal amplitude | `output/tables/national_seasonal*.csv`, `manuscript_numbers_22.csv`, `fig24_seasonal.png` |
 | 23 | `R/23_export_dataset.R` | The matched dataset for release: every surface sample of the three arms matched to its TEMPO columns under each screening variant and lag, with HRRR meteorology and HMS smoke flags, in one schema; values are copied as text from steps 04, 07, 08 and 13, and the row counts of the primary variant are checked against those steps' own files | `dataset/matched_primary.csv.gz`, `dataset/matched_all_variants.csv.gz`, `dataset/data_dictionary.csv`, `dataset/README.md` |
+| 24 | `R/24_app_data.R` | Data for the Shiny explorer in `app/`: the released matched dataset, every air toxic in the CDPHE COATTS and COOPs packets (screened as step 01 screens formaldehyde), the site list, and `app/manifest.json` for Posit Connect Cloud; stops unless `app/R/stats.R` reproduces every site correlation of step 13 | `app/appdata/app_data.rds`, `app/manifest.json` |
 
 Step 12 is the long one. `aqs_arm_durations` names all three duration sets, so
 it covers every national site. Two different numbers describe its size and they
@@ -173,7 +174,7 @@ by step 3, so run step 3 at least once first.
 12 (national TEMPO) → 13 (national analysis) → 17 (national noise ceiling and
 time of day) → 15 (observability bias) → 16 (TOC graphic) → 19 (HRRR against
 TEMPO meteorology) → 20 (agreement diagnostics) → 21 (Table 1) → 22 (agreement
-by season) → 23 (release dataset) → 14 (site map, last, so a missing map
+by season) → 23 (release dataset) → 24 (app data) → 14 (site map, last, so a missing map
 package cannot stop the analysis);
 step 18 (HRRR meteorology) runs before each arm's matching. Every arm reads AQS,
 so `run_all.R` stops at once if AQS credentials are absent.
@@ -186,7 +187,7 @@ invocation: each step is gated on its input being produced earlier in that run,
 not on a file that happened to exist at startup. Leave the flag off and
 the Colorado case study, its diagnostics, the HRRR meteorology and the AQS
 inventory and sample pull still run end to end; the national analysis (steps 13,
-15-17 and 20-23) needs the national TEMPO extraction.
+15-17 and 20-24) needs the national TEMPO extraction.
 Turn parts off with `run_three_hour_arm`, `run_smoke_flags`, `run_diagnostics`,
 `run_aqs_inventory`, `run_aqs_samples` and `run_aqs_tempo` in `R/00_config.R`. Every arm needs an
 AQS API key (`AQS_EMAIL`, `AQS_KEY` in `~/.Renviron`); without one `run_all.R`
@@ -207,6 +208,15 @@ screening (the main analyses use its `lag_h` = 0 rows with `usable` = TRUE);
 `matched_all_variants.csv.gz` adds every cloud-fraction threshold, block size and
 lag; `data_dictionary.csv` defines every column. Step 23 writes the folder and
 `data/` stays untracked, so the dataset is versioned with the code that made it.
+
+## Interactive app
+
+`app/` is a Shiny app for exploring the results monitor by monitor: a map of every
+site coloured by its day-to-day agreement with TEMPO; for the selected site, the
+surface and TEMPO time series, whole-period and day-to-day scatter plots by data
+set, duration, lag, smoke and season; and, at the nine Colorado sites, every air
+toxic in the CDPHE packets. Step 24 builds its data; `app/README.md` describes how
+to test it (`Rscript app/tests/test_app.R`) and deploy it to Posit Connect Cloud.
 
 ## Settings
 
