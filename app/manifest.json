@@ -2299,19 +2299,22 @@
   },
   "files": {
     "app.R": {
-      "checksum": "cd9366d0d7f7495891da3ec12984abbe"
+      "checksum": "6370ec3ce842e64142fd156e5bb62eb8"
     },
     "appdata/app_data.rds": {
-      "checksum": "8341412094e295e91e8f79d173c6ce00"
+      "checksum": "25255d615ec47b2276491fdeee3674b1"
+    },
+    "R/sensitivity.R": {
+      "checksum": "1df7942064e888560995bbcf13483a9a"
     },
     "R/stats.R": {
-      "checksum": "22fbf3b51e3e2c3382f437f4866153ec"
+      "checksum": "4f7885a081abd4b1da37874d2afa4c51"
     },
     "README.md": {
-      "checksum": "21aab7c63a748caaed4fca25dfc8e180"
+      "checksum": "fe7cde92cab3c8da5e56223872b2a3da"
     },
     "tests/test_app.R": {
-      "checksum": "e67100e972a55e5f9fc650ef8628a7f9"
+      "checksum": "6f1c1e04056287bf193a22bec7176a27"
     }
   },
   "users": null

@@ -7,6 +7,11 @@
 #   tempo   the released matched dataset (dataset/matched_primary.csv.gz, step
 #           23): surface HCHO, the TEMPO column, HRRR and smoke flags, every arm
 #           and lag of the primary screening
+#   screen  the other TEMPO screening variants of the released data (pixel
+#           block, cloud-fraction limit, Colorado midday scans), from
+#           dataset/matched_all_variants.csv.gz
+#   sens_nat agreement across configurations at every site-duration of the
+#           national comparison, from app/R/sensitivity.R (the app's own code)
 #   toxics  every air toxic in the CDPHE COATTS and COOPs annual packets that
 #           step 01 downloads (carbonyls, VOCs, PAHs, metals; SNMOC and methane at
 #           the ozone-precursor sites), screened as step 01 screens formaldehyde
@@ -17,18 +22,23 @@
 #   * app/R/stats.R, which the app uses, reproduces n, r, anomaly pairs and the
 #     anomaly r of every site in output/tables/national_stats_by_site.csv;
 #   * the CDPHE code -> AQS ID crosswalk matches R/01_coatts.R and
-#     R/06_threeh_samples.R.
+#     R/06_threeh_samples.R;
+#   * the primary rows of matched_all_variants.csv.gz are matched_primary.csv.gz;
+#   * ntile3() in app/R/sensitivity.R equals dplyr::ntile(), and the unchanged
+#     configuration of sens_nat reproduces national_stats_by_site.csv.
 # Packet formaldehyde is compared with the AQS values the paper uses and the
 # agreement is logged (the packets are not used for any result in the paper).
 #
 # The .rds holds no time stamp, so an unchanged input gives an identical file.
-# Inputs : dataset/matched_primary.csv.gz (step 23), data/raw/coatts/*.xlsx
+# Inputs : dataset/matched_primary.csv.gz and matched_all_variants.csv.gz
+#          (step 23), data/raw/coatts/*.xlsx
 #          (step 01), output/tables/national_stats_by_site.csv (step 13)
 # Outputs: app/appdata/app_data.rds, app/manifest.json
 # =============================================================================
 source("R/00_config.R")
 source("R/helpers_basemap.R")   # Census boundaries, cached in data/raw/basemap
 source("app/R/stats.R")
+source("app/R/sensitivity.R")   # agreement across configurations, as the app computes it
 
 APP <- "app"
 OUT <- file.path(APP, "appdata")   # not "data/": .gitignore excludes every data/ folder
@@ -99,6 +109,70 @@ bad <- with(chk, n != n_ref | n_anom != n_anom_ref | abs(r - r_ref) > 1e-6 | abs
 check(nrow(chk) == nrow(ref) & !is.na(bad) & !bad,
       sum(bad | is.na(bad)), " of ", nrow(ref), " site-durations differ from national_stats_by_site.csv")
 log_msg("app/R/stats.R reproduces all ", nrow(chk), " site-duration correlations of step 13")
+
+# ---- 1b. screening variants -----------------------------------------------------------
+# The app compares the primary TEMPO screening with the other pixel blocks and
+# cloud-fraction limits of the released data (and the Colorado midday-scan variant).
+av_path <- file.path("dataset", "matched_all_variants.csv.gz")
+if (!file.exists(av_path)) stop("Missing ", av_path, " - run step 23 first.")
+check(n_distinct(mp$max_ecf) == 1 & n_distinct(mp$block) == 1 & n_distinct(mp$scan_window) == 1,
+      ds_path, " holds more than one screening")
+check(abs(as.numeric(mp$max_ecf[1]) - PRIMARY_SCREEN$max_ecf) < 1e-9 & mp$block[1] == PRIMARY_SCREEN$block &
+        mp$scan_window[1] == PRIMARY_SCREEN$scan_window,
+      "PRIMARY_SCREEN in app/R/sensitivity.R is not the screening of ", ds_path)
+av <- read_tbl(av_path, colClasses = list(character = c("site_id", "start_utc", "sample_date_local", "smoke_class",
+                                                        "arm", "block", "scan_window"))) |>
+  transmute(arm, site_id, duration_h = as.integer(duration_h), lag_h = as.integer(lag_h),
+            start_utc = as.POSIXct(start_utc, format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+            date = as.Date(sample_date_local), season = as.character(season_of(date)),
+            hcho = hcho_ugm3, column = tempo_vc / 1e15, usable = as.logical(usable),
+            smoke = if_else(is.na(smoke_class) | smoke_class == "", NA_character_, smoke_class),
+            max_ecf = as.numeric(max_ecf), block, scan_window_raw = scan_window,
+            scan_window = if_else(grepl("^midday", scan_window), "midday", scan_window))
+check(av$scan_window %in% c("sampling window", "midday"), "Unexpected scan_window in ", av_path, ": ",
+      paste(unique(av$scan_window_raw[!av$scan_window %in% c("sampling window", "midday")]), collapse = ", "))
+is_prim <- abs(av$max_ecf - PRIMARY_SCREEN$max_ecf) < 1e-9 & av$block == PRIMARY_SCREEN$block &
+  av$scan_window == PRIMARY_SCREEN$scan_window
+vkey <- function(d) paste(d$arm, d$site_id, d$duration_h, d$lag_h, format(d$start_utc, "%Y-%m-%dT%H:%M", tz = "UTC"))
+check(!anyDuplicated(vkey(tempo)), "Duplicate samples in ", ds_path)
+pv <- av[is_prim, ]; m <- match(vkey(tempo), vkey(pv))
+check(nrow(pv) == nrow(tempo) & !is.na(m), "The primary rows of ", av_path, " are not the samples of ", ds_path)
+check(identical(pv$usable[m], tempo$usable) & isTRUE(all.equal(pv$column[m], tempo$column)) &
+        isTRUE(all.equal(pv$hcho[m], tempo$hcho)), "The primary rows of ", av_path, " differ from ", ds_path)
+screen <- as.data.frame(av[!is_prim, c("arm", "site_id", "duration_h", "lag_h", "date", "season", "smoke",
+                                       "hcho", "column", "usable", "max_ecf", "block", "scan_window")])
+log_msg("Screening variants: ", nrow(screen), " rows besides the primary (",
+        paste(sort(unique(sprintf("%s ecf %.1f %s", screen$block, screen$max_ecf, screen$scan_window))), collapse = "; "),
+        "); the primary rows of ", basename(av_path), " equal ", basename(ds_path))
+
+# ---- 1c. agreement across configurations, every national site --------------------------
+for (x in list(nat0$n_valid, nat0$hrrr_pbl_km, c(3, 1, NA, 2, 2, 5, 1), c(2, 1), numeric()))
+  check(identical(ntile3(x), as.integer(dplyr::ntile(x, 3L))), "ntile3() in app/R/sensitivity.R differs from dplyr::ntile()")
+nat_rows <- as.data.frame(tempo[tempo$arm == "national", ])
+nat_scr  <- screen[screen$arm == "national", ]
+sens_nat <- map2(ref$site, ref$duration_class, function(s, dc) {
+  dur <- as.integer(sub(" h$", "", dc))
+  cbind(data.frame(site_id = s, duration_h = dur, stringsAsFactors = FALSE),
+        sensitivity_site(nat_rows[nat_rows$site_id == s, ], "national", dur, 0L,
+                         screen = nat_scr[nat_scr$site_id == s, ], with_duration = FALSE))
+}) |> list_rbind() |> as.data.frame()
+cc <- merge(sens_nat[sens_nat$key == "current", ],
+            transform(chk, site_id = site, duration_h = as.integer(sub(" h$", "", duration_class))),
+            by = c("site_id", "duration_h"))
+ok <- with(cc, n.x == n_ref & n_anom.x == n_anom_ref & abs(r.x - r_ref) < 1e-6 & abs(r_anom.x - r_anom_ref) < 1e-6)
+check(nrow(cc) == nrow(chk) & !is.na(ok) & ok,
+      "The unchanged configuration of sens_nat does not reproduce national_stats_by_site.csv")
+log_msg("Agreement across configurations: ", nrow(sens_nat), " rows for ", nrow(chk),
+        " national site-durations; the unchanged configuration reproduces the site table")
+sens_summary <- sens_nat |>
+  group_by(duration_h, dim, key, ord) |>
+  summarise(sites = sum(n_anom >= MIN_REPORT & !is.na(r_anom)),
+            median_r = round(median(r[n >= MIN_REPORT], na.rm = TRUE), 2),
+            median_r_anom = round(median(r_anom[n_anom >= MIN_REPORT], na.rm = TRUE), 2), .groups = "drop") |>
+  arrange(desc(duration_h), match(dim, DIM_ORDER), ord) |>
+  mutate(dim = substr(dim, 1, 40)) |> select(-ord)
+log_msg("Median site correlations by configuration (sites with >= ", MIN_REPORT, " anomaly pairs):")
+print(as.data.frame(sens_summary), right = FALSE, row.names = FALSE)
 
 # ---- 2. sites ---------------------------------------------------------------------
 first_nonempty <- function(x) { x <- x[!is.na(x) & nzchar(x)]; if (length(x)) x[1] else NA_character_ }
@@ -277,6 +351,7 @@ log_msg("Map background: ", sum(is.na(geo$states$lng)), " state rings, ",
 md5 <- function(f) unname(tools::md5sum(f))
 meta <- list(
   dataset = list(file = ds_path, md5 = md5(ds_path)),
+  variants = list(file = av_path, md5 = md5(av_path)),
   packets = tibble(file = basename(packets), md5 = vapply(packets, md5, character(1), USE.NAMES = FALSE)),
   date_range = format(CFG$date_range),
   screening = sprintf("effective cloud fraction <= %.1f, 3 x 3 block, scans in the sampling window",
@@ -284,10 +359,12 @@ meta <- list(
   repo = "https://github.com/pdez90/coatts_hcho"
 )
 tempo <- as.data.frame(tempo); toxics <- as.data.frame(toxics); sites <- as.data.frame(sites)
-saveRDS(list(sites = sites, tempo = tempo, toxics = toxics, meta = meta, geo = geo),
+saveRDS(list(sites = sites, tempo = tempo, screen = screen, sens_nat = sens_nat, toxics = toxics,
+             meta = meta, geo = geo),
         file.path(OUT, "app_data.rds"), compress = "xz")
 log_msg("Wrote ", file.path(OUT, "app_data.rds"), " (", round(file.size(file.path(OUT, "app_data.rds")) / 1e6, 1),
-        " MB): ", nrow(sites), " sites, ", nrow(tempo), " matched rows, ", nrow(toxics), " air-toxics values")
+        " MB): ", nrow(sites), " sites, ", nrow(tempo), " matched rows, ", nrow(screen), " variant rows, ",
+        nrow(sens_nat), " configuration rows, ", nrow(toxics), " air-toxics values")
 
 # manifest.json for Posit Connect Cloud, which installs the packages it lists
 if (requireNamespace("rsconnect", quietly = TRUE)) {

@@ -11,17 +11,19 @@ MIN_REPORT         <- 10L  # CFG$min_anom_pairs_site, and >= 10 matched samples
 # Within-month anomalies: the mean of each calendar month of each year is
 # removed from both series, in months holding at least MIN_PER_SITE_MONTH
 # samples. Call it on the samples of ONE site (and one duration and lag).
+# Column i is the position of each anomaly in the input vectors.
 month_anomalies <- function(date, surface, column, min_n = MIN_PER_SITE_MONTH) {
   if (!length(date)) {
     return(data.frame(date = as.Date(character()), ym = character(),
-                      surface_anom = numeric(), column_anom = numeric()))
+                      surface_anom = numeric(), column_anom = numeric(), i = integer()))
   }
   ym   <- format(date, "%Y-%m")
   n_ym <- stats::ave(seq_along(ym), ym, FUN = length)
   k    <- n_ym >= min_n
   data.frame(date = date[k], ym = ym[k],
              surface_anom = surface[k] - stats::ave(surface[k], ym[k]),
-             column_anom  = column[k]  - stats::ave(column[k],  ym[k]))
+             column_anom  = column[k]  - stats::ave(column[k],  ym[k]),
+             i = which(k))
 }
 
 # Whole-period and within-month (day-to-day) Pearson correlations between
@@ -32,6 +34,7 @@ pair_stats <- function(date, surface, column) {
   n  <- length(surface)
   r  <- if (n >= 3) stats::cor(surface, column) else NA_real_
   an <- month_anomalies(date, surface, column)
+  an$i <- which(ok)[an$i]   # positions in the vectors passed to pair_stats()
   n_a <- nrow(an)
   r_a <- if (n_a >= 3) stats::cor(an$surface_anom, an$column_anom) else NA_real_
   list(n = n, r = r, n_anom = n_a, r_anom = r_a, anom = an)

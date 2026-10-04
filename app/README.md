@@ -15,6 +15,12 @@ Colorado sites.
   * The tab shows a time series, the whole-period and day-to-day scatter plots
     with their correlations, and surface HCHO on observable versus
     screened-out days.
+* **How agreement varies.** For the selected site, the whole-period and
+  day-to-day correlations with one thing changed at a time: smoke, season, TEMPO
+  window, sample duration, pixel block, cloud-fraction limit, and thirds of the
+  samples by boundary-layer height (HRRR and TEMPO), temperature and valid
+  scans. A second panel shows the same across every national site (median and
+  interquartile range), for the monitoring networks checked at left.
 * **Air toxics (Colorado sites).**
   * Every carbonyl, VOC, PAH and metal at the COATTS sites, and carbonyls,
     SNMOC and methane at the COOPs ozone-precursor sites.
