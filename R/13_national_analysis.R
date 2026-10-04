@@ -496,7 +496,7 @@ if (length(big_states)) {
     geom_vline(xintercept = 0, colour = "grey70") +
     geom_point(aes(size = anom_n), alpha = 0.55, colour = "#1f78b4") +
     geom_point(aes(x = anom_r), shape = 124, size = 5, colour = "#b2182b") +
-    scale_size_continuous(range = c(1.2, 4), name = "n") +
+    scale_size_continuous(range = c(1.2, 4), name = "anomaly\npairs") +
     labs(x = "Day-to-day correlation (within-month anomalies)", y = NULL,
          title = "Most variation in day-to-day agreement lies within states, not between them",
          subtitle = sprintf(paste("Each point a 24 h monitor; red bar the state's pooled day-to-day correlation.",
@@ -658,14 +658,16 @@ if (file.exists(sm_path)) {
         facet_wrap(~ duration_class) +
         labs(x = "HMS smoke class over the site, sampling window \u00b1 3 h",
              y = "Pearson r, surface HCHO vs TEMPO column",
-             title = "Agreement by smoke class; 24 h and 8 h rise with smoke (3 h: too few smoke samples)",
-             subtitle = "Labels are matched samples; the 3 h medium/heavy class has too few to interpret")
+             title = "Agreement by smoke class; 24 h and 8 h rise with smoke",
+             subtitle = "Labels are matched samples; the 3 h record has too few smoke samples to interpret")
       ggsave(file.path(P$figures, "fig17_national_smoke.png"), p_smoke, width = 8, height = 3.8, dpi = 300)
       log_msg("  figure: fig17_national_smoke.png")
 
       # Numbers the smoke paragraphs quote, by name.
       g <- function(dc, sc, col) nat_smoke[[col]][nat_smoke$duration_class == dc & nat_smoke$smoke_class == sc]
       dd <- function(dc, sub) nat_smoke_sens$pearson_r[nat_smoke_sens$duration_class == dc & nat_smoke_sens$subset == sub]
+      # share of usable 24 h samples that are smoke-affected, by season (Sect. 3.3)
+      sp <- function(s) sprintf("%.0f", 100 * mean(su$smoke_any[su$duration_class == "24 h" & su$season == s] %in% TRUE))
       data.table::fwrite(
         tibble(key = c("smoke_n_flagged", "smoke_n_affected",
                        "smoke_r_24_none", "smoke_r_24_light", "smoke_r_24_heavy",
@@ -673,7 +675,8 @@ if (file.exists(sm_path)) {
                        "smoke_dd_24_all", "smoke_dd_24_nosmoke", "smoke_dd_8_all", "smoke_dd_8_nosmoke",
                        "smoke_col_24_none", "smoke_col_24_light", "smoke_col_24_heavy",
                        "smoke_col_8_none", "smoke_col_8_light", "smoke_col_8_heavy",
-                       "smoke_n_3_none", "smoke_n_3_light", "smoke_n_3_heavy"),
+                       "smoke_n_3_none", "smoke_n_3_light", "smoke_n_3_heavy",
+                       "smoke_pct_24_djf", "smoke_pct_24_jja"),
                value = c(nrow(su), sum(su$smoke_any %in% TRUE),
                          sprintf("%.2f", g("24 h", "none", "pearson_r")), sprintf("%.2f", g("24 h", "light", "pearson_r")), sprintf("%.2f", g("24 h", "medium/heavy", "pearson_r")),
                          sprintf("%.2f", g("8 h", "none", "pearson_r")),  sprintf("%.2f", g("8 h", "light", "pearson_r")),  sprintf("%.2f", g("8 h", "medium/heavy", "pearson_r")),
@@ -683,7 +686,8 @@ if (file.exists(sm_path)) {
                          sprintf("%.2f", g("24 h", "medium/heavy", "median_tempo_1e15")),
                          sprintf("%.2f", g("8 h", "none", "median_tempo_1e15")), sprintf("%.2f", g("8 h", "light", "median_tempo_1e15")),
                          sprintf("%.2f", g("8 h", "medium/heavy", "median_tempo_1e15")),
-                         g("3 h", "none", "n"), g("3 h", "light", "n"), g("3 h", "medium/heavy", "n")),
+                         g("3 h", "none", "n"), g("3 h", "light", "n"), g("3 h", "medium/heavy", "n"),
+                         sp("DJF"), sp("JJA")),
                source = "R/13_national_analysis.R"),
         file.path(P$tables, "manuscript_numbers_13_smoke.csv"))
       print(nat_smoke_sens |> select(any_of(c("duration_class", "subset", "n", "site_months",
@@ -698,6 +702,9 @@ if (file.exists(sm_path)) {
 
 sens0 <- filter(sens, lag_h == 0)
 if (nrow(sens0)) {
+  # panels in the order of Table 1, not alphabetical
+  sens0 <- mutate(sens0, duration_class = factor(duration_class,
+                  levels = intersect(c("24 h", "8 h", "3 h", "1 h"), unique(duration_class))))
   p_sens <- ggplot(sens0, aes(max_ecf, spearman_rho, colour = block_label)) +
     geom_line(linewidth = 0.7) +
     geom_point(aes(size = n)) +
@@ -722,11 +729,18 @@ lag_curve <- by_duration_lag |>
   pivot_longer(c(whole, anomalies), names_to = "kind", values_to = "r") |>
   mutate(n_lab = if_else(kind == "whole", n, anom_n))
 if (nrow(lag_curve)) {
+  # label the higher series above its point and the lower one below, so the
+  # two labels at one lag never overprint
+  lag_curve <- lag_curve |> group_by(duration_class, lag_h) |>
+    mutate(lab_vjust = if_else(coalesce(r == max(r, na.rm = TRUE), FALSE), -1, 1.9)) |> ungroup()
   p11 <- ggplot(lag_curve, aes(lag_h, r, colour = kind, shape = kind)) +
     geom_hline(yintercept = 0, colour = "grey70") +
     geom_vline(xintercept = 0, linetype = 2, colour = "grey60") +
     geom_line(linewidth = 0.7) + geom_point(size = 2.4) +
-    geom_text(aes(label = n_lab), vjust = -1, size = 2.8, show.legend = FALSE) +
+    # whole-period labels below their points, anomaly labels above, so equal
+    # counts (e.g. the 3 h series at -3 h) do not print on top of each other
+    geom_text(aes(label = n_lab, vjust = lab_vjust), size = 2.8, show.legend = FALSE) +
+    scale_x_continuous(breaks = sort(unique(lag_curve$lag_h))) +
     scale_y_continuous(expand = expansion(mult = c(0.08, 0.16))) +
     facet_wrap(~ duration_class) +
     labs(x = "Lag of the TEMPO window from the sampling window (h)",
@@ -747,10 +761,16 @@ if (nrow(by_hour)) {
   ph <- bind_rows(
     by_hour |> transmute(duration_class, window_start_hour, n, r = pearson_r, kind = "whole"),
     by_hour |> transmute(duration_class, window_start_hour, n = anom_n, r = anom_pearson_r, kind = "anomalies"))
+  # In the 3 h panel the 06:00 point is the two Colorado sites and the others
+  # the two California sites, so the line does not join them.
+  ph <- mutate(ph, line_grp = paste(kind, if_else(duration_class == "3 h" & window_start_hour == 6,
+                                                  "Colorado", "other")))
+  ph <- ph |> group_by(duration_class, window_start_hour) |>
+    mutate(lab_vjust = if_else(coalesce(r == max(r, na.rm = TRUE), FALSE), -1, 1.9)) |> ungroup()
   p12 <- ggplot(ph, aes(window_start_hour, r, colour = kind, shape = kind)) +
     geom_hline(yintercept = 0, colour = "grey70") +
-    geom_line(linewidth = 0.7) + geom_point(size = 2.6) +
-    geom_text(aes(label = n), vjust = -1, size = 2.8, show.legend = FALSE) +
+    geom_line(aes(group = line_grp), linewidth = 0.7) + geom_point(size = 2.6) +
+    geom_text(aes(label = n, vjust = lab_vjust), size = 2.8, show.legend = FALSE) +
     scale_x_continuous(breaks = seq(0, 21, 4)) +
     scale_y_continuous(expand = expansion(mult = c(0.08, 0.16))) +
     facet_wrap(~ duration_class) +
@@ -780,7 +800,7 @@ if (nrow(by_site) && "anom_pearson_r" %in% names(by_site) && any(!is.na(by_site$
                            limits = c(-0.8, 0.8), oob = scales::squish) +
     scale_size_continuous(range = c(1.5, 5)) +
     facet_wrap(~ duration_class, ncol = 1) +
-    labs(x = "Longitude", y = "Latitude", colour = "Day-to-day r", size = "n",
+    labs(x = "Longitude", y = "Latitude", colour = "Day-to-day r", size = "anomaly\npairs",
          title = "Day-to-day agreement, TEMPO vs surface HCHO",
          subtitle = "Within-month anomalies; scans inside the sampling window")
   p13 <- p13 + (if (is.null(conus)) coord_quickmap()

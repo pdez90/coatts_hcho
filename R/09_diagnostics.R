@@ -258,8 +258,10 @@ if (have_threeh) {
     geom_text(data = labs3, aes(x = -Inf, y = Inf, label = label), inherit.aes = FALSE,
               hjust = -0.08, vjust = 1.2, size = 3) +
     facet_wrap(~site) +
-    labs(x = "TEMPO column in the sampling window (1e15 molec/cm2)",
-         y = paste0("TEMPO column ", after_lab, " later (1e15 molec/cm2)"),
+    # season colours and units as in Fig. S10 (R/07)
+    scale_colour_manual(values = c(DJF = "#3b6fb6", MAM = "#5aa469", JJA = "#d9822b", SON = "#8a5fb0")) +
+    labs(x = "TEMPO column in the sampling window (10\u00b9\u2075 molec/cm\u00b2)",
+         y = paste0("TEMPO column ", after_lab, " later (10\u00b9\u2075 molec/cm\u00b2)"),
          colour = "Season", title = "Same-sample TEMPO columns: sampling window vs the window after it") +
     theme_bw(base_size = 10)
   ggsave(file.path(P$figures, "figS3_threeh_window_columns.png"), pS3, width = 8, height = 4.3, dpi = 300)

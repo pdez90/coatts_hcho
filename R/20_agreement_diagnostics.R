@@ -729,8 +729,9 @@ if (HAS_GG) {
     # first two words of the AQS site name; squish before taking words (double
     # spaces gave an empty second word) and keep one-word names (word(x, 1, 2)
     # returned NA for Rubidoux, Sydney, Lawrenceville and Hawthorne)
-    mutate(lab = paste0(st_abbr[state], ": ", str_to_title(
-      str_extract(str_squish(str_replace_all(tolower(site_name), "[-_/()]", " ")), "^\\S+( \\S+)?"))))
+    # AQS case kept, so the labels read as the names in Table S8
+    mutate(lab = paste0(st_abbr[state], ": ",
+      str_extract(str_squish(str_replace_all(site_name, "[-_/()]", " ")), "^\\S+( \\S+)?")))
   HAS_REPEL <- requireNamespace("ggrepel", quietly = TRUE)
   p20 <- ggplot(lab20, aes(anom_r_24h, anom_r_8h)) +
     annotate("rect", xmin = -0.35, xmax = 1, ymin = -0.35, ymax = 1, fill = NA, colour = NA) +
@@ -740,7 +741,7 @@ if (HAS_GG) {
     (if (HAS_REPEL) ggrepel::geom_text_repel(aes(label = lab), size = 2.4, colour = "grey15", min.segment.length = 0.2,
                                               segment.colour = "grey60", box.padding = 0.3, max.overlaps = 30, seed = 42)
      else geom_text(aes(label = lab), size = 2.3, nudge_y = 0.035, check_overlap = TRUE, colour = "grey15")) +
-    annotate("text", x = 0.95, y = 0.99, label = "8 h agrees better", hjust = 1, size = 2.8, colour = "grey40") +
+    annotate("text", x = 0.95, y = 0.955, label = "8 h agrees better", hjust = 1, size = 2.8, colour = "grey40") +
     annotate("text", x = 0.99, y = -0.3, label = "24 h agrees better", hjust = 1, size = 2.8, colour = "grey40") +
     scale_size_area(max_size = 7, breaks = c(30, 60, 90), name = "anomaly pairs\n(smaller of the two)") +
     coord_equal(xlim = c(-0.35, 1), ylim = c(-0.35, 1), expand = FALSE) +

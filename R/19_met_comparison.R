@@ -205,12 +205,15 @@ dir.create(P$figures, recursive = TRUE, showWarnings = FALSE)
 panel <- function(d, a, b, lab_a, lab_b, title, colour_by_arm = TRUE) {
   d <- filter(d, is.finite(.data[[a]]), is.finite(.data[[b]]))
   if (!nrow(d)) return(NULL)
+  # national points first, so the Colorado arms are drawn on top of them
+  if ("arm" %in% names(d)) d <- d[order(d$arm != "National"), ]
   mapping <- if (colour_by_arm) aes(.data[[a]], .data[[b]], colour = arm)
              else aes(.data[[a]], .data[[b]])
   ggplot(d, mapping) +
     geom_abline(slope = 1, intercept = 0, linewidth = 0.3, colour = "grey50") +
     geom_point(alpha = 0.25, size = 0.7) +
     labs(x = lab_a, y = lab_b, title = title, colour = NULL) +
+    guides(colour = guide_legend(override.aes = list(alpha = 1, size = 2))) +
     theme_minimal(base_size = 9) +
     theme(legend.position = "bottom")
 }
