@@ -45,5 +45,27 @@ testServer(app, {
   try_out("map", session$getOutput("map"))
 })
 
+# The map statistics are globals of app.R, which testServer's expression cannot
+# see; load them as Shiny does (R/stats.R, then app.R) into their own environment.
+message("map statistics")
+e <- new.env(parent = globalenv())
+try_out("load app globals", {
+  sys.source(file.path("app", "R", "stats.R"), envir = e)
+  sys.source(file.path("app", "app.R"), envir = e)
+})
+if (exists("map_stats", envir = e, inherits = FALSE)) {
+  # with no filter, the map colours are step 24's headline values
+  try_out("map colours = step 24 values", {
+    ms <- e$map_stats()
+    stopifnot(nrow(ms) == nrow(e$SITES),
+              isTRUE(all.equal(ms$n_anom, as.integer(e$SITES$map_n_anom))),
+              isTRUE(all.equal(ms$r_anom, as.numeric(e$SITES$map_r_anom))))
+  })
+  try_out("map stats, smoke-free winter", {
+    lab <- e$map_labels(e$map_stats("none", "DJF"), e$filter_text("none", "DJF"))
+    stopifnot(length(lab) == nrow(e$SITES))
+  })
+}
+
 if (length(fails)) stop(length(fails), " check(s) failed: ", paste(fails, collapse = "; "))
 message("All app checks passed.")

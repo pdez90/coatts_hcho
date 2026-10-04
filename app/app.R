@@ -45,14 +45,55 @@ CHOICES <- c(list("Colorado: CDPHE air toxics and TEMPO" = setNames(co_sites$sit
              split(setNames(nat_sites$site_id, site_label(nat_sites)), nat_sites$state))
 DEFAULT_SITE <- if ("08-001-0010" %in% SITES$site_id) "08-001-0010" else SITES$site_id[1]
 
-SITES$map_label <- sprintf(
-  "<b>%s</b><br>AQS %s%s<br>%s<br>%s",
-  SITES$name, SITES$site_id,
-  ifelse(is.na(SITES$site_code), "", paste0(" &middot; CDPHE ", SITES$site_code)),
-  ifelse(is.na(SITES$program), "", SITES$program),
-  ifelse(is.na(SITES$map_r_anom), "too few samples for a day-to-day correlation",
-         sprintf("%d h record: day-to-day r = %.2f (%d pairs)%s", SITES$map_duration, SITES$map_r_anom,
-                 SITES$map_n_anom, ifelse(SITES$map_n_anom < MIN_REPORT, ", below the reporting threshold", ""))))
+# One filter for the site panel and the map: smoke class and seasons.
+filter_rows <- function(d, smoke = "all", seasons = names(SEASONS)) {
+  if (smoke == "none")  d <- d[!is.na(d$smoke) & d$smoke == "none", ]
+  if (smoke == "smoke") d <- d[!is.na(d$smoke) & d$smoke != "none", ]
+  d[d$season %in% seasons, ]
+}
+filter_text <- function(smoke, seasons) {
+  s1 <- c(all = "all days", none = "smoke-free days", smoke = "smoke-affected days")[[smoke]]
+  se <- intersect(names(SEASONS), seasons)
+  s2 <- if (length(se) == length(SEASONS)) "all seasons" else if (!length(se)) "no season selected" else
+    paste(c(DJF = "winter", MAM = "spring", JJA = "summer", SON = "autumn")[se], collapse = ", ")
+  paste0(s1, "; ", s2)
+}
+
+# The map colours each site by the day-to-day correlation of the record behind
+# its headline result (its longest duration, sampling window, national comparison;
+# the Colorado analysis for Wheat Ridge), for the selected smoke class and seasons.
+MAP_ROWS <- TEMPO[TEMPO$lag_h == 0L & TEMPO$usable &
+                    paste(TEMPO$site_id, TEMPO$arm, TEMPO$duration_h) %in%
+                    paste(SITES$site_id, SITES$map_arm, SITES$map_duration), ]
+map_stats <- function(smoke = "all", seasons = names(SEASONS)) {
+  d  <- filter_rows(MAP_ROWS, smoke, seasons)
+  st <- lapply(split(d, factor(d$site_id, levels = SITES$site_id)),
+               function(x) pair_stats(x$date, x$hcho, x$column))
+  data.frame(n_anom = vapply(st, function(z) as.integer(z$n_anom), 1L),
+             r_anom = vapply(st, function(z) as.numeric(z$r_anom), 1), row.names = NULL)
+}
+SITE_HEAD <- sprintf("<b>%s</b><br>AQS %s%s%s", SITES$name, SITES$site_id,
+                     ifelse(is.na(SITES$site_code), "", paste0(" &middot; CDPHE ", SITES$site_code)),
+                     ifelse(is.na(SITES$program), "", paste0("<br>", SITES$program)))
+map_labels <- function(ms, ftxt) {
+  stat <- ifelse(is.na(SITES$map_duration), "no matched samples",
+          ifelse(ms$n_anom >= MIN_REPORT & !is.na(ms$r_anom),
+                 sprintf("%d h record: day-to-day r = %.2f (%d pairs)", SITES$map_duration, ms$r_anom, ms$n_anom),
+                 sprintf("%d h record: %d anomaly pairs, fewer than %d", SITES$map_duration, ms$n_anom, MIN_REPORT)))
+  paste0(SITE_HEAD, "<br>", stat, "<br><i>", ftxt, "</i>")
+}
+add_site_markers <- function(map, ms, ftxt) {
+  map |>
+    addCircleMarkers(data = SITES, lng = ~lon, lat = ~lat, layerId = ~site_id,
+                     radius = ifelse(SITES$colorado_detail, 8, 4 + 4 * sqrt(pmin(ms$n_anom, 150) / 150)),
+                     fillColor = PAL(clamp(ifelse(ms$n_anom >= MIN_REPORT, ms$r_anom, NA))), fillOpacity = 0.9,
+                     color = ifelse(SITES$colorado_detail, "#111111", "#6b6b6b"),
+                     weight = ifelse(SITES$colorado_detail, 2.5, 0.7),
+                     label = lapply(map_labels(ms, ftxt), HTML)) |>
+    addLegend("bottomright", pal = PAL, values = c(-0.8, 0.8), opacity = 1, layerId = "legend",
+              title = HTML(paste0("Day-to-day r<br><span style='font-weight:normal;font-size:85%'>",
+                                  ftxt, "</span>")))
+}
 PAL   <- colorNumeric(c("#b2182b", "#f7f7f7", "#2166ac"), domain = c(-0.8, 0.8), na.color = "#bdbdbd")
 clamp <- function(x) pmax(pmin(x, 0.8), -0.8)
 
@@ -115,8 +156,9 @@ ui <- page_navbar(
                          actionLink("zoom_co", "Zoom to Colorado")),
              leafletOutput("map", height = 620),
              card_footer(class = "small text-muted",
-                         "Colour: day-to-day correlation of each site's longest-duration record with TEMPO. ",
-                         "Black outline: Colorado sites with CDPHE air-toxics data. Grey: too few samples. ",
+                         "Colour: day-to-day correlation with TEMPO of each site's longest-duration record ",
+                         "(sampling window), for the smoke and season filters at left. Grey: fewer than 10 ",
+                         "within-month anomaly pairs. Black outline: Colorado sites with CDPHE air-toxics data. ",
                          "Background layers are in the control at the top right of the map.")),
         navset_card_tab(id = "tab", full_screen = TRUE,
           nav_panel("TEMPO vs surface HCHO", value = "tempo",
@@ -178,13 +220,8 @@ server <- function(input, output, session) {
       over <- c(over, "Colorado counties")
     }
     m |>
-      addCircleMarkers(lng = ~lon, lat = ~lat, layerId = ~site_id,
-                       radius = ~ifelse(colorado_detail, 8, 4 + 4 * sqrt(pmin(map_n_anom, 150) / 150)),
-                       fillColor = ~PAL(clamp(map_r_anom)), fillOpacity = 0.9,
-                       color = ~ifelse(colorado_detail, "#111111", "#6b6b6b"),
-                       weight = ~ifelse(colorado_detail, 2.5, 0.7),
-                       label = lapply(SITES$map_label, HTML)) |>
-      addLegend("bottomright", pal = PAL, values = c(-0.8, 0.8), title = "Day-to-day r", opacity = 1) |>
+      add_site_markers(isolate(map_stats(input$smoke %or% "all", input$seasons %or% character())),
+                       isolate(filter_text(input$smoke %or% "all", input$seasons %or% character()))) |>
       addLayersControl(baseGroups = base, overlayGroups = over,
                        options = layersControlOptions(collapsed = TRUE)) |>
       hideGroup(setdiff(base, base[1])) |>
@@ -194,9 +231,18 @@ server <- function(input, output, session) {
     id <- input$map_marker_click$id
     if (!is.null(id) && id %in% SITES$site_id) updateSelectInput(session, "site", selected = id)
   })
-  # ring around the selected site; re-drawn once the map exists (input$map_zoom)
+  # markers re-coloured when the smoke or season filter changes (same layerIds,
+  # so each marker and the legend are replaced, not duplicated)
+  map_ready <- reactiveVal(FALSE)
+  observeEvent(input$map_zoom, map_ready(TRUE), once = TRUE)
   observe({
-    req(input$map_zoom)
+    req(map_ready())
+    sm <- input$smoke %or% "all"; se <- input$seasons %or% character()
+    leafletProxy("map") |> add_site_markers(map_stats(sm, se), filter_text(sm, se))
+  })
+  # ring around the selected site, once the map exists
+  observe({
+    req(map_ready())
     s <- site()
     leafletProxy("map") |> clearGroup("selected") |>
       addCircleMarkers(lng = s$lon, lat = s$lat, radius = 15, fill = FALSE, color = "#000000",
@@ -242,10 +288,7 @@ server <- function(input, output, session) {
   sel_all <- reactive({
     d <- TEMPO[TEMPO$site_id == req(input$site) & TEMPO$arm == cur_arm() &
                  TEMPO$duration_h == cur_dur() & TEMPO$lag_h == cur_lag(), ]
-    sm <- input$smoke %or% "all"
-    if (sm == "none")  d <- d[!is.na(d$smoke) & d$smoke == "none", ]
-    if (sm == "smoke") d <- d[!is.na(d$smoke) & d$smoke != "none", ]
-    d[d$season %in% (input$seasons %or% character()), ]
+    filter_rows(d, input$smoke %or% "all", input$seasons %or% character())
   })
   sel <- reactive({ d <- sel_all(); d[d$usable, ] })
   st  <- reactive({ d <- sel(); pair_stats(d$date, d$hcho, d$column) })
