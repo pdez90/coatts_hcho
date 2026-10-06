@@ -59,12 +59,13 @@ for (f in c(bysite_path, gap_path, models_path, cells_path)) {
 MIN_PAIRS <- CFG$min_anom_pairs_site   # as steps 13, 17 and 20
 WEST_LON  <- -100                      # deg E
 COAST_KM  <- 50                        # "coastal": within 50 km of the ocean coastline
+SCALE_T_K <- 288                       # temperature of the scale height, K
 SCALE_H_M <- 8430                      # R_d x 288 K / g, in m
 fz <- function(r) atanh(pmin(pmax(r, -0.999), 0.999))
-# two decimals, never "-0.00" (as step 20); p-values to three, or "< 0.001"
+# two decimals, never "-0.00" (as step 20); p-values as "p = 0.039" or "p < 0.001"
 r2   <- function(x) { s <- sprintf("%.2f", x); s3 <- sprintf("%.3f", x)
   ifelse(!is.na(x) & abs(x) < 0.005, ifelse(s3 %in% c("0.000", "-0.000"), "0.00", s3), s) }
-ptxt <- function(p) ifelse(is.na(p), "NA", ifelse(p < 0.001, "< 0.001", sprintf("%.3f", p)))
+ptxt <- function(p) ifelse(is.na(p), "NA", ifelse(p < 0.001, "p < 0.001", sprintf("p = %.3f", p)))
 
 # ---- 1. the sites ------------------------------------------------------------
 sites <- read_tbl(bysite_path, colClasses = list(character = c("site", "networks"))) |>
@@ -167,7 +168,7 @@ groups <- bind_rows(
 rng <- tapply(geo$relief5_m, geo$relief_class, range)
 groups$range <- NA_character_
 for (l in names(rng)) groups$range[groups$grouping == "terrain relief, 5 x 5 block (tertiles)" & groups$group == l] <-
-  sprintf("%.0f-%.0f m", rng[[l]][1], rng[[l]][2])
+  sprintf("%.0f\u2013%.0f m", rng[[l]][1], rng[[l]][2])
 data.table::fwrite(groups, file.path(P$tables, "geography_groups.csv"))
 
 wil <- function(g) suppressWarnings(stats::wilcox.test(geo$r_anom[g], geo$r_anom[!g], exact = FALSE))$p.value
@@ -189,7 +190,7 @@ tests <- tibble(
 data.table::fwrite(tests, file.path(P$tables, "geography_tests.csv"))
 for (i in seq_len(nrow(tests)))
   log_msg("  ", tests$test[i], ": ", if (is.na(tests$statistic[i])) "" else sprintf("rho %.2f, ", tests$statistic[i]),
-          "p ", ptxt(tests$p[i]))
+          ptxt(tests$p[i]))
 for (i in seq_len(nrow(groups)))
   log_msg("  ", groups$grouping[i], " / ", groups$group[i], ": n ", groups$n_sites[i], ", median day-to-day r ",
           r2(groups$median_r_anom[i]), " (", r2(groups$q25[i]), "-", r2(groups$q75[i]), ")")
@@ -228,8 +229,8 @@ data.table::fwrite(models, file.path(P$tables, "geography_models.csv"))
 for (m in unique(models$model)) {
   mm <- filter(models, model == m)
   log_msg("  ", m, ": n ", mm$n_sites[1], ", R2 ", r2(mm$r2_base[1]), " -> ", r2(mm$r2_with_geography[1]),
-          " (geography alone ", r2(mm$r2_geography_only[1]), "; joint F p ", ptxt(mm$p_geography[1]), "); ",
-          paste(sprintf("%s %+.2f (p %s)", mm$term[mm$term %in% GEO3], mm$estimate_per_sd[mm$term %in% GEO3],
+          " (geography alone ", r2(mm$r2_geography_only[1]), "; joint F test ", ptxt(mm$p_geography[1]), "); ",
+          paste(sprintf("%s %+.2f (%s)", mm$term[mm$term %in% GEO3], mm$estimate_per_sd[mm$term %in% GEO3],
                         ptxt(mm$p[mm$term %in% GEO3])), collapse = ", "))
 }
 
@@ -250,6 +251,7 @@ nums <- tibble(
           "geo_lon_rho", "geo_lon_p", "geo_coast_rho", "geo_coast_p", "geo_relief_rho", "geo_relief_p",
           "geo_m1_sites", "geo_m1_r2_base", "geo_m1_r2_geo", "geo_m1_r2_geo_only", "geo_m1_p",
           "geo_m1_west", "geo_m1_west_p", "geo_m1_coast", "geo_m1_coast_p", "geo_m1_relief", "geo_m1_relief_p",
+          "geo_m1_snr", "geo_m1_snr_p", "geo_m1_smoke", "geo_m1_smoke_p", "geo_scale_h_km", "geo_scale_t_k",
           "geo_m2_r2_base", "geo_m2_r2_geo", "geo_m2_p"),
   value = c(as.character(nrow(geo)), as.character(abs(WEST_LON)), as.character(COAST_KM),
             g("longitude", "west", "n_sites"), r2(g("longitude", "west", "median_r_anom")), r2(g("longitude", "west", "q25")), r2(g("longitude", "west", "q75")),
@@ -272,6 +274,9 @@ nums <- tibble(
             sprintf("%+.2f", term(m1, "west", "estimate_per_sd")), ptxt(term(m1, "west", "p")),
             sprintf("%+.2f", term(m1, "log_coast", "estimate_per_sd")), ptxt(term(m1, "log_coast", "p")),
             sprintf("%+.2f", term(m1, "log_relief", "estimate_per_sd")), ptxt(term(m1, "log_relief", "p")),
+            sprintf("%+.2f", term(m1, "log_snr", "estimate_per_sd")), ptxt(term(m1, "log_snr", "p")),
+            sprintf("%+.2f", term(m1, "smoke_share", "estimate_per_sd")), ptxt(term(m1, "smoke_share", "p")),
+            sprintf("%.2f", SCALE_H_M / 1000), sprintf("%d", SCALE_T_K),
             r2(m2$r2_base[1]), r2(m2$r2_with_geography[1]), ptxt(m2$p_geography[1])),
   source = "R/25_geography.R")
 check(!anyNA(nums$value) & !any(nums$value %in% c("NA", "")), "A geography number is missing: ",

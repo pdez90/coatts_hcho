@@ -239,6 +239,12 @@ tod_an <- tod |>
   group_by(site, ym) |> filter(n() >= CFG$min_days_per_site_month) |>
   mutate(across(c(hcho_ugm3, col_early, col_late), ~ .x - mean(.x), .names = "{.col}_anom")) |>
   ungroup()
+# seasons of these site-days: the solar-zenith-angle screen removes most early-
+# morning scans in winter, so this comparison is weighted to the warmer months
+tod_seas <- table(factor(as.character(season_of(tod_an$sample_date)), levels = c("DJF", "MAM", "JJA", "SON")))
+tod_season_keys <- tibble(key = paste0("nat_tod_pct_", tolower(names(tod_seas))),
+                          value = sprintf("%.0f", 100 * as.numeric(tod_seas) / sum(tod_seas)))
+log_msg("Time of day: anomaly site-days by season (DJF/MAM/JJA/SON) ", paste(as.integer(tod_seas), collapse = "/"))
 tod_pooled <- bind_rows(
   dep_cor_test(tod$hcho_ugm3, tod$col_late, tod$col_early) |> mutate(comparison = "whole period"),
   dep_cor_test(tod_an$hcho_ugm3_anom, tod_an$col_late_anom, tod_an$col_early_anom) |>
@@ -272,6 +278,6 @@ log_msg("Time of day, all 24 h sites, anomalies (n = ", ta$n, "): r 06-09 ", rou
         " and earlier at ",
         sum(tod_site$williams_p < 0.05 & tod_site$diff_09_12_minus_06_09 < 0, na.rm = TRUE))
 
-data.table::fwrite(bind_rows(noise_keys, tod_keys) |> mutate(source = "R/17_national_diagnostics.R"),
+data.table::fwrite(bind_rows(noise_keys, tod_keys, tod_season_keys) |> mutate(source = "R/17_national_diagnostics.R"),
                    file.path(P$tables, "manuscript_numbers_17.csv"))
 log_msg("National diagnostics done.")

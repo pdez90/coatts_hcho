@@ -69,6 +69,7 @@ const ALLOW = new Map([
   ["0.02",   /grid/i],                                 // the L3 grid spacing in degrees
   ["0.999",  /capped|transformation/i],                // the cap on E before Fisher transformation
   ["43502",  /parameter code/i],                       // the AQS parameter code for formaldehyde
+  ["4.5",    /spatial resolution/i],                  // TEMPO native pixel, about 2 km x 4.5 km (instrument specification)
 ]);
 const allowed = (tok, para) => ALLOW.has(tok) && ALLOW.get(tok).test(para);
 

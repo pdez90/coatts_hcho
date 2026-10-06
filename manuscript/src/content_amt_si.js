@@ -559,6 +559,13 @@ module.exports = {
         "caption": "Figure S13. Within-month anomaly correlation between surface HCHO and the TEMPO column at the {{n:dd_sites_paired}} monitors with at least {{n:dd_min_pairs}} anomaly pairs in both their 24 h and their 8 h record (primary screening, scans inside the sampling window). Symbol size is the smaller of the two pair counts; the dashed line is equality."
       },
       "p": []
+    },
+    {
+      "fig": {
+        "file": "fig25_geography.png",
+        "caption": "Figure S14. Within-month anomaly correlation at each of the {{n:geo_sites}} 24 h monitors with a site-level correlation against (a) longitude, (b) geodesic distance to the ocean coastline (Atlantic, Pacific and Gulf of Mexico features of the U.S. Census TIGER/Line coastline file) and (c) terrain relief across the 5 × 5 block of TEMPO grid cells around the monitor, computed from the TEMPO surface pressure of each cell (main text, Sect. 2.3.3). Orange symbols are monitors within {{n:geo_coast_km}} km of the ocean coastline and blue symbols inland monitors; symbol size is the number of anomaly pairs. The dashed line in (a) marks {{n:geo_west_lon}}° W, and the grey curves are loess fits shown for guidance only. Distance and relief are on logarithmic axes."
+      },
+      "p": []
     }
   ],
   "authors": [
