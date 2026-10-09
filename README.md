@@ -172,10 +172,10 @@ by step 3, so run step 3 at least once first.
 
 `run_all.R` order: 01 → 02 → 03 → 04 (24-h data) → 06 → 02 → 03 (3-h data) →
 08 (smoke) → 05 → 07 (analyses) → 09 (diagnostics) → 10, 11 (national data) →
-12 (national TEMPO) → 13 (national analysis) → 17 (national noise ceiling and
+08 (smoke flags for the national windows) → 12 (national TEMPO) → 13 (national analysis) → 17 (national noise ceiling and
 time of day) → 15 (observability bias) → 16 (TOC graphic) → 19 (HRRR against
 TEMPO meteorology) → 20 (agreement diagnostics) → 21 (Table 1) → 22 (agreement
-by season) → 25 (geography and terrain) → 23 (release dataset) → 24 (app data) → 14 (site map, last, so a missing map
+by season) → 23 (release dataset) → 24 (app data) → 25 (geography and terrain) → 14 (site map, last, so a missing map
 package cannot stop the analysis);
 step 18 (HRRR meteorology) runs before each arm's matching. Every arm reads AQS,
 so `run_all.R` stops at once if AQS credentials are absent.

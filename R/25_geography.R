@@ -203,6 +203,8 @@ gap <- read_tbl(gap_path, colClasses = list(character = c("site", "block_label",
                               log_relief = log10(pmax(relief5_m, 1))), by = "site")
 check(nrow(gap) == nrow(read_tbl(gap_path, colClasses = list(character = c("site", "block_label", "networks")))),
       "Some sites of step 20's model have no geography")
+check(all(abs(gap$anomaly_r_observed - geo$r_anom[match(gap$site, geo$site)]) < 1e-9),
+      "Step 20's site correlations differ from step 13's: re-run step 20 before step 25")
 ref <- read_tbl(models_path)
 fit_geo <- function(outcome, ref_model, label) {
   d <- gap |> select(all_of(c(outcome, SIX, GEO3, "n_anomalies"))) |> drop_na()

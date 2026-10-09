@@ -112,12 +112,14 @@ main <- function() {
   add("R/20_agreement_diagnostics.R", "coatts", diag && nat_done && hrrr)  # duration, noise ceiling, temporal averaging, mixing depth
   add("R/21_manuscript_tables.R", "coatts", nat_done)   # Table 1 as the build renders it
   add("R/22_seasonal_analysis.R", "coatts", nat_done)   # agreement by season (Wang et al. 2022 comparison)
-  # agreement by longitude, distance to the coast and terrain relief (needs step 20's site model)
-  add("R/25_geography.R",       "coatts", diag && nat_done && hrrr)
   # the matched data of all three arms, with smoke flags, for release in dataset/
   add("R/23_export_dataset.R",  "coatts", nat_done && three_h && smoke)
   # the Shiny explorer's data (dataset/ plus every air toxic in the CDPHE packets)
   add("R/24_app_data.R",        "coatts", nat_done && three_h && smoke)
+  # agreement by longitude, distance to the coast and terrain relief (needs step 20's
+  # site model, the sf package and a coastline download, so it runs after 23 and 24:
+  # a failure here cannot stop the release dataset or the app data)
+  add("R/25_geography.R",       "coatts", diag && nat_done && hrrr)
   # Fig. S1 is a figure only and runs last, so a missing map package cannot stop the
   # analysis steps; it needs the Colorado 24 h and 3 h samples and the AQS inventory
   # (step 11), not the national TEMPO arm

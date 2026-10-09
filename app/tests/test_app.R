@@ -82,8 +82,10 @@ if (exists("sensitivity_site", envir = e, inherits = FALSE)) {
     cr <- t[t$key == "current", ]
     stopifnot(cr$n == st$n, cr$n_anom == st$n_anom, isTRUE(all.equal(cr$r, st$r)), isTRUE(all.equal(cr$r_anom, st$r_anom)),
               all(c(e$DIM[["lag"]], e$DIM[["block"]], e$DIM[["ecf"]], e$THIRDS$dim) %in% t$dim),
-              # every sample entering the day-to-day r falls in exactly one third of valid scans
-              sum(t$n[t$dim == e$THIRDS$dim[e$THIRDS$var == "n_valid"]]) == st$n_anom)
+              # every sample entering the start-hour anomalies falls in exactly one third of valid scans
+              sum(t$n[t$dim == e$THIRDS$dim[e$THIRDS$var == "n_valid"]]) ==
+                sum(vapply(split(seq_len(nrow(d)), format(d$start_utc, "%H", tz = "UTC")),
+                           function(ix) nrow(e$month_anomalies(d$date[ix], d$hcho[ix], d$column[ix])), 1L)))
   })
   try_out("all-sites table = the map's statistics", {
     s <- e$SITES[e$SITES$map_arm %in% "national" & !is.na(e$SITES$map_duration), ]

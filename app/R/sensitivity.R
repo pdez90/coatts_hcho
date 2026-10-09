@@ -43,6 +43,7 @@ DIM <- c(smoke    = "Smoke (NOAA HMS)",
 # variable are dropped, within-month anomalies are formed from the rest, and the
 # samples entering the day-to-day correlation are split into equal thirds with
 # dplyr::ntile(); "relative" stratifies by the departure from the month mean.
+# For sub-daily records both steps are done within each sampling start hour.
 THIRDS <- data.frame(
   var      = c("hrrr_pbl_km", "hrrr_pbl_km", "tempo_pbl_km", "temp_c", "n_valid"),
   relative = c(FALSE, TRUE, FALSE, FALSE, FALSE),
@@ -131,23 +132,38 @@ sensitivity_site <- function(rows, arm, dur, lag, smoke = "all", seasons = SEASO
   }
 
   d <- filter_rows(cur, smoke, seasons); d <- d[d$usable, ]
+  # Sub-daily records sample several windows a day. As in R/20 (anomalies within
+  # site, month and start hour; tertiles within each start hour), the anomalies
+  # and the thirds are formed separately for each start hour, so that a third
+  # does not simply collect the samples of one time of day. A 24 h record is a
+  # single stratum, which gives exactly the site-month calculation.
+  by_hour <- dur < 24L
   for (j in seq_len(nrow(THIRDS))) {
     v  <- THIRDS$var[j]
-    dv <- d[is.finite(d[[v]]), ]
-    an <- pair_stats(dv$date, dv$hcho, dv$column)$anom
-    if (nrow(an) < 3) next
-    x  <- dv[[v]][an$i]
-    if (THIRDS$relative[j]) x <- x - stats::ave(x, an$ym)
-    hc <- dv$hcho[an$i]; co <- dv$column[an$i]
-    tc <- ntile3(x)
+    dv <- d[is.finite(d[[v]]) & !is.na(d$date) & is.finite(d$hcho) & is.finite(d$column), ]
+    if (!nrow(dv)) next
+    g  <- if (by_hour) format(dv$start_utc, "%H", tz = "UTC") else rep("all", nrow(dv))
+    parts <- lapply(split(seq_len(nrow(dv)), g), function(ix) {
+      an <- month_anomalies(dv$date[ix], dv$hcho[ix], dv$column[ix])
+      if (!nrow(an)) return(NULL)
+      x <- dv[[v]][ix][an$i]
+      if (THIRDS$relative[j]) x <- x - stats::ave(x, an$ym)
+      data.frame(x = x, tc = ntile3(x), hc = dv$hcho[ix][an$i], co = dv$column[ix][an$i],
+                 sa = an$surface_anom, ca = an$column_anom)
+    })
+    P <- do.call(rbind, parts)
+    if (is.null(P) || nrow(P) < 3) next
     for (k in 1:3) {
-      s <- which(tc == k); if (!length(s)) next
-      rg <- range(x[s])
+      s <- which(P$tc == k); if (!length(s)) next
+      rg <- range(P$x[s])
       lv <- if (isTRUE(all.equal(rg[1], rg[2]))) sprintf(THIRDS$fmt[j], rg[1]) else
         paste(sprintf(THIRDS$fmt[j], rg[1]), "to", sprintf(THIRDS$fmt[j], rg[2]))
-      add(THIRDS$dim[j], THIRD_KEYS[k], paste0(c("Lowest", "Middle", "Highest")[k], " third: ", lv, THIRDS$unit[j]),
-          list(n = length(s), r = cor_or_na(hc[s], co[s]),
-               n_anom = length(s), r_anom = cor_or_na(an$surface_anom[s], an$column_anom[s])))
+      # within-hour thirds overlap across hours, so their ranges are not shown
+      lab <- if (by_hour) paste0(c("Lowest", "Middle", "Highest")[k], " third within each start hour") else
+        paste0(c("Lowest", "Middle", "Highest")[k], " third: ", lv, THIRDS$unit[j])
+      add(THIRDS$dim[j], THIRD_KEYS[k], lab,
+          list(n = length(s), r = cor_or_na(P$hc[s], P$co[s]),
+               n_anom = length(s), r_anom = cor_or_na(P$sa[s], P$ca[s])))
     }
   }
   do.call(rbind, out)
