@@ -122,7 +122,7 @@ const builders = {
     return { header: ["Quantity and arm", "n", "HRRR", "TEMPO", "Difference", "r"], rows: out,
              widths: [4200, 900, 900, 900, 1100, 900] };
   },
-  // Table S9: the weighted Fisher-z models (R/20, diag8_ceiling_gap_models.csv)
+  // Table S6: the weighted Fisher-z models (R/20, diag8_ceiling_gap_models.csv)
   ceilingGapModels() {
     const rows = csv("diag8_ceiling_gap_models.csv");
     const labels = { "(Intercept)": "Intercept", log_surface: "log median surface HCHO", log_snr: "log signal-to-noise ratio",
@@ -164,7 +164,7 @@ const builders = {
                       "SD of column anomaly, 10^{15} molecules cm^{−2}", "deep minus shallow (95% CI) or interaction"],
              rows: out, widths: [1300, 1600, 1250, 1150, 1100, 1250, 1400] };
   },
-  // Table S10: the temporal-averaging curve (R/20, diag9_*.csv)
+  // Table S5: the temporal-averaging curve (R/20, diag9_*.csv)
   temporalAveraging() {
     const ta = csv("diag9_temporal_averaging.csv"), nf = csv("diag9_temporal_averaging_noise.csv");
     const out = [];

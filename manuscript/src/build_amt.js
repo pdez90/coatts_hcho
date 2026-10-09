@@ -11,7 +11,7 @@
 //     availability, author contributions, competing interests, ...) before
 //     the references.
 // Numbers: {{n:key}} markers resolve from output/tables/manuscript_numbers_*.csv
-// (numbers.js); Table 1 and Tables S2-S4 and S8-S11 are rendered from pipeline CSVs by
+// (numbers.js); Table 1 and Tables S2-S6, S8 and S11 are rendered from pipeline CSVs by
 // tables_amt.js. Nothing is hand-numbered.
 const fs = require("fs");
 const path = require("path");

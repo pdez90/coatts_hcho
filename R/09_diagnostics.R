@@ -230,13 +230,30 @@ if (have_threeh) {
   t2a <- bind_rows(
     by_site_and_all(both, function(d) dep_cor_test(d$hcho_ugm3, d$tempo_vc_1e15_after, d$tempo_vc_1e15_window)) |>
       mutate(comparison = "whole period", .after = site),
-    by_site_and_all(both_anom, function(d) dep_cor_test(d$s_a, d$ca_after, d$ca_window)) |>
+    # anomalies: resample whole site-months (Williams' p treats them as independent)
+    by_site_and_all(both_anom, function(d) dep_cor_test(d$s_a, d$ca_after, d$ca_window,
+                                                        cluster = paste(d$site, d$ym))) |>
       mutate(comparison = "within-month anomalies", .after = site)
   ) |>
     rename(any_of(c(r_after = "r_start", r_sampling_window = "r_end",
                     diff_after_minus_window = "diff_start_minus_end")))
   out_tbl(t2a, "diag2_threeh_window_vs_after.csv")
   print(t2a)
+  # the paired comparison of the main text (Sect. 3.5, Fig. S12), by name
+  ptxt9 <- function(p) ifelse(p < 0.001, "p < 0.001", sprintf("p = %.3f", p))
+  w2 <- filter(t2a, comparison == "within-month anomalies")
+  win_keys <- map(c(chco = "CHCO", pvco = "PVCO", all = "all sites"), function(s) {
+    x <- w2[w2$site == s, ]
+    if (nrow(x) != 1) return(NULL)
+    c(diff = sprintf("%.2f", x$diff_after_minus_window), lo = sprintf("%.2f", x$diff_ci_lo),
+      hi = sprintf("%.2f", x$diff_ci_hi), bootp = ptxt9(x$boot_p), wp = ptxt9(x$williams_p),
+      clusters = as.character(x$boot_clusters))
+  })
+  win_keys <- compact(win_keys)
+  data.table::fwrite(
+    tibble(key = unname(unlist(imap(win_keys, function(v, s) paste0("win_", s, "_", names(v))))),
+           value = unname(unlist(win_keys)), source = "R/09_diagnostics.R"),
+    file.path(P$tables, "manuscript_numbers_09_windows.csv"))
   for (i in seq_len(nrow(t2a))) note("  ", t2a$site[i], ", ", t2a$comparison[i], " (same ", t2a$n[i],
                                      " samples): r in the sampling window ", round(t2a$r_sampling_window[i], 2),
                                      " vs ", after_lab, " ", round(t2a$r_after[i], 2),

@@ -6,9 +6,9 @@ twice. Six files, plus the numbers and tables the pipeline wrote.
 | File | Role |
 | --- | --- |
 | `content_amt.js` | the main text as data: abstract, sections, back matter (data availability, author contributions, ...), the figure files and captions, and the reference entries in Copernicus form |
-| `content_amt_si.js` | the supplement the same way: a short methods section (S1-S6), Tables S1, S5, S6 and S7 (literal rows), Tables S2-S4 and S8-S11 (rendered from CSVs), Figures S1-S13, all numbered in order of first citation in the main text |
+| `content_amt_si.js` | the supplement the same way: a short methods section (S1-S6), Tables S1, S7, S9 and S10 (literal rows), Tables S2-S6, S8 and S11 (rendered from CSVs), Figures S1-S14, all numbered in order of first citation in the main text |
 | `numbers.js` | resolves `{{n:key}}` against `output/tables/manuscript_numbers_*.csv` and refuses to build if a key is missing |
-| `tables_amt.js` | renders the display tables that come straight from pipeline CSVs: Table 1 (`manuscript_table1.csv`, written by `R/21`), Tables S2 and S3 (steps 13 and 19), S4 (step 22) and S8-S11 (step 20) |
+| `tables_amt.js` | renders the display tables that come straight from pipeline CSVs: Table 1 (`manuscript_table1.csv`, written by `R/21`), Tables S2 and S3 (steps 13 and 19), S4 (step 22) and S5, S6, S8 and S11 (step 20) |
 | `build_amt.js` | renders both documents to `../TEMPO_HCHO_AMT_manuscript.docx` and `../TEMPO_HCHO_AMT_supplement.docx`, reading figures from `../../output/figures` |
 | `check_amt.js` | verifies that every number in both documents is derived from the pipeline or found in an output table, that every figure and table is cited, exists and is numbered in order of first citation, and that no p-value prints as 0.000 |
 
@@ -17,7 +17,7 @@ superseded ES&T (numbered-citation) chain, kept for the record.
 
 To rebuild after re-running the pipeline:
 
-    Rscript R/20_agreement_diagnostics.R     # figures 20-23, tables S8-S11, manuscript_numbers_20.csv
+    Rscript R/20_agreement_diagnostics.R     # figures 20-23, tables S5, S6, S8, S11, manuscript_numbers_20.csv
     Rscript R/21_manuscript_tables.R         # Table 1
     Rscript R/22_seasonal_analysis.R         # Table S4, Fig. S5, manuscript_numbers_22.csv
     cd manuscript/src
@@ -32,9 +32,9 @@ Three routes, and `check_amt.js` treats them differently:
 * **derived** - `{{n:key}}` markers, resolved from the `manuscript_numbers_*.csv`
   files each R step writes, and every cell of a table `tables_amt.js` renders
   from a CSV. These cannot be transcribed wrongly; the check does not re-test
-  them. All of Sect. 3.6, the abstract's new sentences, Table 1 and Tables S2-S4 and
-  S8-S11 are on this route.
-* **verified** - a literal in prose, a caption or Tables S1, S5, S6 and S7 must occur, at
+  them. All of the diagnostic results (Sects. 3.3-3.5), Table 1 and Tables S2-S6, S8 and
+  S11 are on this route.
+* **verified** - a literal in prose, a caption or Tables S1, S7, S9 and S10 must occur, at
   the precision printed, in at least one CSV in `output/tables/`. A decimal that
   matches five or more tables is counted as weakly verified (set
   `HCHO_SHOW_WEAK=1` to list them); the cure is to derive it instead.

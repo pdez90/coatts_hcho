@@ -26,17 +26,17 @@ module.exports = {
     {
       "h1": "S3. Statistics",
       "p": [
-        "Slopes are reduced major axis (RMA) slopes, because both measurements carry error. Confidence intervals are bootstrap percentile intervals: 1000 replicates unless stated; 200 for the national site-, state- and smoke-class breakdowns; and 2000 for the Williams'-test differences, the mixing-depth tertile contrasts, the dual-duration summaries, the observability differences and the seasonal pooled correlations. Pooled analyses resample whole sites, so that the samples of one monitor stay together; with fewer than five sites individual samples are resampled and the interval is marked descriptive. The sign of an RMA slope is unstable when r is near zero, so scatter plots of surface HCHO against the column show a fitted line only where the Pearson correlation is significant (p < 0.05); the least-squares lines of Figs. S5b and S7b and the loess curves of Fig. S14 are drawn in every panel, for illustration.",
-        "Anomaly correlations are tested by permutation, because the site-month means are estimated from the same samples and the parametric p-value is too small: one variable is permuted within each site × year-month stratum, which leaves the removed means unchanged, and the observed |r| is compared with 2000 permuted values (smallest attainable p, 1/2001 = 0.0005). Whole-period correlations, Williams' tests for two correlations sharing the surface measurement{{steiger1980}} and regressions use their usual parametric tests. Column coefficients come from ordinary least squares with fixed effects for site and calendar month; nationally their standard errors are clustered by site, while the two Colorado 3 h sites are too few to cluster (Table S6). Site-level significance counts are given with a Benjamini–Hochberg false-discovery-rate correction (Table S2).",
+        "Slopes are reduced major axis (RMA) slopes, because both measurements carry error. Confidence intervals are bootstrap percentile intervals: 1000 replicates unless stated; 200 for the national site-, state- and smoke-class breakdowns; and 2000 for the Williams'-test differences, the mixing-depth tertile contrasts, the dual-duration summaries, the observability differences and the seasonal pooled correlations. Pooled analyses resample whole sites, so that the samples of one monitor stay together; with fewer than five sites individual samples are resampled and the interval is marked descriptive. The sign of an RMA slope is unstable when r is near zero, so scatter plots of surface HCHO against the column show a fitted line only where the Pearson correlation is significant (p < 0.05); the least-squares lines of Figs. S5b and S6b and the loess curves of Fig. S8 are drawn in every panel, for illustration.",
+        "Anomaly correlations are tested by permutation, because the site-month means are estimated from the same samples and the parametric p-value is too small: one variable is permuted within each site × year-month stratum, which leaves the removed means unchanged, and the observed |r| is compared with 2000 permuted values (smallest attainable p, 1/2001 = 0.0005). Whole-period correlations and regressions use their usual parametric tests. A difference between two correlations sharing the surface measurement carries a bootstrap interval and two-sided percentile-bootstrap p-value (2000 replicates): for anomaly correlations the bootstrap resamples whole site-months at a single site and whole sites when sites are pooled, so that every resampled stratum keeps the samples its anomalies were formed from. Williams' test{{steiger1980}}, which treats the pairs as independent, is reported alongside as an approximate check. Column coefficients come from ordinary least squares with fixed effects for site and calendar month; nationally their standard errors are clustered by site, while the two Colorado 3 h sites are too few to cluster (Table S9). Site-level significance counts are given with a Benjamini–Hochberg false-discovery-rate correction (Table S2).",
         "For 8 h and 3 h samples a site-month mixes sampling windows, so an anomaly can retain systematic differences between times of day. Computing the anomalies within site, month and start hour instead gave r = 0.38 at the 8 h sites (n = 3483, 477 strata) and r = 0.33 at the 3 h sites (n = 369, 56 strata), both with permutation p = 0.0005, against 0.38 and 0.39 with the windows pooled (Table 1). At the 8 h sites, which sample every block on every sampling day, the two agree; at the 3 h sites pooling adds 0.06 from systematic diurnal differences. Table 1 reports the pooled values.",
-        "The product uncertainty of a scan's block is the root mean square of its passing cells' uncertainties, the fully correlated limit; the empirical estimator of Sect. S4 is used for the agreement analysis instead. Terrain heterogeneity is indexed by the spread of TEMPO surface pressure across a block of grid cells, because the surface pressure supplied with each cell follows that cell's terrain: at the Colorado sites as the pressure range within the block (Sect. S6), and nationally as the height difference implied by the highest and lowest surface pressure in the 5 × 5 block, H ln(p_{max}/p_{min}) with H = {{n:geo_scale_h_km}} km, taken as the median over scans (main text Sect. 2.3.3). The synoptic pressure gradient across a block, of order 0.1 hPa, is small beside these differences. Distance to the coast is the geodesic distance from a monitor to the nearest Atlantic, Pacific or Gulf of Mexico feature of the U.S. Census TIGER/Line coastline file{{censuscoast2023}}; Great Lakes shorelines are not counted as coast."
+        "The product uncertainty of a scan's block is the root mean square of its passing cells' uncertainties, the fully correlated limit; the empirical estimator of Sect. S4 is used for the agreement analysis instead. Terrain heterogeneity is indexed by the spread of TEMPO surface pressure across a block of grid cells, because the surface pressure supplied with each cell follows that cell's terrain: at the Colorado sites as the pressure range within the block (Sect. S6), and nationally as the height difference implied by the highest and lowest surface pressure in the 5 × 5 block, H ln(p_{max}/p_{min}) with H = {{n:geo_scale_h_km}} km, taken as the median over scans (main text Sect. 2.3.2). The synoptic pressure gradient across a block, of order 0.1 hPa, is small beside these differences. Distance to the coast is the geodesic distance from a monitor to the nearest Atlantic, Pacific or Gulf of Mexico feature of the U.S. Census TIGER/Line coastline file{{censuscoast2023}}; Great Lakes shorelines are not counted as coast."
       ]
     },
     {
       "h1": "S4. Retrieval-noise estimator",
       "p": [
         "Retrieval noise is estimated from pairs of successive valid scans of the same site on the same day, no more than 1.6 h apart: the root mean square of their differences, divided by √2, is the random error of a single scan. It is an upper bound, because the column can change between scans, and it cannot detect errors that persist through the day. Its square, divided by the number of valid scans in the sample's mean and multiplied by 1 − 1/m for the m samples of the site-month mean that the anomaly removes, is the noise variance of the column anomaly. Its ratio to the observed variance of the column anomalies is the noise fraction, and r_{ceiling} = √(1 − noise fraction) is the correlation expected if retrieval noise were the only source of disagreement.",
-        "A site-level ceiling requires at least 20 successive-scan pairs and 10 anomaly pairs. Of the {{n:n_sites_24}} 24 h sites with a site-level correlation, {{n:nat_sites_scored}} have a ceiling (Fig. S7a); at the remaining {{n:nat_sites_ceiling_undefined}} sites the noise variance exceeds the anomaly variance and no ceiling is defined. The uncertainties reported with the product imply much lower ceilings. Pooled over the Colorado sites, they give a ceiling of 0 if the cells of a block are treated as fully correlated and 0.04 if they are treated as independent (0.44 for independent cells if each sample's median rather than mean scan uncertainty is used), against the {{n:noise_ceiling_3x3}} of the empirical estimate and an observed day-to-day correlation of {{n:anom_r_observed_3x3}} (all seven sites; the six in the national comparison give 0.32, main text Sect. 3.2); this is why they are not taken at face value."
+        "A site-level ceiling requires at least 20 successive-scan pairs and 10 anomaly pairs. Of the {{n:n_sites_24}} 24 h sites with a site-level correlation, {{n:nat_sites_scored}} have a ceiling (Fig. S6a); at the remaining {{n:nat_sites_ceiling_undefined}} sites the noise variance exceeds the anomaly variance and no ceiling is defined. The uncertainties reported with the product imply much lower ceilings. Pooled over the Colorado sites, they give a ceiling of 0 if the cells of a block are treated as fully correlated and 0.04 if they are treated as independent (0.44 for independent cells if each sample's median rather than mean scan uncertainty is used), against the {{n:noise_ceiling_3x3}} of the empirical estimate and an observed day-to-day correlation of {{n:anom_r_observed_3x3}} (all seven sites; the six in the national comparison give 0.32, main text Sect. 3.2); this is why they are not taken at face value."
       ]
     },
     {
@@ -48,7 +48,7 @@ module.exports = {
     {
       "h1": "S6. Checks at the Colorado sites",
       "p": [
-        "Noise ceilings and terrain. With the estimator of Sect. S4 (3 × 3 block), La Salle and Cañon City lie close to their ceilings, with noise-corrected day-to-day correlations of {{n:r_corrected_LSCO}} and {{n:r_corrected_CNCO}}; Commerce City is intermediate ({{n:r_corrected_ADCO}}) and Grand Junction far below ({{n:r_corrected_GPCO}}). Cañon City, Colorado Springs and Pueblo began sampling in July 2025 and have only 20–23 anomaly pairs each; at Colorado Springs and Pueblo the noise-corrected correlations are negative (−0.25 and −0.32), and Wheat Ridge has too few pairs (8) for a ceiling. Terrain does not explain the ordering of the first four sites: the spread of TEMPO surface pressure within the block is smallest at Commerce City (1.8 hPa) and largest at Cañon City (11.5 hPa), the opposite of what a terrain effect would produce. Nationally, by contrast, day-to-day agreement was weaker at monitors with more terrain relief (main text Sect. 3.6.2, Fig. S14); four Colorado sites are too few to show such a relation.",
+        "Noise ceilings and terrain. With the estimator of Sect. S4 (3 × 3 block), La Salle and Cañon City lie close to their ceilings, with noise-corrected day-to-day correlations of {{n:r_corrected_LSCO}} and {{n:r_corrected_CNCO}}; Commerce City is intermediate ({{n:r_corrected_ADCO}}) and Grand Junction far below ({{n:r_corrected_GPCO}}). Cañon City, Colorado Springs and Pueblo began sampling in July 2025 and have only 20–23 anomaly pairs each; at Colorado Springs and Pueblo the noise-corrected correlations are negative (−0.25 and −0.32), and Wheat Ridge has too few pairs (8) for a ceiling. Terrain does not explain the ordering of the first four sites: the spread of TEMPO surface pressure within the block is smallest at Commerce City (1.8 hPa) and largest at Cañon City (11.5 hPa), the opposite of what a terrain effect would produce. Nationally, by contrast, day-to-day agreement was weaker at monitors with more terrain relief (main text Sect. 3.4, Fig. S8); four Colorado sites are too few to show such a relation.",
         "Midday scans. Restricting TEMPO to 10:00–14:00 MST lowered the pooled whole-period correlation of the 24 h samples at every block size, to 0.38, 0.50 and 0.59 for 1 × 1, 3 × 3 and 5 × 5 blocks from 0.47, 0.56 and 0.61 with all daylight scans, so the all-day mean is the better match to a 24 h sample.",
         "Smoke. Smoke affected 69 of the 453 Colorado 24 h samples (15%). The whole-period correlation was lower on smoke-affected days, 0.46 on smoke-free days (n = 276), 0.36 under light smoke (n = 48) and 0.37 under medium–heavy smoke (n = 14), but excluding smoke days still lowered the day-to-day correlation, from 0.30 to 0.23, as it did nationally. Within season, smoke-affected and smoke-free samples had similar median cloud fractions (summer 0.16 and 0.18, p = 0.52; autumn 0.13 and 0.13, p = 0.82)."
       ]
@@ -218,7 +218,21 @@ module.exports = {
     },
     {
       "table": {
-        "caption": "Table S5. Agreement between surface HCHO and the TEMPO column by HMS smoke class over the site during the sampling window widened by 3 h on each side (Sect. S5), for every duration in the national comparison, at the primary screening with scans inside the sampling window. Medians are over matched samples. The 3 h smoke classes hold too few samples to interpret.",
+        "caption": "Table S5. The temporal-averaging experiment of Fig. 3 for each spatial block: {{n:ta_samples}} 24 h samples with at least four valid scans in every block, {{n:ta_draws}} random draws per k, {{n:ta_pairs}} anomaly pairs in all; the site median is over the {{n:ta_sites}} sites with at least 10 pairs. The last row of each block is the single-scan noise implied by the slope of the column-anomaly variance against 1/k (R^{2} > 0.99), to be compared with the site medians of the scan-difference estimator: {{n:nc_single_median_11}}, {{n:nc_single_median_33}} and {{n:nc_single_median_55}} × 10^{15} molecules cm^{−2}.",
+        "builder": "temporalAveraging"
+      },
+      "p": []
+    },
+    {
+      "table": {
+        "caption": "Table S6. Weighted least-squares models of the Fisher-transformed observed within-month correlation (M1) and of the noise-corrected ratio E = r_{obs}/r_{ceiling} (M2, M3) at the {{n:gap_sites}} 24 h sites with a retrieval-noise ceiling. Predictors are standardized (coefficients are per standard deviation, standard errors in parentheses), weights are n − 3, with n the number of anomaly pairs, and the six descriptors were fixed in advance. Usable share is the percentage of all samples with at least one usable scan. E is capped at 0.999 before transformation. Univariate Spearman correlations are in output/tables/diag8_ceiling_gap_univariate.csv of the code archive, and the models that add the three geographic descriptors of main text Sect. 3.4 (west of {{n:geo_west_lon}}° W, distance to the ocean coastline and terrain relief) are in output/tables/geography_models.csv.",
+        "builder": "ceilingGapModels"
+      },
+      "p": []
+    },
+    {
+      "table": {
+        "caption": "Table S7. Agreement between surface HCHO and the TEMPO column by HMS smoke class over the site during the sampling window widened by 3 h on each side (Sect. S5), for every duration in the national comparison, at the primary screening with scans inside the sampling window. Medians are over matched samples. The 3 h smoke classes hold too few samples to interpret.",
         "header": [
           "Duration",
           "Smoke class",
@@ -317,7 +331,14 @@ module.exports = {
     },
     {
       "table": {
-        "caption": "Table S6. Comparison of 3 h surface HCHO at the two Colorado sites (Chatfield 2024–2025, Platteville August 2023–July 2025) with the mean of valid TEMPO scans in the sampling window (06:00–09:00 MST) and in windows shifted 3 and 6 h later (primary screening, 3 × 3 cells).",
+        "caption": "Table S8. The {{n:dd_sites_total}} monitors reporting both 24 h and 8 h formaldehyde. n and r are the number of within-month anomaly pairs and their correlation (primary screening, 3 × 3 block, scans inside the sampling window); r_{8h} 04:00 and 12:00 use anomalies computed within site, month and start hour; the last two correlations pair the 24 h surface sample with the mean of only those scans falling in the hours of each 8 h block. Usable share is the percentage of samples with TEMPO coverage that had at least one usable scan; scans is the median number of valid scans per usable sample. Two sites have too few 24 h anomaly pairs for a correlation. Paired summaries, including the comparison restricted to the months of the 8 h record, are in output/tables/diag7_dual_duration_paired.csv of the code archive (see Code and data availability).",
+        "builder": "dualDurationSites"
+      },
+      "p": []
+    },
+    {
+      "table": {
+        "caption": "Table S9. Comparison of 3 h surface HCHO at the two Colorado sites (Chatfield 2024–2025, Platteville August 2023–July 2025) with the mean of valid TEMPO scans in the sampling window (06:00–09:00 MST) and in windows shifted 3 and 6 h later (primary screening, 3 × 3 cells).",
         "header": [
           "",
           "Sampling window (06–09 MST)",
@@ -398,7 +419,7 @@ module.exports = {
     },
     {
       "table": {
-        "caption": "Table S7. Does the 2023 extension create the difference between the two sites? Both 3 h sites were recomputed on 2024–2025 alone, besides the record as analyzed. Chatfield State Park reported no 2023 formaldehyde, so its values are identical in the two periods and are given once.",
+        "caption": "Table S10. Does the 2023 extension create the difference between the two sites? Both 3 h sites were recomputed on 2024–2025 alone, besides the record as analyzed. Chatfield State Park reported no 2023 formaldehyde, so its values are identical in the two periods and are given once.",
         "header": [
           "",
           "Sampling window (06–09 MST)",
@@ -438,27 +459,6 @@ module.exports = {
           ]
         ],
         "notes": "Anomaly p-values are within-site-month permutation values (Sect. S3). The later window has no advantage at Platteville in either period, which is the claim made in the text; the apparent preference for the sampling window in the anomaly correlations appears only once 2023 is included (the whole-period correlations favour it in both periods), and no Platteville anomaly correlation is significant in either period."
-      },
-      "p": []
-    },
-    {
-      "table": {
-        "caption": "Table S8. The {{n:dd_sites_total}} monitors reporting both 24 h and 8 h formaldehyde. n and r are the number of within-month anomaly pairs and their correlation (primary screening, 3 × 3 block, scans inside the sampling window); r_{8h} 04:00 and 12:00 use anomalies computed within site, month and start hour; the last two correlations pair the 24 h surface sample with the mean of only those scans falling in the hours of each 8 h block. Usable share is the percentage of samples with TEMPO coverage that had at least one usable scan; scans is the median number of valid scans per usable sample. Two sites have too few 24 h anomaly pairs for a correlation. Paired summaries, including the comparison restricted to the months of the 8 h record, are in output/tables/diag7_dual_duration_paired.csv of the code archive (see Code and data availability).",
-        "builder": "dualDurationSites"
-      },
-      "p": []
-    },
-    {
-      "table": {
-        "caption": "Table S9. Weighted least-squares models of the Fisher-transformed observed within-month correlation (M1) and of the noise-corrected ratio E = r_{obs}/r_{ceiling} (M2, M3) at the {{n:gap_sites}} 24 h sites with a retrieval-noise ceiling. Predictors are standardized (coefficients are per standard deviation, standard errors in parentheses), weights are n − 3, with n the number of anomaly pairs, and the six descriptors were fixed in advance. Usable share is the percentage of all samples with at least one usable scan. E is capped at 0.999 before transformation. Univariate Spearman correlations are in output/tables/diag8_ceiling_gap_univariate.csv of the code archive, and the models that add the three geographic descriptors of main text Sect. 3.6.2 (west of {{n:geo_west_lon}}° W, distance to the ocean coastline and terrain relief) are in output/tables/geography_models.csv.",
-        "builder": "ceilingGapModels"
-      },
-      "p": []
-    },
-    {
-      "table": {
-        "caption": "Table S10. The temporal-averaging experiment of Fig. 4 for each spatial block: {{n:ta_samples}} 24 h samples with at least four valid scans in every block, {{n:ta_draws}} random draws per k, {{n:ta_pairs}} anomaly pairs in all; the site median is over the {{n:ta_sites}} sites with at least 10 pairs. The last row of each block is the single-scan noise implied by the slope of the column-anomaly variance against 1/k (R^{2} > 0.99), to be compared with the site medians of the scan-difference estimator: {{n:nc_single_median_11}}, {{n:nc_single_median_33}} and {{n:nc_single_median_55}} × 10^{15} molecules cm^{−2}.",
-        "builder": "temporalAveraging"
       },
       "p": []
     },
@@ -506,64 +506,64 @@ module.exports = {
     },
     {
       "fig": {
-        "file": "fig17_national_smoke.png",
-        "caption": "Figure S6. Pearson correlation between surface HCHO and the TEMPO column by HMS smoke class over the site during the sampling window widened by 3 h on each side (Sect. S5), for the 24 h, 8 h and 3 h sites nationally. Labels are the number of matched samples. Agreement rises with smoke at both well-sampled durations; the 3 h record, with 95 light and 12 medium–heavy samples, is not interpreted."
-      },
-      "p": []
-    },
-    {
-      "fig": {
         "file": "fig21_ceiling_gap.png",
-        "caption": "Figure S7. (a) Observed within-month anomaly correlation at each of the {{n:gap_sites}} 24 h sites with a retrieval-noise ceiling (at least 20 successive-scan pairs and 10 anomaly pairs; 3 × 3 block), against that ceiling. The dashed line is equality (E = 1), where agreement would be limited only by retrieval noise, and the dotted line is half the ceiling. Color is the site's median surface HCHO (logarithmic scale). The {{n:nat_sites_ceiling_undefined}} sites at which the noise bound exceeded the anomaly variance have no ceiling and are not shown. (b) The noise-corrected ratio E = r_{obs}/r_{ceiling} against the six site descriptors of Table S9, on their natural scales, with unweighted least-squares fits and their 95% confidence bands drawn in every panel for illustration; the dashed line is E = 1. The Table S9 models are weighted and use the logarithms of surface HCHO, signal-to-noise ratio and scan count."
+        "caption": "Figure S6. (a) Observed within-month anomaly correlation at each of the {{n:gap_sites}} 24 h sites with a retrieval-noise ceiling (at least 20 successive-scan pairs and 10 anomaly pairs; 3 × 3 block), against that ceiling. The dashed line is equality (E = 1), where agreement would be limited only by retrieval noise, and the dotted line is half the ceiling. Color is the site's median surface HCHO (logarithmic scale). The {{n:nat_sites_ceiling_undefined}} sites at which the noise bound exceeded the anomaly variance have no ceiling and are not shown. (b) The noise-corrected ratio E = r_{obs}/r_{ceiling} against the six site descriptors of Table S6, on their natural scales, with unweighted least-squares fits and their 95% confidence bands drawn in every panel for illustration; the dashed line is E = 1. The Table S6 models are weighted and use the logarithms of surface HCHO, signal-to-noise ratio and scan count."
       },
       "p": []
     },
     {
       "fig": {
-        "file": "fig11_national_lag_curve.png",
-        "caption": "Figure S8. Pooled correlation between sub-daily surface HCHO and the mean TEMPO column as a function of the lag of the TEMPO window from the sampling window, for the 3 h and 8 h sites. \"Whole\" uses the concentrations as measured; \"anomalies\" uses deviations from site-month means. Labels give the number of samples in each series; the anomaly series can have fewer because site-months with fewer than three samples are dropped. At −3 h the 3 h series holds only the California sites, because no Colorado scan passed screening in that window. Because the sites pooled here sample different windows, a given lag corresponds to different times of day at different sites, which is why the main text reports agreement by window start hour instead."
-      },
-      "p": []
-    },
-    {
-      "fig": {
-        "file": "fig12_national_by_start_hour.png",
-        "caption": "Figure S9. Correlation between sub-daily surface HCHO and the mean TEMPO column, grouped by the local standard hour at which the sampling window begins, using only scans inside the sampling window. \"Whole\" uses the concentrations as measured; \"anomalies\" uses deviations from site-month means computed within each start hour. In the 3 h panel, the windows beginning at 05:00, 12:00 and 16:00 are the two California sites and the window beginning at 06:00 is the two Colorado sites (not joined to the California points); in the 8 h panel each point pools all 40 sites. Start hours with fewer than 12 usable samples or fewer than six anomaly pairs are not shown: in the 8 h panel the dark 20:00 LST block and the off-schedule blocks used briefly at five sites, and in the 3 h panel the dark 23:00 windows and the 08:00 windows (14 usable samples, too few anomaly pairs). Labels give the number of samples in each series; the anomaly series can have fewer because site-months with fewer than three samples are dropped."
-      },
-      "p": []
-    },
-    {
-      "fig": {
-        "file": "fig7_threeh_scatter.png",
-        "caption": "Figure S10. Three-hour surface HCHO at Chatfield State Park (CHCO, 2024–2025) and Platteville (PVCO, August 2023–July 2025) versus the mean TEMPO column in the sampling window (06:00–09:00 MST) and in windows shifted by +3, +6 and +9 h. The −3 h window is not shown because no scan passed screening in it, and the +9 h row holds only seven Platteville samples. Colors denote season; lines show reduced major axis fits where the Pearson correlation is significant."
-      },
-      "p": []
-    },
-    {
-      "fig": {
-        "file": "fig10_threeh_lag_curve.png",
-        "caption": "Figure S11. Agreement between 3 h surface HCHO and the mean TEMPO column as a function of the lag between the sampling window (06:00–09:00 MST) and the satellite window, for the whole period and for within-month anomalies. Labels give the number of samples in each series; the +9 h point (15:00–18:00 MST) is seven Platteville samples, which Table S6 omits. Agreement is highest in the window beginning when sampling ends (09:00–12:00 MST), when the median TEMPO boundary layer height has risen from 0.45 to 1.5 km; the pooled curve averages two sites that differ (Table S6)."
-      },
-      "p": []
-    },
-    {
-      "fig": {
-        "file": "figS3_threeh_window_columns.png",
-        "caption": "Figure S12. TEMPO columns for the same 3 h samples, measured in the sampling window (06:00–09:00 MST) and three hours later. These are the samples usable in both windows (50 at Chatfield State Park and 52 at Platteville; 42 and 38 anomaly pairs in site-months with at least three such samples), on which the paired comparison of the main text is made: the anomaly correlation with surface HCHO rises from −0.16 in the sampling window to 0.41 three hours later at Chatfield (an increase of 0.57; 95% CI: 0.21, 0.88), from 0.17 to 0.24 at Platteville (0.07; −0.20, 0.35), and from 0.02 to 0.31 with both sites pooled (0.29; 0.05, 0.52), the pooled value being descriptive because the two sites behave differently. The two columns are only weakly correlated at Chatfield (r = 0.27 over the whole period, 0.01 for within-month anomalies) and more closely at Platteville (0.61 and 0.31); colors denote season; the dashed line is 1:1."
-      },
-      "p": []
-    },
-    {
-      "fig": {
-        "file": "fig20_dual_duration.png",
-        "caption": "Figure S13. Within-month anomaly correlation between surface HCHO and the TEMPO column at the {{n:dd_sites_paired}} monitors with at least {{n:dd_min_pairs}} anomaly pairs in both their 24 h and their 8 h record (primary screening, scans inside the sampling window). Symbol size is the smaller of the two pair counts; the dashed line is equality."
+        "file": "fig17_national_smoke.png",
+        "caption": "Figure S7. Pearson correlation between surface HCHO and the TEMPO column by HMS smoke class over the site during the sampling window widened by 3 h on each side (Sect. S5), for the 24 h, 8 h and 3 h sites nationally. Labels are the number of matched samples. Agreement rises with smoke at both well-sampled durations; the 3 h record, with 95 light and 12 medium–heavy samples, is not interpreted."
       },
       "p": []
     },
     {
       "fig": {
         "file": "fig25_geography.png",
-        "caption": "Figure S14. Within-month anomaly correlation at each of the {{n:geo_sites}} 24 h monitors with a site-level correlation against (a) longitude, (b) geodesic distance to the ocean coastline (Atlantic, Pacific and Gulf of Mexico features of the U.S. Census TIGER/Line coastline file; {{~censuscoast2023}}) and (c) terrain relief across the 5 × 5 block of TEMPO grid cells around the monitor, computed from the TEMPO surface pressure of each cell (main text, Sect. 2.3.3). Orange symbols are monitors within {{n:geo_coast_km}} km of the ocean coastline and blue symbols inland monitors; symbol size is the number of anomaly pairs. The dashed line in (a) marks {{n:geo_west_lon}}° W, and the grey curves are loess fits shown for guidance only. Distance and relief are on logarithmic axes."
+        "caption": "Figure S8. Within-month anomaly correlation at each of the {{n:geo_sites}} 24 h monitors with a site-level correlation against (a) longitude, (b) geodesic distance to the ocean coastline (Atlantic, Pacific and Gulf of Mexico features of the U.S. Census TIGER/Line coastline file; {{~censuscoast2023}}) and (c) terrain relief across the 5 × 5 block of TEMPO grid cells around the monitor, computed from the TEMPO surface pressure of each cell (main text, Sect. 2.3.2). Orange symbols are monitors within {{n:geo_coast_km}} km of the ocean coastline and blue symbols inland monitors; symbol size is the number of anomaly pairs. The dashed line in (a) marks {{n:geo_west_lon}}° W, and the grey curves are loess fits shown for guidance only. Distance and relief are on logarithmic axes."
+      },
+      "p": []
+    },
+    {
+      "fig": {
+        "file": "fig20_dual_duration.png",
+        "caption": "Figure S9. Within-month anomaly correlation between surface HCHO and the TEMPO column at the {{n:dd_sites_paired}} monitors with at least {{n:dd_min_pairs}} anomaly pairs in both their 24 h and their 8 h record (primary screening, scans inside the sampling window). Symbol size is the smaller of the two pair counts; the dashed line is equality."
+      },
+      "p": []
+    },
+    {
+      "fig": {
+        "file": "fig11_national_lag_curve.png",
+        "caption": "Figure S10. Pooled correlation between sub-daily surface HCHO and the mean TEMPO column as a function of the lag of the TEMPO window from the sampling window, for the 3 h and 8 h sites. \"Whole\" uses the concentrations as measured; \"anomalies\" uses deviations from site-month means. Labels give the number of samples in each series; the anomaly series can have fewer because site-months with fewer than three samples are dropped. At −3 h the 3 h series holds only the California sites, because no Colorado scan passed screening in that window. Because the sites pooled here sample different windows, a given lag corresponds to different times of day at different sites, which is why the main text reports agreement by window start hour instead."
+      },
+      "p": []
+    },
+    {
+      "fig": {
+        "file": "fig12_national_by_start_hour.png",
+        "caption": "Figure S11. Correlation between sub-daily surface HCHO and the mean TEMPO column, grouped by the local standard hour at which the sampling window begins, using only scans inside the sampling window. \"Whole\" uses the concentrations as measured; \"anomalies\" uses deviations from site-month means computed within each start hour. In the 3 h panel, the windows beginning at 05:00, 12:00 and 16:00 are the two California sites and the window beginning at 06:00 is the two Colorado sites (not joined to the California points); in the 8 h panel each point pools all 40 sites. Start hours with fewer than 12 usable samples or fewer than six anomaly pairs are not shown: in the 8 h panel the dark 20:00 LST block and the off-schedule blocks used briefly at five sites, and in the 3 h panel the dark 23:00 windows and the 08:00 windows (14 usable samples, too few anomaly pairs). Labels give the number of samples in each series; the anomaly series can have fewer because site-months with fewer than three samples are dropped."
+      },
+      "p": []
+    },
+    {
+      "fig": {
+        "file": "fig7_threeh_scatter.png",
+        "caption": "Figure S12. Three-hour surface HCHO at Chatfield State Park (CHCO, 2024–2025) and Platteville (PVCO, August 2023–July 2025) versus the mean TEMPO column in the sampling window (06:00–09:00 MST) and in windows shifted by +3, +6 and +9 h. The −3 h window is not shown because no scan passed screening in it, and the +9 h row holds only seven Platteville samples. Colors denote season; lines show reduced major axis fits where the Pearson correlation is significant."
+      },
+      "p": []
+    },
+    {
+      "fig": {
+        "file": "fig10_threeh_lag_curve.png",
+        "caption": "Figure S13. Agreement between 3 h surface HCHO and the mean TEMPO column as a function of the lag between the sampling window (06:00–09:00 MST) and the satellite window, for the whole period and for within-month anomalies. Labels give the number of samples in each series; the +9 h point (15:00–18:00 MST) is seven Platteville samples, which Table S9 omits. Agreement is highest in the window beginning when sampling ends (09:00–12:00 MST), when the median TEMPO boundary layer height has risen from 0.45 to 1.5 km; the pooled curve averages two sites that differ (Table S9)."
+      },
+      "p": []
+    },
+    {
+      "fig": {
+        "file": "figS3_threeh_window_columns.png",
+        "caption": "Figure S14. TEMPO columns for the same 3 h samples, measured in the sampling window (06:00–09:00 MST) and three hours later. These are the samples usable in both windows (50 at Chatfield State Park and 52 at Platteville; 42 and 38 anomaly pairs in site-months with at least three such samples), on which the paired comparison of the main text is made: the anomaly correlation with surface HCHO rises from −0.16 in the sampling window to 0.41 three hours later at Chatfield (an increase of {{n:win_chco_diff}}; 95% CI: {{n:win_chco_lo}}, {{n:win_chco_hi}}), from 0.17 to 0.24 at Platteville ({{n:win_pvco_diff}}; {{n:win_pvco_lo}}, {{n:win_pvco_hi}}), and from 0.02 to 0.31 with both sites pooled ({{n:win_all_diff}}; {{n:win_all_lo}}, {{n:win_all_hi}}; intervals resample whole site-months), the pooled value being descriptive because the two sites behave differently. The two columns are only weakly correlated at Chatfield (r = 0.27 over the whole period, 0.01 for within-month anomalies) and more closely at Platteville (0.61 and 0.31); colors denote season; the dashed line is 1:1."
       },
       "p": []
     }

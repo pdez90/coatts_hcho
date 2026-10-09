@@ -154,22 +154,36 @@ perm_anom_p <- function(d, nperm = 2000L, seed = 42L) {
 }
 
 # Williams' t for two dependent correlations sharing y: cor(y, x1) vs cor(y, x2)
-# (Steiger 1980, eq. 7), with a paired bootstrap CI for the difference. Used by
-# step 09 (Colorado 3 h windows, 24 h time of day) and step 17 (every 24 h site).
-dep_cor_test <- function(y, x1, x2, nboot = 2000L) {
+# (Steiger 1980, eq. 7), with a bootstrap CI and p-value for the difference. Used
+# by step 09 (Colorado 3 h windows, 24 h time of day) and step 17 (every 24 h site).
+#
+# Williams' test treats the pairs as independent. Within-month anomalies are not:
+# each is a deviation from a mean estimated from the same site-month. Give
+# `cluster` (site-months, or sites) and the bootstrap resamples whole clusters,
+# so every resampled site-month keeps all the samples its anomalies were formed
+# from and the dependence that creates is carried into the interval. boot_p is
+# the two-sided percentile-bootstrap p-value for no difference (smallest
+# 1/(nboot + 1)); Williams' p is kept as an approximate, parametric companion.
+dep_cor_test <- function(y, x1, x2, nboot = 2000L, cluster = NULL) {
   ok <- is.finite(y) & is.finite(x1) & is.finite(x2)
+  if (!is.null(cluster)) cluster <- as.character(cluster)[ok]
   y <- y[ok]; x1 <- x1[ok]; x2 <- x2[ok]; n <- length(y)
   if (n < 8) return(tibble(n = n))
   r12 <- cor(y, x1); r13 <- cor(y, x2); r23 <- cor(x1, x2)
   detR <- 1 - r12^2 - r13^2 - r23^2 + 2 * r12 * r13 * r23
   rbar <- (r12 + r13) / 2
   t <- (r12 - r13) * sqrt((n - 1) * (1 + r23) / (2 * ((n - 1) / (n - 3)) * detR + rbar^2 * (1 - r23)^3))
+  idx <- if (is.null(cluster)) NULL else unname(split(seq_len(n), cluster))
+  G <- if (is.null(idx)) n else length(idx)
   bt <- replicate(nboot, {
-    k <- sample.int(n, n, replace = TRUE)
+    k <- if (is.null(idx)) sample.int(n, n, replace = TRUE) else unlist(idx[sample.int(G, G, replace = TRUE)])
     suppressWarnings(cor(y[k], x1[k]) - cor(y[k], x2[k]))
   })
+  bt <- bt[is.finite(bt)]
+  boot_p <- min(1, (2 * min(sum(bt <= 0), sum(bt >= 0)) + 1) / (length(bt) + 1))
   tibble(n = n, r_start = r12, r_end = r13, r_between_window_columns = r23, diff_start_minus_end = r12 - r13,
-         diff_ci_lo = quantile(bt, 0.025, na.rm = TRUE)[[1]], diff_ci_hi = quantile(bt, 0.975, na.rm = TRUE)[[1]],
+         diff_ci_lo = quantile(bt, 0.025)[[1]], diff_ci_hi = quantile(bt, 0.975)[[1]],
+         boot_unit = if (is.null(cluster)) "pair" else "cluster", boot_clusters = G, boot_p = boot_p,
          williams_t = t, df = n - 3, williams_p = 2 * pt(-abs(t), df = n - 3))
 }
 

@@ -246,13 +246,16 @@ tod_season_keys <- tibble(key = paste0("nat_tod_pct_", tolower(names(tod_seas)))
                           value = sprintf("%.0f", 100 * as.numeric(tod_seas) / sum(tod_seas)))
 log_msg("Time of day: anomaly site-days by season (DJF/MAM/JJA/SON) ", paste(as.integer(tod_seas), collapse = "/"))
 tod_pooled <- bind_rows(
-  dep_cor_test(tod$hcho_ugm3, tod$col_late, tod$col_early) |> mutate(comparison = "whole period"),
-  dep_cor_test(tod_an$hcho_ugm3_anom, tod_an$col_late_anom, tod_an$col_early_anom) |>
+  # pooled over sites: resample whole sites
+  dep_cor_test(tod$hcho_ugm3, tod$col_late, tod$col_early, cluster = tod$site) |>
+    mutate(comparison = "whole period"),
+  dep_cor_test(tod_an$hcho_ugm3_anom, tod_an$col_late_anom, tod_an$col_early_anom, cluster = tod_an$site) |>
     mutate(comparison = "within-month anomalies")) |>
   mutate(site = "all sites", .before = 1)
 tod_site <- tod_an |>
   group_by(site) |> filter(n() >= TOD_MIN_PAIRS) |>
-  group_modify(~ dep_cor_test(.x$hcho_ugm3_anom, .x$col_late_anom, .x$col_early_anom)) |>
+  # one site: resample whole site-months
+  group_modify(~ dep_cor_test(.x$hcho_ugm3_anom, .x$col_late_anom, .x$col_early_anom, cluster = .x$ym)) |>
   ungroup() |> mutate(comparison = "within-month anomalies")
 tod_out <- bind_rows(tod_pooled, tod_site) |>
   rename(r_09_12 = r_start, r_06_09 = r_end, diff_09_12_minus_06_09 = diff_start_minus_end)
@@ -263,9 +266,12 @@ print(tod_out |> filter(site == "all sites") |>
 ta <- tod_out |> filter(site == "all sites", comparison == "within-month anomalies")
 tod_keys <- tibble(
   key = c("nat_tod_n", "nat_tod_r_0609", "nat_tod_r_0912", "nat_tod_p",
+          "nat_tod_diff", "nat_tod_diff_lo", "nat_tod_diff_hi", "nat_tod_bootp", "nat_tod_boot_sites",
           "nat_tod_sites", "nat_tod_sites_late_better", "nat_tod_sites_sig", "nat_tod_sites_sig_lower"),
   value = c(as.character(ta$n), sprintf("%.2f", ta$r_06_09), sprintf("%.2f", ta$r_09_12),
             sprintf("%.3f", ta$williams_p),
+            sprintf("%.2f", ta$diff_09_12_minus_06_09), sprintf("%.2f", ta$diff_ci_lo), sprintf("%.2f", ta$diff_ci_hi),
+            ifelse(ta$boot_p < 0.001, "p < 0.001", sprintf("p = %.3f", ta$boot_p)), as.character(ta$boot_clusters),
             as.character(nrow(tod_site)),
             as.character(sum(tod_site$diff_09_12_minus_06_09 > 0, na.rm = TRUE)),
             as.character(sum(tod_site$williams_p < 0.05 & tod_site$diff_09_12_minus_06_09 > 0, na.rm = TRUE)),
