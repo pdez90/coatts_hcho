@@ -324,7 +324,8 @@ ui <- page_navbar(
         navset_card_tab(id = "tab", full_screen = TRUE,
           nav_panel("TEMPO vs surface HCHO", value = "tempo",
             uiOutput("tempo_boxes"),
-            plotlyOutput("p_ts", height = "380px"),
+            uiOutput("ts_note"),
+            plotlyOutput("p_ts", height = "480px"),
             layout_columns(col_widths = breakpoints(sm = 12, lg = c(6, 6)),
                            plotlyOutput("p_scatter", height = "330px"),
                            plotlyOutput("p_anom", height = "330px")),
@@ -506,6 +507,17 @@ server <- function(input, output, session) {
                           if (s$n_anom < MIN_REPORT) "; below the paper's 10-pair threshold" else ""))))
   })
 
+  output$ts_note <- renderUI({
+    req(nrow(sel_all()) > 0)
+    div(class = "small text-muted mb-1",
+        sprintf(paste0("Every %d h surface sample at this monitor, in date order: this is one site's record, not an ",
+                       "average across sites. Each TEMPO point is the mean of all usable scans (effective cloud ",
+                       "fraction \u2264 0.2) over the 3 \u00d7 3 block of grid cells (about 7 \u00d7 5 km) around ",
+                       "the monitor, during %s. Filters at left apply."),
+                cur_dur(), if (cur_lag() == 0) "that sample's own sampling window"
+                           else sprintf("the sampling window shifted by %+d h", cur_lag())))
+  })
+
   output$p_ts <- renderPlotly({
     d <- sel_all()
     validate(need(nrow(d) > 0, "No samples match this selection."))
@@ -515,7 +527,7 @@ server <- function(input, output, session) {
                    text = sprintf("%s<br>surface HCHO %.2f %s<br>%s", format(d$date), d$hcho, U_CONC,
                                   ifelse(d$usable, "usable TEMPO observation", "no usable TEMPO observation")),
                    hoverinfo = "text") |>
-      layout(yaxis = list(title = paste0("Surface HCHO (", U_CONC, ")")))
+      layout(yaxis = list(title = list(text = paste0("Surface HCHO<br>(", U_CONC, ")"), standoff = 8)))
     u <- d[d$usable, ]
     if (nrow(u)) {
       u$smoke_lab <- factor(ifelse(is.na(u$smoke), "no HMS data", u$smoke), levels = names(SMOKE_COL))
@@ -525,14 +537,21 @@ server <- function(input, output, session) {
                                     format(u$date), u$column, u$n_valid, as.character(u$smoke_lab),
                                     fmt_num(u$hrrr_pbl_km, 2), fmt_num(u$tempo_pbl_km, 2), fmt_num(u$temp_c, 1)),
                      hoverinfo = "text") |>
-        layout(yaxis = list(title = paste0("TEMPO (", U_COL, ")")))
+        layout(yaxis = list(title = list(text = paste0("TEMPO column<br>(", U_COL, ")"), standoff = 8)))
     } else {
       bot <- plotly_empty(type = "scatter", mode = "markers")
     }
-    subplot(top, bot, nrows = 2, shareX = TRUE, titleY = TRUE, heights = c(0.5, 0.5)) |>
-      layout(title = list(text = "Surface samples (open: no usable TEMPO observation) and TEMPO columns by smoke class",
-                          font = list(size = 13)),
-             legend = list(orientation = "h", y = -0.12), xaxis = list(title = ""))
+    subplot(top, bot, nrows = 2, shareX = TRUE, titleY = TRUE, heights = c(0.5, 0.5), margin = 0.04) |>
+      layout(margin = list(l = 95, t = 30),
+             annotations = list(
+               list(text = "<b>Surface HCHO</b>, one point per sample (open: no usable TEMPO observation)",
+                    x = 0, y = 1, xref = "paper", yref = "paper", xanchor = "left", yanchor = "bottom",
+                    showarrow = FALSE, font = list(size = 12)),
+               list(text = "<b>TEMPO column</b> for the same samples, coloured by NOAA HMS smoke",
+                    x = 0, y = 0.46, xref = "paper", yref = "paper", xanchor = "left", yanchor = "bottom",
+                    showarrow = FALSE, font = list(size = 12))),
+             legend = list(orientation = "h", y = -0.1, title = list(text = "Smoke: ")),
+             xaxis = list(title = ""))
   })
 
   output$p_scatter <- renderPlotly({
