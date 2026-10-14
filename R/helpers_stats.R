@@ -166,7 +166,10 @@ perm_anom_p <- function(d, nperm = 2000L, seed = 42L) {
 # 1/(nboot + 1)); Williams' p is kept as an approximate, parametric companion.
 dep_cor_test <- function(y, x1, x2, nboot = 2000L, cluster = NULL) {
   ok <- is.finite(y) & is.finite(x1) & is.finite(x2)
-  if (!is.null(cluster)) cluster <- as.character(cluster)[ok]
+  if (!is.null(cluster)) {
+    if (anyNA(cluster)) stop("dep_cor_test: missing cluster labels")
+    cluster <- as.character(cluster)[ok]
+  }
   y <- y[ok]; x1 <- x1[ok]; x2 <- x2[ok]; n <- length(y)
   if (n < 8) return(tibble(n = n))
   r12 <- cor(y, x1); r13 <- cor(y, x2); r23 <- cor(x1, x2)

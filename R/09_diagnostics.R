@@ -6,7 +6,8 @@
 #      it vary together from day to day? Are the scans in either window screened
 #      out more often, or noisier, at one site than the other?
 #   2. 3-h arm: the sampling window vs the window after it, on the SAME samples
-#      (Williams' test for dependent correlations + paired bootstrap), and the
+#      (Williams' test for dependent correlations + a bootstrap that resamples
+#      whole site-months for the anomalies), and the
 #      seasonal mix of usable samples in each window
 #   3. 24-h arm: how much day-to-day column variability is retrieval noise, and
 #      the correlation ceiling that noise alone implies (by site and block size)
@@ -102,7 +103,7 @@ scan_level <- function(cells, block, max_ecf = CFG$qc_max_cloud_fraction) {
     mutate(valid = n_pass >= pmax(1, ceiling(CFG$qc_min_cell_fraction * n_cells)),
            u_rms = nan_to_na(u_rms), ecf = nan_to_na(ecf), sza = nan_to_na(sza))
 }
-# dep_cor_test() (Williams' t with a paired bootstrap CI) lives in
+# dep_cor_test() (Williams' t with a pair or cluster bootstrap CI) lives in
 # R/helpers_stats.R, shared with step 17; nboot above is its default.
 
 summary_lines <- character()
@@ -231,7 +232,7 @@ if (have_threeh) {
     by_site_and_all(both, function(d) dep_cor_test(d$hcho_ugm3, d$tempo_vc_1e15_after, d$tempo_vc_1e15_window)) |>
       mutate(comparison = "whole period", .after = site),
     # anomalies: resample whole site-months (Williams' p treats them as independent)
-    by_site_and_all(both_anom, function(d) dep_cor_test(d$s_a, d$ca_after, d$ca_window,
+    by_site_and_all(both_anom, function(d) dep_cor_test(d$s_a, d$ca_after, d$ca_window, nboot = 10000L,
                                                         cluster = paste(d$site, d$ym))) |>
       mutate(comparison = "within-month anomalies", .after = site)
   ) |>
@@ -240,7 +241,7 @@ if (have_threeh) {
   out_tbl(t2a, "diag2_threeh_window_vs_after.csv")
   print(t2a)
   # the paired comparison of the main text (Sect. 3.5, Fig. S12), by name
-  ptxt9 <- function(p) ifelse(p < 0.001, "p < 0.001", sprintf("p = %.3f", p))
+  ptxt9 <- function(p) ifelse(is.na(p), NA_character_, ifelse(p < 0.001, "p < 0.001", sprintf("p = %.3f", p)))
   w2 <- filter(t2a, comparison == "within-month anomalies")
   win_keys <- map(c(chco = "CHCO", pvco = "PVCO", all = "all sites"), function(s) {
     x <- w2[w2$site == s, ]
@@ -596,7 +597,8 @@ t6b <- map(c("all", "one"), function(v) {
   bind_rows(
     by_site_and_all(pair6, function(x) dep_cor_test(x$hcho_ugm3, x[[cl]], x[[ce]])) |>
       mutate(comparison = "whole period", .after = site),
-    by_site_and_all(an6, function(x) dep_cor_test(x$hcho_ugm3_anom, x[[paste0(cl, "_anom")]], x[[paste0(ce, "_anom")]])) |>
+    by_site_and_all(an6, function(x) dep_cor_test(x$hcho_ugm3_anom, x[[paste0(cl, "_anom")]], x[[paste0(ce, "_anom")]],
+                                                  cluster = paste(x$site, x$ym))) |>
       mutate(comparison = "within-month anomalies", .after = site)
   ) |>
     mutate(scans = if (v == "all") "all valid scans in window" else "one scan nearest 09:00", .after = site)

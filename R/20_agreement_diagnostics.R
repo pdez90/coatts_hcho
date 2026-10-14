@@ -824,9 +824,10 @@ if (HAS_GG) {
                                    labels = c("absolute depth", "relative to the site-month", "relative, smoke-free days only")),
            sample = factor(sample, levels = c("8 h, start 04:00 LST", "8 h, start 12:00 LST", "24 h"),
                            labels = c("8 h samples from 04:00 LST", "8 h samples from 12:00 LST", "24 h samples")))
+  ci_txt <- function(x) if (abs(x) < 0.01 && x != 0) sprintf("%.3f", x) else sprintf("%.2f", x)
   ann23 <- t23 |> filter(tert == "deep") |>
     group_by(sample, stratification) |>
-    summarise(txt = sprintf("%+.2f (%.2f, %.2f)", diff_top_minus_bottom[1], diff_ci_lo[1], diff_ci_hi[1]), .groups = "drop") |>
+    summarise(txt = sprintf("%+.2f (%s, %s)", diff_top_minus_bottom[1], ci_txt(diff_ci_lo[1]), ci_txt(diff_ci_hi[1])), .groups = "drop") |>
     group_by(sample) |> mutate(y = 0.72 - 0.045 * (as.integer(stratification) - 1)) |> ungroup()
   p23 <- ggplot(t23, aes(tert, r, fill = stratification)) +
     geom_col(position = position_dodge(0.72), width = 0.68) +

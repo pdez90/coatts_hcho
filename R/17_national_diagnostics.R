@@ -247,9 +247,10 @@ tod_season_keys <- tibble(key = paste0("nat_tod_pct_", tolower(names(tod_seas)))
 log_msg("Time of day: anomaly site-days by season (DJF/MAM/JJA/SON) ", paste(as.integer(tod_seas), collapse = "/"))
 tod_pooled <- bind_rows(
   # pooled over sites: resample whole sites
-  dep_cor_test(tod$hcho_ugm3, tod$col_late, tod$col_early, cluster = tod$site) |>
+  dep_cor_test(tod$hcho_ugm3, tod$col_late, tod$col_early, cluster = tod$site, nboot = 10000L) |>
     mutate(comparison = "whole period"),
-  dep_cor_test(tod_an$hcho_ugm3_anom, tod_an$col_late_anom, tod_an$col_early_anom, cluster = tod_an$site) |>
+  dep_cor_test(tod_an$hcho_ugm3_anom, tod_an$col_late_anom, tod_an$col_early_anom, cluster = tod_an$site,
+               nboot = 10000L) |>
     mutate(comparison = "within-month anomalies")) |>
   mutate(site = "all sites", .before = 1)
 tod_site <- tod_an |>
