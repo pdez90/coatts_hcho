@@ -17,6 +17,7 @@ data_file <- if (file.exists(file.path("appdata", "app_data.rds"))) file.path("a
 D <- readRDS(data_file)
 SITES <- D$sites; TEMPO <- D$tempo; TOX <- D$toxics; META <- D$meta; GEO <- D$geo
 SCREEN <- D$screen; SENS_NAT <- D$sens_nat   # screening variants; every national site by configuration
+FIND <- D$findings                           # the paper's national results (step 24, from the pipeline tables)
 
 `%or%` <- function(a, b) if (is.null(a) || !length(a) || all(is.na(a))) b else a
 fmt_r <- function(r) if (is.null(r) || is.na(r)) "\u2013" else sprintf("%.2f", r)
@@ -71,8 +72,12 @@ NET_N  <- colSums(NET_MAT[IS_NAT, , drop = FALSE])
 # ---- what the app is for -----------------------------------------------------------------
 INTRO_TEXT <- tagList(
   "This app compares formaldehyde (HCHO) measured at ground-based monitors with the HCHO column that NASA's ",
-  "TEMPO satellite measures from geostationary orbit, sample by sample, from ",
-  format(min(TEMPO$date), "%B %Y"), " to ", format(max(TEMPO$date), "%B %Y"), ". ",
+  "TEMPO satellite measures from geostationary orbit, sample by sample. The national analysis covers ",
+  paste(range(format(TEMPO$date[TEMPO$arm == "national"], "%Y")), collapse = "\u2013"),
+  if (any(TEMPO$arm == "colorado_3h"))
+    paste0("; the Colorado analysis extends the Platteville record back to ",
+           format(min(TEMPO$date[TEMPO$arm == "colorado_3h"]), "%B %Y")) else "",
+  ". ",
   sprintf("The ground data are the integrated 24, 8 and 3 h samples of %d U.S. EPA Air Quality System (AQS) monitors: ",
           sum(IS_NAT)),
   sprintf("NATTS (%d), NCore (%d), PAMS (%d) and near-road (%d) sites%s, and %d state and local monitors with no network listed in AQS",
@@ -83,7 +88,8 @@ INTRO_TEXT <- tagList(
   sprintf(". At the %d Colorado sites (black outline) the CDPHE ", sum(SITES$colorado_detail)),
   "air-toxics packets add every other toxic measured there. Click a monitor to see how closely surface and satellite ",
   "agree, over the whole period and day to day; the ", tags$b("How agreement varies"), " tab shows how that agreement ",
-  "changes with boundary-layer height, temperature, timing, smoke, season and the satellite screening.")
+  "changes with boundary-layer height, temperature, timing, smoke, season and the satellite screening. The paper's ",
+  "national results are summarized on the ", tags$b("Main findings"), " tab.")
 INTRO <- div(class = "alert alert-light border small mb-3", tags$b("What this app is for. "), INTRO_TEXT)
 
 # ---- colouring the scatter plots ----------------------------------------------------------
@@ -197,22 +203,38 @@ filter_text <- function(smoke, seasons) {
 MAP_ROWS <- TEMPO[TEMPO$lag_h == 0L & TEMPO$usable &
                     paste(TEMPO$site_id, TEMPO$arm, TEMPO$duration_h) %in%
                     paste(SITES$site_id, SITES$map_arm, SITES$map_duration), ]
-map_stats <- function(smoke = "all", seasons = names(SEASONS)) {
-  d  <- filter_rows(MAP_ROWS, smoke, seasons)
+# every duration of each site's map arm, for the record selector above the map
+MAP_ALL <- TEMPO[TEMPO$lag_h == 0L & TEMPO$usable &
+                   paste(TEMPO$site_id, TEMPO$arm) %in% paste(SITES$site_id, SITES$map_arm), ]
+MAP_DUR_CHOICES <- c("Longest at each site" = "longest",
+                     setNames(as.character(sort(unique(MAP_ALL$duration_h), decreasing = TRUE)),
+                              paste(sort(unique(MAP_ALL$duration_h), decreasing = TRUE), "h")))
+# dur: "longest" (each site's longest record) or a duration in hours; the column
+# dur gives the record behind each site's colour (NA: the site has no such record)
+map_stats <- function(smoke = "all", seasons = names(SEASONS), dur = "longest") {
+  if (identical(dur, "longest")) {
+    d <- MAP_ROWS; shown <- SITES$map_duration
+  } else {
+    dd <- as.integer(dur); d <- MAP_ALL[MAP_ALL$duration_h == dd, ]
+    shown <- ifelse(SITES$site_id %in% d$site_id, dd, NA_integer_)
+  }
+  d  <- filter_rows(d, smoke, seasons)
   st <- lapply(split(d, factor(d$site_id, levels = SITES$site_id)),
                function(x) pair_stats(x$date, x$hcho, x$column))
   data.frame(n_anom = vapply(st, function(z) as.integer(z$n_anom), 1L),
-             r_anom = vapply(st, function(z) as.numeric(z$r_anom), 1), row.names = NULL)
+             r_anom = vapply(st, function(z) as.numeric(z$r_anom), 1),
+             dur = as.integer(shown), row.names = NULL)
 }
+map_show <- function(ms, nets, dur) site_in_nets(nets) & (identical(dur, "longest") | !is.na(ms$dur))
 SITE_HEAD <- sprintf("<b>%s</b><br>AQS %s%s%s%s", SITES$name, SITES$site_id,
                      ifelse(is.na(SITES$site_code), "", paste0(" &middot; CDPHE ", SITES$site_code)),
                      ifelse(nzchar(NET_TEXT), paste0("<br>AQS networks: ", NET_TEXT), "<br>No network listed in AQS"),
                      ifelse(is.na(SITES$program), "", paste0("<br>", SITES$program)))
 map_labels <- function(ms, ftxt) {
-  stat <- ifelse(is.na(SITES$map_duration), "no matched samples",
+  stat <- ifelse(is.na(ms$dur), "no matched samples",
           ifelse(ms$n_anom >= MIN_REPORT & !is.na(ms$r_anom),
-                 sprintf("%d h record: day-to-day r = %.2f (%d pairs)", SITES$map_duration, ms$r_anom, ms$n_anom),
-                 sprintf("%d h record: %d anomaly pairs, fewer than %d", SITES$map_duration, ms$n_anom, MIN_REPORT)))
+                 sprintf("%d h record: day-to-day r = %.2f (%d pairs)", ms$dur, ms$r_anom, ms$n_anom),
+                 sprintf("%d h record: %d anomaly pairs, fewer than %d", ms$dur, ms$n_anom, MIN_REPORT)))
   paste0(SITE_HEAD, "<br>", stat, "<br><i>", ftxt, "</i>")
 }
 add_site_markers <- function(map, ms, ftxt, show = rep(TRUE, nrow(SITES))) {
@@ -248,6 +270,8 @@ ABOUT <- card(card_body(
     "seven Colorado Air Toxics Trends (COATTS) sites, and carbonyls, speciated non-methane organic compounds and methane at the ",
     "two ozone-precursor (COOPs) sites. Values are shown as reported; samples carrying an AQS null-data qualifier and the ",
     "packets' QC samples are removed, and non-detects are drawn at their detection limit where one is reported."),
+  p("The ", tags$b("Main findings"), " tab gives the paper's national results, read from the pipeline's output ",
+    "tables when the app data are built (step 24)."),
   h4("Statistics"),
   tags$ul(
     tags$li(tags$b("Whole-period r"), ": Pearson correlation between surface HCHO and the TEMPO column over samples with a usable TEMPO observation."),
@@ -274,12 +298,91 @@ ABOUT <- card(card_body(
   p(class = "small text-muted", "Data version: dataset md5 ", substr(META$dataset$md5, 1, 12), ".")
 ))
 
+# ---- main findings: the paper's national results, from the pipeline's tables ----------
+FN  <- function(k) { v <- if (is.null(FIND)) NA else unname(FIND$nums[k]); if (length(v) != 1 || is.na(v)) "\u2013" else sub("^-", "\u2212", v) }
+F2  <- function(x) if (length(x) != 1 || is.na(x)) "\u2013" else sub("^-", "\u2212", sprintf("%.2f", x))
+FROW <- function(tab, ...) { if (is.null(tab)) return(NULL); k <- Reduce(`&`, list(...)); r <- tab[k, , drop = FALSE]; if (nrow(r) == 1) r else NULL }
+MAIN_FINDINGS <- if (is.null(FIND)) div(class = "alert alert-secondary", "Re-run step 24 to add the paper's national results.") else local({
+  p24  <- FROW(FIND$pooled, FIND$pooled$duration_class == "24 h", FIND$pooled$lag_h == 0)
+  ce3  <- FROW(FIND$ceiling, FIND$ceiling$block_label == "3x3")
+  ofx  <- FROW(FIND$obs_fx, FIND$obs_fx$arm == "National (24 h)")
+  opr  <- FROW(FIND$obs_pair, FIND$obs_pair$arm == "National (24 h)", FIND$obs_pair$stratum == "all")
+  pct  <- 100 * FIND$n24[["usable"]] / FIND$n24[["samples"]]
+  card_md <- function(title, ...) card(card_header(tags$b(title)), card_body(...))
+  tagList(
+    div(class = "alert alert-light border small mb-3",
+        tags$b("The paper's national results. "),
+        "Unless stated otherwise, these are for the national 24 h samples of 2024\u20132025 at the primary screening ",
+        "(3 \u00d7 3 grid cells, effective cloud fraction \u2264 0.2, scans inside the sampling window). The ",
+        tags$b("Explore"), " tab shows individual monitors."),
+    layout_column_wrap(width = "220px", fill = FALSE, class = "mb-3",
+      value_box("Samples with a usable TEMPO observation", sprintf("%.0f%%", pct),
+                p(sprintf("%d of %d national 24 h samples", FIND$n24[["usable"]], FIND$n24[["samples"]]))),
+      value_box("Pooled whole-period r", F2(p24$pearson_r),
+                p(sprintf("%d samples at %d sites", p24$n, FIND$n24[["sites"]]))),
+      value_box("Pooled day-to-day r", F2(p24$anom_pearson_r),
+                p(sprintf("%d within-month anomaly pairs", p24$anom_n))),
+      value_box("Median day-to-day r across monitors", FN("site_dd_median_24"),
+                p(sprintf("interquartile range %s\u2013%s; range %s to %s over %s sites", FN("site_dd_q25_24"),
+                          FN("site_dd_q75_24"), FN("site_dd_min_24"), FN("site_dd_max_24"), FN("n_sites_24"))))),
+    layout_columns(col_widths = breakpoints(sm = 12, lg = c(6, 6)),
+      card_md("Agreement differs widely between monitors",
+        p("Day-to-day agreement is positive at most monitors but ranges from ", FN("site_dd_min_24"), " to ",
+          FN("site_dd_max_24"), ", and most of that variation lies among monitors within the same state. ",
+          "A single network-wide satellite-to-surface relationship should therefore not be applied to an individual ",
+          "monitor without local evaluation. The map on the Explore tab shows each monitor."),
+        p(class = "small text-muted", "Paper: Sect. 3.2, Figs. 1\u20132.")),
+      card_md("Scatter between scans sets an estimated ceiling",
+        p("If the scatter between successive scans (no more than 1.6 h apart) were entirely retrieval noise, and ",
+          "that noise the only source of disagreement, the pooled day-to-day correlation could reach about ",
+          F2(ce3$ceiling_empirical), "; the observed value is ", F2(ce3$anomaly_r_observed), ". At individual monitors ",
+          "the estimated ceilings are similar (median ", FN("nat_site_ceiling_median"), "), but observed correlations ",
+          "reach a median of only ", FN("nat_site_rcorr_median"), " of them, so noise explains only part of the ",
+          "disagreement."),
+        p(class = "small text-muted", "The ceiling is an estimate: real change in the column between scans inflates ",
+          "the noise estimate, and errors that persist through the day are invisible to it. Paper: Sect. 3.3."))),
+    layout_columns(col_widths = breakpoints(sm = 12, lg = c(6, 6)),
+      card_md("Averaging scans improves agreement",
+        plotlyOutput("p_find_avg", height = "300px"),
+        p(class = "small", "On one fixed set of ", FN("ta_samples"), " samples with at least four valid scans, a single ",
+          "randomly chosen scan of the 3 \u00d7 3 block gives a pooled day-to-day r of ", FN("ta_r1_33"),
+          " and the mean of all scans ", FN("ta_rall_33"), ". Because the samples are the same at every point, this ",
+          "isolates the effect of averaging; the \u201cvalid scans\u201d thirds on the How agreement varies tab ",
+          "compare different days and do not."),
+        p(class = "small text-muted", "Bars: 2.5\u201397.5% range over random draws. Paper: Sect. 3.3, Fig. 3.")),
+      card_md("Agreement rises with modelled mixing depth for 8 h samples",
+        plotlyOutput("p_find_pbl", height = "300px"),
+        p(class = "small", "For 8 h samples starting at 04:00 LST, the pooled anomaly correlation rose from ",
+          FN("pbl_8h4_r_low"), " in the shallowest third of HRRR mixing depth to ", FN("pbl_8h4_r_high"),
+          " in the deepest (difference ", FN("pbl_8h4_diff"), ", 95% CI ", FN("pbl_8h4_lo"), " to ", FN("pbl_8h4_hi"),
+          "). The association persisted after allowing for the number of scans and the column level (interaction ",
+          FN("pbl_int_adj_8h4"), ", ", FN("pbl_int_adj_8h4_ptxt"), ") and, at about half the size, on smoke-free ",
+          "days. For 24 h samples it disappeared once scan count and column level were allowed for (interaction ",
+          FN("pbl_int_adj_24"), ", ", FN("pbl_int_adj_24_ptxt"), ")."),
+        p(class = "small text-muted", "These are pooled analyses, with thirds formed within each start hour over all ",
+          "sites. The How agreement varies tab forms thirds site by site and shows medians across monitors, an ",
+          "exploratory view. Paper: Sect. 3.5, Fig. 4."))),
+    card_md("Days TEMPO can use are not representative",
+      p("After allowing for monitor and calendar month, surface HCHO was ", F2(ofx$beta_observable_minus_screened),
+        " \u00b5g m\u207b\u00b3 higher on days with a usable TEMPO observation than on days when TEMPO observed the ",
+        "site but every scan was screened out (95% CI ", F2(ofx$ci_lo), " to ", F2(ofx$ci_hi), "; ", ofx$n,
+        " samples at ", ofx$sites, " monitors); paired differences within site-months give ",
+        F2(opr$paired_observable_minus_screened), " (", F2(opr$boot_lo), " to ", F2(opr$boot_hi), ")."),
+      p(class = "small text-muted", "This is a difference between two kinds of day, about ",
+        sprintf("%.0f%%", ofx$pct_of_median), " of the median concentration; it is not the bias of an all-day mean, ",
+        "which also depends on how many days fall in each group. Days without any TEMPO granule are excluded. ",
+        "Paper: Sect. 3.6, Fig. 5.")),
+    p(class = "small text-muted mt-2", "All numbers on this page are read from the pipeline's output tables when the ",
+      "app data are built (step 24)."))
+})
+
 # ---- UI --------------------------------------------------------------------------------
 ui <- page_navbar(
   title = "TEMPO vs ground-based formaldehyde (HCHO)",
   theme = bs_theme(version = 5, bootswatch = "flatly"),
   header = tags$style(HTML(".leaflet-container { background: #e8edf1; }")),
   fillable = FALSE,
+  nav_panel("Main findings", MAIN_FINDINGS),
   nav_panel("Explore",
     layout_sidebar(
       sidebar = sidebar(width = 330,
@@ -297,7 +400,9 @@ ui <- page_navbar(
             checkboxGroupInput("nets", NULL, choices = NET_CHOICES, selected = NET_CHOICES),
             div(class = "small text-muted",
                 "Sites shown on the map and used in the all-sites panel. A site is shown if it belongs to any ",
-                "checked group; AQS lists the networks.")),
+                "checked group; AQS lists the networks.",
+                if (any(!IS_NAT)) sprintf(" Counts include %s, which is in the Colorado analysis only.",
+                                          paste(SITES$name[!IS_NAT], collapse = ", ")) else "")),
           accordion_panel("Air toxics",
             uiOutput("tox_class_ui"), uiOutput("tox_param_ui"),
             checkboxInput("tox_log", "Logarithmic axis", FALSE),
@@ -309,6 +414,10 @@ ui <- page_navbar(
         card(full_screen = TRUE,
              card_header(class = "d-flex flex-wrap justify-content-between align-items-center gap-2",
                          span("Monitors: click one to select it. Scroll or use + / \u2212 to zoom."),
+                         div(class = "d-flex align-items-center gap-2",
+                             span(class = "text-muted", "Record shown:"),
+                             div(style = "margin-bottom: -1rem;", radioButtons("map_dur", NULL, inline = TRUE,
+                                                               choices = MAP_DUR_CHOICES, selected = "longest"))),
                          div(class = "d-flex gap-3",
                              span(class = "text-muted", "Zoom to:"),
                              actionLink("zoom_us", "Whole US"),
@@ -316,8 +425,9 @@ ui <- page_navbar(
                              actionLink("zoom_site", "Selected site"))),
              leafletOutput("map", height = 560),
              card_footer(class = "small text-muted",
-                         "Colour: day-to-day correlation with TEMPO of each site's longest-duration record ",
-                         "(sampling window), for the smoke and season filters at left. Grey: fewer than 10 ",
+                         "Colour: day-to-day correlation with TEMPO of the record chosen above (by default each ",
+                         "site's longest-duration record, so 24 h, 8 h and 3 h sites are mixed; choose a duration to ",
+                         "compare like with like), sampling window, for the smoke and season filters at left. Grey: fewer than 10 ",
                          "within-month anomaly pairs. Black outline: Colorado sites with CDPHE air-toxics data. ",
                          "Sites follow the network filter at left. ",
                          "Background layers are in the control at the top right of the map; the expand ",
@@ -335,7 +445,8 @@ ui <- page_navbar(
           nav_panel("How agreement varies", value = "sens",
             div(class = "small text-muted mt-2 mb-2",
                 "How the agreement between surface HCHO and the TEMPO column changes with the conditions and the choices ",
-                "of the comparison. Each row changes one thing and keeps the rest. Grey diamonds: whole-period r; ",
+                "of the comparison. Each row changes one setting; screening and subgroup choices also change which samples ",
+                "are included, so rows do not always compare the same samples. Grey diamonds: whole-period r; ",
                 "blue circles: day-to-day r (within-month anomalies). Faded: fewer than 10 samples or pairs, which the ",
                 "paper does not report. Thirds: the samples entering the day-to-day correlation split into equal thirds ",
                 "by that variable, as in the paper's boundary-layer analysis (for 8 h and 3 h records, within each ",
@@ -348,6 +459,10 @@ ui <- page_navbar(
             downloadButton("dl_sens", "Download this table (CSV)", class = "btn-sm"),
             hr(),
             h5("All national sites"),
+            div(class = "alert alert-warning py-2 small mb-2",
+                tags$b("Medians across monitors; bars show the spread between monitors (interquartile range), not ",
+                       "confidence intervals. The smoke and season filters at left do not apply here."),
+                " The paper's pooled results, including its mixing-depth analysis, are on the Main findings tab."),
             div(class = "small text-muted mb-2",
                 "Every site of the national comparison at the paper's primary configuration, changing one thing at a ",
                 "time (computed by step 24 with the same code). Points: median across the sites with at least 10 samples ",
@@ -408,9 +523,12 @@ server <- function(input, output, session) {
       over <- c(over, "Colorado counties")
     }
     m |>
-      add_site_markers(isolate(map_stats(input$smoke %or% "all", input$seasons %or% character())),
+      add_site_markers(isolate(map_stats(input$smoke %or% "all", input$seasons %or% character(),
+                                         input$map_dur %or% "longest")),
                        isolate(filter_text(input$smoke %or% "all", input$seasons %or% character())),
-                       isolate(site_in_nets(input$nets %or% character()))) |>
+                       isolate(map_show(map_stats(input$smoke %or% "all", input$seasons %or% character(),
+                                                  input$map_dur %or% "longest"),
+                                        input$nets %or% character(), input$map_dur %or% "longest"))) |>
       addLayersControl(baseGroups = base, overlayGroups = over,
                        options = layersControlOptions(collapsed = TRUE)) |>
       hideGroup(setdiff(base, base[1])) |>
@@ -427,9 +545,9 @@ server <- function(input, output, session) {
   observeEvent(input$map_zoom, map_ready(TRUE), once = TRUE)
   observe({
     req(map_ready())
-    sm <- input$smoke %or% "all"; se <- input$seasons %or% character()
-    leafletProxy("map") |> add_site_markers(map_stats(sm, se), filter_text(sm, se),
-                                            site_in_nets(input$nets %or% character()))
+    sm <- input$smoke %or% "all"; se <- input$seasons %or% character(); du <- input$map_dur %or% "longest"
+    ms <- map_stats(sm, se, du)
+    leafletProxy("map") |> add_site_markers(ms, filter_text(sm, se), map_show(ms, input$nets %or% character(), du))
   })
   # ring around the selected site, once the map exists
   observe({
@@ -518,6 +636,41 @@ server <- function(input, output, session) {
                        "the monitor, during %s. Filters at left apply."),
                 cur_dur(), if (cur_lag() == 0) "that sample's own sampling window"
                            else sprintf("the sampling window shifted by %+d h", cur_lag())))
+  })
+
+  # ---- main findings plots
+  output$p_find_avg <- renderPlotly({
+    a <- FIND$averaging
+    validate(need(!is.null(a) && nrow(a) > 0, "The temporal-averaging table is not in the app data."))
+    a$k <- as.character(a$k_scans); a$x <- ifelse(a$k == "all", 5, suppressWarnings(as.numeric(a$k)))
+    blocks <- c("1x1" = "1 \u00d7 1 grid cell", "3x3" = "3 \u00d7 3 block", "5x5" = "5 \u00d7 5 block")
+    cols <- c("1x1" = "#9ecae1", "3x3" = "#2166ac", "5x5" = "#08306b")
+    p <- plot_ly()
+    for (b in intersect(names(blocks), unique(a$block))) {
+      s <- a[a$block == b, ]; s <- s[order(s$x), ]
+      p <- add_trace(p, x = s$x, y = s$r_pooled, type = "scatter", mode = "lines+markers", name = blocks[[b]],
+                     line = list(color = cols[[b]]), marker = list(color = cols[[b]], size = 7),
+                     error_y = list(type = "data", symmetric = FALSE, array = s$r_pooled_hi - s$r_pooled,
+                                    arrayminus = s$r_pooled - s$r_pooled_lo, color = cols[[b]], thickness = 1, width = 3),
+                     text = sprintf("%s, %s scan(s): r = %.2f", blocks[[b]], s$k, s$r_pooled), hoverinfo = "text")
+    }
+    p |> layout(xaxis = list(title = "Scans averaged per 24 h sample", tickvals = 1:5, ticktext = c("1", "2", "3", "4", "all")),
+                yaxis = list(title = "Pooled day-to-day r"), legend = list(orientation = "h", y = -0.25),
+                margin = list(t = 10))
+  })
+  output$p_find_pbl <- renderPlotly({
+    t <- FIND$pbl
+    validate(need(!is.null(t) && nrow(t) > 0, "The mixing-depth table is not in the app data."))
+    t <- t[t$stratification == "absolute HRRR mixing depth", ]
+    t$sample <- factor(t$sample, levels = c("8 h, start 04:00 LST", "8 h, start 12:00 LST", "24 h"),
+                       labels = c("8 h from 04:00 LST", "8 h from 12:00 LST", "24 h"))
+    t$third <- factor(t$tert, levels = 1:3, labels = c("shallowest third", "middle third", "deepest third"))
+    plot_ly(t, x = ~sample, y = ~r, color = ~third, colors = c("#c6dbef", "#6baed6", "#08519c"), type = "bar",
+            text = ~sprintf("%.2f", r), textposition = "outside",
+            hovertext = ~sprintf("%s, %s<br>r = %.2f (n = %d)<br>median mixing depth %.2f km", sample, third, r, n,
+                                 pbl_median_km), hoverinfo = "text") |>
+      layout(barmode = "group", yaxis = list(title = "Pooled day-to-day r", range = c(0, 0.75)),
+             xaxis = list(title = ""), legend = list(orientation = "h", y = -0.2), margin = list(t = 10))
   })
 
   output$p_ts <- renderPlotly({

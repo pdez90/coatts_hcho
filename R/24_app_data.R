@@ -347,6 +347,36 @@ if (is.null(geo$states)) log_msg("  no state outlines (sf or the Census files un
 log_msg("Map background: ", sum(is.na(geo$states$lng)), " state rings, ",
         sum(is.na(geo$co_counties$lng)), " Colorado county rings")
 
+# ---- 3c. the paper's national results, for the app's "Main findings" tab -------------
+# Every number shown there comes from the pipeline's own output tables (steps 13, 15,
+# 17 and 20) and the manuscript_numbers_*.csv keys the manuscript is built from;
+# nothing is typed into the app.
+opt_tbl <- function(f) { p <- file.path(P$tables, f); if (file.exists(p)) as.data.frame(read_tbl(p)) else NULL }
+num_files <- list.files(P$tables, "^manuscript_numbers.*\\.csv$", full.names = TRUE)
+nums <- unlist(lapply(num_files, function(f) {
+  x <- data.table::fread(f, colClasses = "character")
+  if (!all(c("key", "value") %in% names(x))) return(NULL)
+  setNames(x$value, x$key)
+}))
+n24 <- filter(tempo, arm == "national", lag_h == 0L, duration_h == 24L)
+findings <- list(
+  nums      = nums,
+  n24       = c(samples = nrow(n24), usable = sum(n24$usable), sites = n_distinct(n24$site_id)),
+  pooled    = opt_tbl("national_stats_by_duration_lag.csv"),
+  ceiling   = { x <- opt_tbl("national_noise_ceiling.csv"); if (is.null(x)) NULL else x[x$site == "all sites", ] },
+  averaging = opt_tbl("diag9_temporal_averaging.csv"),
+  obs_fx    = opt_tbl("observability_bias_fixed_effects.csv"),
+  obs_pair  = opt_tbl("observability_bias.csv"),
+  pbl       = opt_tbl("diag10_pbl_tertiles.csv"),
+  pbl_int   = opt_tbl("diag10_pbl_interaction.csv"))
+pooled24 <- if (is.null(findings$pooled)) NULL else
+  findings$pooled[findings$pooled$duration_class == "24 h" & findings$pooled$lag_h == 0, ]
+check(!is.null(pooled24) && nrow(pooled24) == 1 && pooled24$n == findings$n24[["usable"]],
+      "The national 24 h row of national_stats_by_duration_lag.csv does not match the released dataset")
+log_msg("Main findings: ", length(nums), " pipeline keys; 24 h samples with a usable scan ",
+        findings$n24[["usable"]], " of ", findings$n24[["samples"]], "; pooled day-to-day r ",
+        round(pooled24$anom_pearson_r, 2))
+
 # ---- 4. write -----------------------------------------------------------------------
 md5 <- function(f) unname(tools::md5sum(f))
 meta <- list(
@@ -360,7 +390,7 @@ meta <- list(
 )
 tempo <- as.data.frame(tempo); toxics <- as.data.frame(toxics); sites <- as.data.frame(sites)
 saveRDS(list(sites = sites, tempo = tempo, screen = screen, sens_nat = sens_nat, toxics = toxics,
-             meta = meta, geo = geo),
+             meta = meta, geo = geo, findings = findings),
         file.path(OUT, "app_data.rds"), compress = "xz")
 log_msg("Wrote ", file.path(OUT, "app_data.rds"), " (", round(file.size(file.path(OUT, "app_data.rds")) / 1e6, 1),
         " MB): ", nrow(sites), " sites, ", nrow(tempo), " matched rows, ", nrow(screen), " variant rows, ",

@@ -2299,10 +2299,10 @@
   },
   "files": {
     "app.R": {
-      "checksum": "886c81a57de202dc19c9b2ad5a57f015"
+      "checksum": "62276da82266a0622957da850bd01b8d"
     },
     "appdata/app_data.rds": {
-      "checksum": "75e03629e0dece4970ee7de5cd0e8e3e"
+      "checksum": "511020567d85f3787c2248dc38502849"
     },
     "R/sensitivity.R": {
       "checksum": "4bd1d8df317616d0fcfb2e2947214d60"
@@ -2314,7 +2314,7 @@
       "checksum": "fe7cde92cab3c8da5e56223872b2a3da"
     },
     "tests/test_app.R": {
-      "checksum": "e616a3064f3f42fd251d1113cd72d058"
+      "checksum": "cbb40f6c824fd2dedea1c31461b7586f"
     }
   },
   "users": null

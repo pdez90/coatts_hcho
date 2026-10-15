@@ -34,7 +34,7 @@ testServer(app, {
     args <- modifyList(list(smoke = "all", seasons = c("DJF", "MAM", "JJA", "SON"), colour_by = "season",
                             nets = c("NATTS", "NCORE", "PAMS", "NEAR", "OTHER", "NONE", "CO"), nat_dur = "24"), cs)
     do.call(session$setInputs, args)
-    for (o in c("site_card", "arm_ui", "dur_ui", "lag_ui", "tempo_boxes", "ts_note", "p_ts", "p_scatter", "p_anom", "p_obs",
+    for (o in c("p_find_avg", "p_find_pbl", "site_card", "arm_ui", "dur_ui", "lag_ui", "tempo_boxes", "ts_note", "p_ts", "p_scatter", "p_anom", "p_obs",
                 "tox_class_ui", "tox_param_ui", "tox_body", "sens_site_head", "sens_site_ui", "sens_site_plot",
                 "sens_site_table", "sens_nat_head", "sens_nat_ui", "sens_nat_plot")) {
       try_out(paste(cs$site, o), session$getOutput(o))
@@ -69,6 +69,18 @@ if (exists("map_stats", envir = e, inherits = FALSE)) {
   try_out("map stats, smoke-free winter", {
     lab <- e$map_labels(e$map_stats("none", "DJF"), e$filter_text("none", "DJF"))
     stopifnot(length(lab) == nrow(e$SITES))
+  })
+  try_out("map stats by duration", {
+    for (du in setdiff(e$MAP_DUR_CHOICES, "longest")) {
+      ms <- e$map_stats(dur = du)
+      lab <- e$map_labels(ms, e$filter_text("all", names(e$SEASONS)))
+      stopifnot(nrow(ms) == nrow(e$SITES), length(lab) == nrow(e$SITES), all(ms$dur[!is.na(ms$dur)] == as.integer(du)),
+                any(!is.na(ms$dur)))
+    }
+  })
+  try_out("main findings data", {
+    stopifnot(!is.null(e$FIND), length(e$FIND$nums) > 100, !is.null(e$FIND$averaging), !is.null(e$FIND$pbl),
+              e$FN("site_dd_median_24") != "\u2013", e$FN("pbl_int_adj_24_ptxt") != "\u2013")
   })
 }
 
