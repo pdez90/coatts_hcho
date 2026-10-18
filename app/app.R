@@ -322,9 +322,9 @@ REGRESSIONS <- if (is.null(FIND)) NULL else local({
   t1 <- FIND$table1
   coef_row <- if (is.null(t1)) NULL else t1[grepl("^Column coefficient", t1$row_label), , drop = FALSE]
   col_card <- card_md("Surface HCHO per unit column, by sample duration (Table 1)",
-    p("Ordinary least squares of surface HCHO on the TEMPO column with monitor and calendar-month fixed effects, so the ",
-      "coefficient describes variation within a monitor and month. ± is the site-clustered standard error; the four ",
-      "3 h sites give a descriptive uncertainty only."),
+    p("Ordinary least squares of surface HCHO on the TEMPO column with monitor and calendar-month fixed effects. The ",
+      "coefficient describes the column–surface association after accounting for differences among monitors and ",
+      "calendar months. ± is the site-clustered standard error; the four 3 h sites give a descriptive uncertainty only."),
     if (!is.null(coef_row) && nrow(coef_row) == 1)
       reg_table(c("", "24 h samples", "8 h samples", "3 h samples"),
                 list(c("µg m⁻³ per 10¹⁵ molecules cm⁻²", coef_row[[2]], coef_row[[3]], coef_row[[4]]),
@@ -366,20 +366,25 @@ REGRESSIONS <- if (is.null(FIND)) NULL else local({
   # Table S11: the mixing-depth interactions
   pi <- FIND$pbl_int
   int_card <- card_md("Does the column–surface slope change with mixing depth? (Table S11 interactions)",
-    p("Regression of the surface anomaly on the column anomaly, the HRRR mixing-depth anomaly and their interaction, all ",
-      "standardized, with site-clustered standard errors. The interaction is the change in the column–surface slope per ",
-      "standard deviation of mixing depth. The adjusted model also lets the slope depend on the number of valid scans ",
-      "and on the site-month column level, so that a signal-to-noise effect cannot masquerade as a mixing effect."),
+    p("Regression of the surface anomaly (in µg m⁻³) on the column anomaly, the HRRR mixing-depth anomaly and ",
+      "their interaction, with standardized predictors and site-clustered standard errors. The interaction coefficient is ",
+      "the change in the column–surface slope, in µg m⁻³ per standard deviation of the column anomaly, for each ",
+      "standard deviation of mixing depth. The adjusted model also lets the slope depend on the number of valid scans and ",
+      "on the site-month column level, to help distinguish mixing-depth associations from differences in satellite ",
+      "sampling and signal strength; these adjustments cannot rule out every alternative explanation."),
     if (is.null(pi)) p(class = "text-muted small", "Re-run step 24 after step 20 to add the interaction models.") else local({
       d <- pi[pi$term == "col_std:pbl_std", , drop = FALSE]
       adj <- grepl("competing", d$model)
       rows <- lapply(seq_len(nrow(d)), function(i) c(d$sample[i], if (adj[i]) "with scan count and column level" else "mixing depth only",
         format(as.integer(d$n[i]), big.mark = ","), sprintf("%s (%.3f)", fmt_est(as.numeric(d$estimate[i])), as.numeric(d$se_cluster[i])),
         paste("p", fmt_pv(as.numeric(d$p[i])))))
-      reg_table(c("Samples", "Model", "n", "Interaction (SE)", ""), rows)
+      reg_table(c("Samples", "Model", "n", "Interaction, µg m⁻³ per SD × SD (SE)", ""), rows)
     }),
     p(class = "small text-muted", "Paper: Sect. 3.5, Table S11, Fig. 4."))
-  tagList(h5(class = "mt-3", "Regression results"), col_card, site_card, int_card)
+  accordion(id = "regressions", open = FALSE, class = "mt-3",
+    accordion_panel("Statistical details: the regression tables (Table 1, Tables S6 and S11, geography models)",
+      p(class = "small text-muted", "The coefficients behind the findings above, read from the paper's analysis output."),
+      col_card, site_card, int_card))
 })
 
 # ---- main findings: the paper's national results, from the pipeline's tables ----------
