@@ -271,11 +271,15 @@ ABOUT <- card(card_body(
     "seven Colorado Air Toxics Trends (COATTS) sites, and carbonyls, speciated non-methane organic compounds and methane at the ",
     "two ozone-precursor (COOPs) sites. Values are shown as reported; samples carrying an AQS null-data qualifier and the ",
     "packets' QC samples are removed, and non-detects are drawn at their detection limit where one is reported."),
-  p("The ", tags$b("Main findings"), " tab gives the paper's national results, read from the pipeline's output ",
-    "tables when the app data are built (step 24). The ", tags$b("How the comparison works"), " tab works through the ",
-    "calculation for one monitor: matching samples to scans, within-month anomalies, the two correlations, the ",
-    "within-site-month permutation test, the noise ceiling and E, and the site-month bootstrap used to compare two ",
-    "correlations. Step 24 checks that its code reproduces the paper's tables."),
+  p("The ", tags$b("Main findings"), " tab gives the paper's national results and regression tables, read from the ",
+    "pipeline's output tables (steps 13, 15, 17, 20, 21 and 25) when the app data are built by step 24; nothing is typed ",
+    "into the app. The ", tags$b("How the comparison works"), " tab works through the calculation for one monitor: ",
+    "matching samples to scans, within-month anomalies, the two correlations, the within-site-month permutation test, ",
+    "the noise ceiling and E, and the site-month bootstrap used to compare two correlations. Step 24 checks that the ",
+    "app's code reproduces the paper's tables: the correlations of every site, every permutation p-value, every ",
+    "site-level noise ceiling and E, and the Colorado window comparison. The single-scan noise of each monitor is the ",
+    "one quantity read from the paper's output rather than recomputed, because the app data hold sample means, not ",
+    "individual scans."),
   h4("Statistics"),
   tags$ul(
     tags$li(tags$b("Whole-period r"), ": Pearson correlation between surface HCHO and the TEMPO column over samples with a usable TEMPO observation."),
@@ -301,6 +305,82 @@ ABOUT <- card(card_body(
     ". Surface data: U.S. EPA AQS and CDPHE. Meteorology: NOAA HRRR. Smoke: NOAA HMS."),
   p(class = "small text-muted", "Data version: dataset md5 ", substr(META$dataset$md5, 1, 12), ".")
 ))
+
+# ---- main findings: the regression results (Table 1, Tables S6 and S11, the geography models) ----
+fmt_pv <- function(p) ifelse(is.na(p), "–", ifelse(p < 0.001, "< 0.001", sprintf("= %.3f", p)))
+fmt_est <- function(x, d = 3) ifelse(is.na(x), "–", sub("^-", "−", sprintf(paste0("%+.", d, "f"), x)))
+PRED_LABEL <- c(log_surface = "log median surface HCHO", log_snr = "log signal-to-noise ratio",
+                log_scans = "log median valid scans", usable_pct = "usable share",
+                pbl_hrrr_km = "HRRR mixing depth", smoke_share = "smoke-affected share",
+                west = "west of 100° W", log_coast = "log distance to the coast", log_relief = "log terrain relief")
+reg_table <- function(header, rows) tags$table(class = "table table-sm small mb-2",
+  tags$thead(tags$tr(lapply(header, function(h) tags$th(HTML(h))))),
+  tags$tbody(lapply(rows, function(r) tags$tr(lapply(r, function(v) tags$td(HTML(as.character(v))))))))
+REGRESSIONS <- if (is.null(FIND)) NULL else local({
+  card_md <- function(title, ...) card(card_header(tags$b(title)), card_body(...))
+  # Table 1: the column coefficient by duration
+  t1 <- FIND$table1
+  coef_row <- if (is.null(t1)) NULL else t1[grepl("^Column coefficient", t1$row_label), , drop = FALSE]
+  col_card <- card_md("Surface HCHO per unit column, by sample duration (Table 1)",
+    p("Ordinary least squares of surface HCHO on the TEMPO column with monitor and calendar-month fixed effects, so the ",
+      "coefficient describes variation within a monitor and month. ± is the site-clustered standard error; the four ",
+      "3 h sites give a descriptive uncertainty only."),
+    if (!is.null(coef_row) && nrow(coef_row) == 1)
+      reg_table(c("", "24 h samples", "8 h samples", "3 h samples"),
+                list(c("µg m⁻³ per 10¹⁵ molecules cm⁻²", coef_row[[2]], coef_row[[3]], coef_row[[4]]),
+                     c("Samples with a usable scan", t1[t1$row_label == "Samples with a usable scan", 2],
+                       t1[t1$row_label == "Samples with a usable scan", 3], t1[t1$row_label == "Samples with a usable scan", 4])))
+    else p(class = "text-muted small", "Re-run step 24 after step 21 to add Table 1."),
+    p(class = "small text-muted", "Paper: Table 1, Sect. 3.1."))
+  # Tables S6 and the geography extension: site models
+  sm <- FIND$site_models; gm <- FIND$geo_models
+  model_rows <- function(d, model_name, with_se = TRUE) {
+    d <- d[d$model == model_name & d$term != "(Intercept)", , drop = FALSE]
+    lapply(seq_len(nrow(d)), function(i) c(PRED_LABEL[d$term[i]] %or% d$term[i],
+      if (with_se) sprintf("%s (%.3f)", fmt_est(as.numeric(d$estimate_per_sd[i])), as.numeric(d$se[i])) else fmt_est(as.numeric(d$estimate_per_sd[i])),
+      paste("p", fmt_pv(as.numeric(d$p[i])))))
+  }
+  m1 <- "M1: Fisher z of observed r ~ all six"; m2 <- "M2: Fisher z of E ~ all six"
+  g1 <- "M1 + geography: Fisher z of observed r"; g2 <- "M2 + geography: Fisher z of E"
+  r2 <- function(d, m, col) if (is.null(d) || !m %in% d$model) NA else as.numeric(d[[col]][d$model == m][1])
+  site_card <- card_md("What distinguishes monitors with weak agreement (Tables S6 and the geography models)",
+    p("Weighted least squares across the ", if (is.null(sm)) "" else format(r2(sm, m1, "n_sites")), " 24 h sites with a noise ceiling. ",
+      HTML("Outcomes: the Fisher-transformed observed day-to-day correlation (M1) and the Fisher-transformed ratio E = r<sub>obs</sub>/r<sub>ceiling</sub> (M2). "),
+      "Coefficients are per standard deviation of each predictor (the first three log-transformed), standard errors in ",
+      "parentheses, weights n − 3 with n the number of anomaly pairs."),
+    if (is.null(sm)) p(class = "text-muted small", "Re-run step 24 after step 20 to add the site models.") else
+      layout_columns(col_widths = breakpoints(sm = 12, lg = c(6, 6)),
+        div(h6(sprintf("M1: observed r (R² = %.2f, adjusted %.2f)", r2(sm, m1, "r2"), r2(sm, m1, "adj_r2"))),
+            reg_table(c("Predictor", "Coefficient (SE)", ""), model_rows(sm, m1))),
+        div(h6(sprintf("M2: E (R² = %.2f, adjusted %.2f)", r2(sm, m2, "r2"), r2(sm, m2, "adj_r2"))),
+            reg_table(c("Predictor", "Coefficient (SE)", ""), model_rows(sm, m2)))),
+    if (!is.null(gm)) tagList(
+      p(class = "mt-2", HTML(sprintf(
+        "Adding the three geographic descriptors raises R² for the observed correlation from %.2f to %.2f (nested F test, p %s) and for E from %.2f to %.2f (p %s). These descriptors were chosen after the geographic pattern was noticed, so the paper treats them as exploratory.",
+        r2(gm, g1, "r2_base"), r2(gm, g1, "r2_with_geography"), fmt_pv(r2(gm, g1, "p_geography")),
+        r2(gm, g2, "r2_base"), r2(gm, g2, "r2_with_geography"), fmt_pv(r2(gm, g2, "p_geography"))))),
+      layout_columns(col_widths = breakpoints(sm = 12, lg = c(6, 6)),
+        div(h6("M1 + geography: observed r"), reg_table(c("Predictor", "Coefficient", ""), model_rows(gm, g1, with_se = FALSE))),
+        div(h6("M2 + geography: E"), reg_table(c("Predictor", "Coefficient", ""), model_rows(gm, g2, with_se = FALSE))))),
+    p(class = "small text-muted", "Paper: Sect. 3.4, Table S6, Fig. S6b."))
+  # Table S11: the mixing-depth interactions
+  pi <- FIND$pbl_int
+  int_card <- card_md("Does the column–surface slope change with mixing depth? (Table S11 interactions)",
+    p("Regression of the surface anomaly on the column anomaly, the HRRR mixing-depth anomaly and their interaction, all ",
+      "standardized, with site-clustered standard errors. The interaction is the change in the column–surface slope per ",
+      "standard deviation of mixing depth. The adjusted model also lets the slope depend on the number of valid scans ",
+      "and on the site-month column level, so that a signal-to-noise effect cannot masquerade as a mixing effect."),
+    if (is.null(pi)) p(class = "text-muted small", "Re-run step 24 after step 20 to add the interaction models.") else local({
+      d <- pi[pi$term == "col_std:pbl_std", , drop = FALSE]
+      adj <- grepl("competing", d$model)
+      rows <- lapply(seq_len(nrow(d)), function(i) c(d$sample[i], if (adj[i]) "with scan count and column level" else "mixing depth only",
+        format(as.integer(d$n[i]), big.mark = ","), sprintf("%s (%.3f)", fmt_est(as.numeric(d$estimate[i])), as.numeric(d$se_cluster[i])),
+        paste("p", fmt_pv(as.numeric(d$p[i])))))
+      reg_table(c("Samples", "Model", "n", "Interaction (SE)", ""), rows)
+    }),
+    p(class = "small text-muted", "Paper: Sect. 3.5, Table S11, Fig. 4."))
+  tagList(h5(class = "mt-3", "Regression results"), col_card, site_card, int_card)
+})
 
 # ---- main findings: the paper's national results, from the pipeline's tables ----------
 FN  <- function(k) { v <- if (is.null(FIND)) NA else unname(FIND$nums[k]); if (length(v) != 1 || is.na(v)) "\u2013" else sub("^-", "\u2212", v) }
@@ -366,6 +446,24 @@ MAIN_FINDINGS <- if (is.null(FIND)) div(class = "alert alert-secondary", "Re-run
         p(class = "small text-muted", "These are pooled analyses, with thirds formed within each start hour over all ",
           "sites. The How agreement varies tab forms thirds site by site and shows medians across monitors, an ",
           "exploratory view. Paper: Sect. 3.5, Fig. 4."))),
+    layout_columns(col_widths = breakpoints(sm = 12, lg = c(6, 6)),
+      card_md("Agreement is weakest in winter",
+        p(HTML(paste0("For 24 h samples the pooled correlation was ", FN("seas_r_24_djf"), " in winter (95% CI ", FN("seas_rlo_24_djf"),
+          " to ", FN("seas_rhi_24_djf"), "), against ", FN("seas_r_24_jja"), " in summer; the day-to-day correlation was ",
+          FN("seas_dd_24_djf"), " in winter and ", FN("seas_dd_24_jja"), " in summer, positive in every season. The column's ",
+          "seasonal cycle is larger than the surface's (relative seasonal range a median ", FN("seas_amp_ratio_median"),
+          " times that of the surface over ", FN("seas_amp_sites"), " sites), and a small winter column is harder to distinguish from roughly constant retrieval noise."))),
+        p(class = "small text-muted", "Paper: Sect. 3.1, Table S4, Fig. S5.")),
+      card_md("Agreement is generally stronger on smoke-affected days",
+        p(HTML(paste0("At the 24 h sites the pooled correlation rose from ", FN("smoke_r_24_none"), " on smoke-free days to ",
+          FN("smoke_r_24_light"), " under light smoke and ", FN("smoke_r_24_heavy"), " under medium or heavy smoke; excluding ",
+          "smoke-affected days reduced the national day-to-day correlation from ", FN("smoke_dd_24_all"), " to ",
+          FN("smoke_dd_24_nosmoke"), " for 24 h samples and from ", FN("smoke_dd_8_all"), " to ", FN("smoke_dd_8_nosmoke"),
+          " for 8 h samples. Columns were about twice as high under smoke (", FN("smoke_col_24_none"), " against ",
+          FN("smoke_col_24_light"), " × 10¹⁵ molecules cm⁻²), so the satellite signal stands further above the noise."))),
+        p(class = "small text-muted", HTML(paste0("Smoke: NOAA HMS polygons over the site within the sampling window widened by 3 h. ",
+          "Season explains part of the 24 h contrast (smoke affected ", FN("smoke_pct_24_jja"), "% of summer samples and ",
+          FN("smoke_pct_24_djf"), "% of winter samples), but the summer-only 8 h records show the same decline. Paper: Sect. 3.4, Table S7, Fig. S7."))))),
     card_md("Days TEMPO can use are not representative",
       p("After allowing for monitor and calendar month, surface HCHO was ", F2(ofx$beta_observable_minus_screened),
         " \u00b5g m\u207b\u00b3 higher on days with a usable TEMPO observation than on days when TEMPO observed the ",
@@ -376,8 +474,8 @@ MAIN_FINDINGS <- if (is.null(FIND)) div(class = "alert alert-secondary", "Re-run
         sprintf("%.0f%%", ofx$pct_of_median), " of the median concentration; it is not the bias of an all-day mean, ",
         "which also depends on how many days fall in each group. Days without any TEMPO granule are excluded. ",
         "Paper: Sect. 3.6, Fig. 5.")),
-    p(class = "small text-muted mt-2", "All numbers on this page are read from the pipeline's output tables when the ",
-      "app data are built (step 24)."))
+    REGRESSIONS,
+    p(class = "small text-muted mt-2", "All numbers on this page are read from the paper's analysis output (see About)."))
 })
 
 # ---- how the comparison works: the paper's calculation, worked on one monitor -----------
@@ -404,10 +502,9 @@ WORKED <- tagList(
   div(class = "alert alert-light border small mb-3",
       tags$b("How the comparison works. "),
       "This page repeats the paper's calculation for one monitor, step by step, on its real samples. Choose a monitor, ",
-      "a month and a sample; every number is recomputed from the released data with the app's own code, and step 24 ",
-      "checks that this code reproduces the paper's tables (correlations, permutation p-values, noise ceilings and the ",
-      "Colorado window comparison). The page uses all days and seasons at the paper's primary screening; the filters on ",
-      "the Explore tab do not apply here."),
+      "a month and a sample; every number is recomputed from the released data with the app's own code, which is ",
+      "checked against the paper's tables when the app is built (see About). The page uses all days and seasons at the ",
+      "paper's primary screening; the filters on the Explore tab do not apply here."),
   card(class = "mb-3", card_body(
     layout_columns(col_widths = breakpoints(sm = 12, md = c(4, 3, 2, 3)),
       selectInput("wk_site", "Monitoring site", choices = CHOICES, selected = WK_DEFAULT),
@@ -529,7 +626,7 @@ ui <- page_navbar(
                 " The paper's pooled results, including its mixing-depth analysis, are on the Main findings tab."),
             div(class = "small text-muted mb-2",
                 "Every site of the national comparison at the paper's primary configuration, changing one thing at a ",
-                "time (computed by step 24 with the same code). Points: median across the sites with at least 10 samples ",
+                "time (computed with the app's own code; see About). Points: median across the sites with at least 10 samples ",
                 "(whole-period) or 10 anomaly pairs (day-to-day); bars: interquartile range across those sites. Sites ",
                 "follow the network filter at left; the smoke and season filters do not apply here. Thirds are formed ",
                 "site by site, so their cut points differ between sites."),
@@ -697,7 +794,8 @@ server <- function(input, output, session) {
         sprintf(paste0("Every %d h surface sample at this monitor, in date order: this is one site's record, not an ",
                        "average across sites. Each TEMPO point is the mean of all usable scans (effective cloud ",
                        "fraction \u2264 0.2) over the 3 \u00d7 3 block of grid cells (about 7 \u00d7 5 km) around ",
-                       "the monitor, during %s. Filters at left apply."),
+                       "the monitor, during %s. Filters at left apply. The lines on the scatter plots are ordinary least-squares fits ",
+                       "shown for orientation; the paper reports reduced major axis slopes (Supplement Sect. S3)."),
                 cur_dur(), if (cur_lag() == 0) "that sample's own sampling window"
                            else sprintf("the sampling window shifted by %+d h", cur_lag())))
   })
@@ -782,7 +880,8 @@ server <- function(input, output, session) {
                sprintf("%s<br>column %.2f<br>surface %.2f", format(d$date), d$column, d$hcho)) |>
       add_lines(x = xs, y = unname(predict(fit, data.frame(column = xs))), inherit = FALSE,
                 line = list(color = "black", width = 1.5), name = "least squares", showlegend = FALSE) |>
-      layout(title = list(text = sprintf("Whole period: r = %s (n = %d)", fmt_r(s$r), s$n), font = list(size = 13)),
+      layout(title = list(text = sprintf("Whole period: r = %s (n = %d)<br><span style='font-size:11px'>least squares: surface = %.2f + %.3f × column</span>",
+                                         fmt_r(s$r), s$n, coef(fit)[[1]], coef(fit)[[2]]), font = list(size = 13)),
              xaxis = list(title = paste0("TEMPO column (", U_COL, ")")),
              yaxis = list(title = paste0("Surface HCHO (", U_CONC, ")")),
              legend = list(orientation = "h", y = -0.25))
@@ -798,8 +897,8 @@ server <- function(input, output, session) {
                        an$column_anom, an$surface_anom)) |>
       add_lines(x = xs, y = unname(predict(fit, data.frame(column_anom = xs))), inherit = FALSE,
                 line = list(color = "black", width = 1.5), showlegend = FALSE) |>
-      layout(title = list(text = sprintf("Day to day (within-month anomalies): r = %s (%d pairs)",
-                                         fmt_r(s$r_anom), s$n_anom), font = list(size = 13)),
+      layout(title = list(text = sprintf("Day to day (within-month anomalies): r = %s (%d pairs)<br><span style='font-size:11px'>least squares: slope %.3f µg m⁻³ per 10¹⁵ molecules cm⁻²</span>",
+                                         fmt_r(s$r_anom), s$n_anom, coef(fit)[[2]]), font = list(size = 13)),
              xaxis = list(title = "TEMPO column anomaly"), yaxis = list(title = "Surface HCHO anomaly"),
              legend = list(orientation = "h", y = -0.25))
   })
@@ -1067,9 +1166,9 @@ server <- function(input, output, session) {
     end <- r$start_utc + du * 3600
     full <- a[a$start_utc == r$start_utc, ][1, ]
     tagList(
-      p(HTML(sprintf("The %d h surface sample that began at %s UTC on %s and ended at %s UTC measured <b>%s %s</b>.",
+      p(HTML(sprintf("The %d h surface sample that began at %s UTC on %s and ended at %s UTC on %s measured <b>%s %s</b>.",
                 du, format(r$start_utc, "%H:%M", tz = "UTC"), format(r$start_utc, "%d %B %Y", tz = "UTC"),
-                format(end, "%H:%M", tz = "UTC"), f2s(r$hcho), U_CONC))),
+                format(end, "%H:%M", tz = "UTC"), format(end, "%d %B %Y", tz = "UTC"), f2s(r$hcho), U_CONC))),
       p(sprintf("TEMPO scanned the monitor %d times while the sample was being collected (the midpoint of each scan ",
                 full$n_scans),
         "inside the sampling window). For each scan we average the 3 × 3 grid cells around the monitor that pass ",
@@ -1162,7 +1261,9 @@ server <- function(input, output, session) {
         sprintf("smallest possible p is 1/%s ≈ %s. ", format(pt$nperm + 1, big.mark = ","), fmt_p(1 / (pt$nperm + 1))),
         "The test is two-sided. Shuffling within site-months, rather than across the whole record, keeps each anomaly ",
         "with the month mean it was formed from; the ordinary test of r would treat the pairs as independent and is too ",
-        "optimistic. The shuffles use the paper's seed, so p is the paper's value."))
+        "optimistic. This test assumes observations can be exchanged within a site-month and does not account for all ",
+        "possible temporal dependence, such as persistence from one sampling day to the next. The shuffles use the ",
+        "paper's seed, so p is the paper's value."))
   })
   output$wk_p_perm <- renderPlotly({
     pt <- wk_perm(); req(pt)
@@ -1201,37 +1302,56 @@ server <- function(input, output, session) {
     intro <- p("Even a perfect monitor could not correlate perfectly with TEMPO, because each scan carries random retrieval ",
                "error (noise). The ceiling is the correlation expected if that noise were the only source of disagreement; ",
                "E, the observed r divided by the ceiling, says how much of that attainable agreement a monitor reaches.")
-    nat_line <- if (!is.null(nat)) p(class = "small", tags$b("National example (all 24 h sites pooled, Sect. 3.3): "),
-      sprintf("single-scan noise %s; median %s valid scans per sample; anomaly noise %s × %s, %s%% of the anomaly variance; ceiling √(1 − %s) = %s; observed r = %s, so E = %s.",
-              f2s(nat$scan_noise_sd_single_1e15), format(nat$median_valid_scans), f2s(nat$noise_sd_empirical_1e15), U_COL,
+    nat1 <- FROW(FIND$ceiling, FIND$ceiling$block_label == "1x1")
+    nat_line <- if (!is.null(nat)) p(class = "small", tags$b("National example (all 24 h sites pooled, 3 × 3 block, Sect. 3.3): "),
+      sprintf("single-scan noise of the 3 × 3 block mean %s × %s%s; median %s valid scans per sample; anomaly noise %s × %s, %s%% of the anomaly variance; ceiling √(1 − %s) = %s; observed r = %s, so E = %s.",
+              f2s(nat$scan_noise_sd_single_1e15), U_COL,
+              if (is.null(nat1)) "" else sprintf(" (%s for a single grid cell: averaging nine cells reduces the noise)", f2s(nat1$scan_noise_sd_single_1e15)),
+              format(nat$median_valid_scans), f2s(nat$noise_sd_empirical_1e15), U_COL,
               sprintf("%.0f", 100 * nat$noise_share_empirical), f2s(nat$noise_share_empirical),
               f2s(nat$ceiling_empirical), f2s(nat$anomaly_r_observed), f2s(nat$anomaly_r_observed / nat$ceiling_empirical)))
     if (!use_site) return(tagList(intro,
       div(class = "alert alert-secondary py-2 small", "The paper estimates a ceiling for each national 24 h record with at ",
-          "least 10 anomaly pairs (step 17). ", if (is.null(sc)) "Re-run step 24 to add the per-site ceilings. " else
+          "least 10 anomaly pairs. ", if (is.null(sc)) "Re-run step 24 to add the per-site ceilings. " else
             "This record has none; choose a 24 h record of the national comparison, or see the national example below."),
       nat_line, caveat))
     cs <- ceiling_steps(an, an$n_valid, row$scan_noise_sd_single_1e15)
     k <- which(an$start_utc == r$start_utc)[1]
     zero <- cs$ceiling <= 0
+    U30 <- "10³⁰ molecules² cm⁻⁴"   # unit of a variance of columns in 10^15 molecules cm^-2
+    qty <- function(sym, what, value, source) tags$tr(tags$td(HTML(sym)), tags$td(what), tags$td(class = "text-end", style = "white-space:nowrap;", HTML(value)), tags$td(class = "text-muted", source))
+    quantities <- tags$table(class = "table table-sm small mb-2",
+      tags$thead(tags$tr(tags$th("Symbol"), tags$th("Meaning"), tags$th(class = "text-end", "Value here"), tags$th("Where it comes from"))),
+      tags$tbody(
+        qty("σ", "noise of a single TEMPO scan (standard deviation)", sprintf("%s × %s", f2s(cs$scan_sd), U_COL),
+            sprintf("root-mean-square difference between successive valid scans at this monitor, ÷ √2; %d scan pairs; this one number is read from the paper's analysis output, because the app data hold each sample's mean column rather than the individual scans", as.integer(row$n_scan_pairs))),
+        qty("k", "valid scans averaged in the example sample", format(cs$k[k]), "step 1 above"),
+        qty("m", sprintf("samples with a TEMPO value in %s", month_name(r$ym)), format(cs$m[k]), "step 2 above"),
+        qty("σ² / k", "noise variance of the sample's mean column", sprintf("%s² / %d = %s", f2s(cs$scan_sd), cs$k[k], f2s(cs$scan_sd^2 / cs$k[k], 3)),
+            "averaging k independent scans divides the noise variance by k"),
+        qty("× (1 − 1/m)", "noise variance of the sample's anomaly", sprintf("%s × (1 − 1/%d) = <b>%s</b>", f2s(cs$scan_sd^2 / cs$k[k], 3), cs$m[k], f2s(cs$nv_i[k], 3)),
+            "subtracting the month mean removes the share 1/m of the noise, because the sample's own noise is part of that mean"),
+        qty("√", "noise SD of the sample's anomaly", sprintf("√%s = <b>%s</b> × %s", f2s(cs$nv_i[k], 3), f2s(sqrt(cs$nv_i[k])), U_COL), "")))
     tagList(intro,
       tags$ol(class = "mb-2",
         tags$li(tags$b("Noise of one scan. "), sprintf(
-          "On days with two valid scans no more than 1.6 h apart, the difference between successive scans holds the errors of both. The root-mean-square difference divided by √2 gives the single-scan noise: σ = %s × %s (from %d scan pairs at this monitor).",
-          f2s(row$scan_noise_sd_single_1e15), U_COL, as.integer(row$n_scan_pairs))),
-        tags$li(tags$b("Noise in one sample's anomaly. "), sprintf(
-          "Averaging k valid scans divides the noise variance by k, and subtracting a month mean of m samples removes a further share 1/m. For the example sample (k = %d scans, m = %d samples in %s): %s² / %d × (1 − 1/%d) = %s, a noise SD of %s.",
-          cs$k[k], cs$m[k], month_name(r$ym), f2s(cs$scan_sd), cs$k[k], cs$m[k], f2s(cs$nv_i[k], 3), f2s(sqrt(cs$nv_i[k])))),
+          "On days with two valid scans no more than 1.6 h apart, the difference between successive scans holds the errors of both scans, so the root-mean-square difference divided by √2 estimates the noise of a single scan: σ = %s × %s, from %d such scan pairs at this monitor. The same σ applies to every sample of the record.",
+          f2s(cs$scan_sd), U_COL, as.integer(row$n_scan_pairs))),
+        tags$li(tags$b("Noise in one sample's anomaly. "),
+          sprintf("The example sample from step 1 averaged k = %d valid scans, and its anomaly in step 2 subtracted a month mean formed from m = %d samples. Its noise is therefore:", cs$k[k], cs$m[k]),
+          quantities,
+          HTML(sprintf("In one line: σ² / k × (1 − 1/m) = %s² / %d × (1 − 1/%d) = %s, a noise SD of %s × %s. Variances are in %s.",
+                       f2s(cs$scan_sd), cs$k[k], cs$m[k], f2s(cs$nv_i[k], 3), f2s(sqrt(cs$nv_i[k])), U_COL, U30))),
         tags$li(tags$b("Average over the record. "), sprintf(
-          "Over all %d anomaly samples (median %s valid scans) the noise variance averages %s (in units of 10³⁰ molecules² cm⁻⁴), an SD of %s.",
-          nrow(an), format(cs$median_k), f2s(cs$noise_var, 3), f2s(cs$noise_sd))),
+          "The same calculation for each of the %d anomaly samples (each with its own k and m; median k = %s) gives noise variances that average %s, a noise SD of %s × %s.",
+          nrow(an), format(cs$median_k), f2s(cs$noise_var, 3), f2s(cs$noise_sd), U_COL)),
         tags$li(tags$b("Noise share. "), sprintf(
-          "The column anomalies vary with an SD of %s, a variance of %s. Noise share f = %s / %s = %s.",
-          f2s(cs$sd_col), f2s(cs$var_col, 3), f2s(cs$noise_var, 3), f2s(cs$var_col, 3), f2s(cs$share))),
+          "The column anomalies themselves (step 2) have an SD of %s × %s, a variance of %s. The share of that variance due to noise is f = %s / %s = %s.",
+          f2s(cs$sd_col), U_COL, f2s(cs$var_col, 3), f2s(cs$noise_var, 3), f2s(cs$var_col, 3), f2s(cs$share))),
         tags$li(tags$b("Ceiling. "), if (zero) "The estimated noise is at least as large as the variance of the column anomalies, so the ceiling is 0 and E cannot be calculated (such records are left out of the paper's site models)." else
-          HTML(sprintf("r<sub>ceiling</sub> = √(1 − f) = √(1 − %s) = <b>%s</b>.", f2s(cs$share), f2s(cs$ceiling)))),
+          HTML(sprintf("If the column anomalies were the true anomalies plus noise, and the surface tracked the true anomalies perfectly, the correlation would be r<sub>ceiling</sub> = √(1 − f) = √(1 − %s) = <b>%s</b>.", f2s(cs$share), f2s(cs$ceiling)))),
         if (!zero) tags$li(tags$b("E. "), HTML(sprintf(
-          "The observed day-to-day r is %s, so E = r<sub>obs</sub> / r<sub>ceiling</sub> = %s / %s = <b>%s</b>: this monitor reaches about %.0f%% of the agreement that scan noise alone would allow.",
+          "The observed day-to-day r (step 3) is %s, so E = r<sub>obs</sub> / r<sub>ceiling</sub> = %s / %s = <b>%s</b>: this monitor reaches about %.0f%% of the agreement that scan noise alone would allow.",
           f2s(cs$r_obs), f2s(cs$r_obs), f2s(cs$ceiling), f2s(cs$E), 100 * min(cs$E, 1)))) ),
       nat_line, caveat)
   })

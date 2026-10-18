@@ -378,7 +378,11 @@ findings <- list(
                    if (is.null(x)) NULL else x[x$site != "all sites" & x$block_label == "3x3" & !is.na(x$ceiling_empirical),
                      c("site", "n_anomalies", "anomaly_r_observed", "sd_column_anomaly_1e15", "median_valid_scans",
                        "scan_noise_sd_single_1e15", "noise_sd_empirical_1e15", "noise_share_empirical",
-                       "ceiling_empirical", "r_noise_corrected", "n_scan_pairs")] })
+                       "ceiling_empirical", "r_noise_corrected", "n_scan_pairs")] },
+  # regression results shown on the Main findings tab
+  table1      = opt_tbl("manuscript_table1.csv"),           # step 21: column coefficients by duration
+  site_models = opt_tbl("diag8_ceiling_gap_models.csv"),    # step 20: six-predictor site models (Table S6)
+  geo_models  = opt_tbl("geography_models.csv"))             # step 25: the same models plus geography
 pooled24 <- if (is.null(findings$pooled)) NULL else
   findings$pooled[findings$pooled$duration_class == "24 h" & findings$pooled$lag_h == 0, ]
 check(!is.null(pooled24) && nrow(pooled24) == 1 && pooled24$n == findings$n24[["usable"]],

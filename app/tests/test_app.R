@@ -153,6 +153,20 @@ try_out("worked: permutation p and noise ceiling at Fresno (24 h)", {
     stopifnot(abs(cs$ceiling - row$ceiling_empirical) < 1e-9, abs(cs$E - row$r_noise_corrected) < 1e-9)
   }
 })
+try_out("main findings: regression tables are the paper's", {
+  sm <- e$FIND$site_models; gm <- e$FIND$geo_models; pi <- e$FIND$pbl_int; t1 <- e$FIND$table1
+  stopifnot(!is.null(sm), !is.null(gm), !is.null(pi), !is.null(t1),
+            # Table S6 M1: signal-to-noise +0.085 (p = 0.005), smoke share +0.076 (p = 0.012); R2 0.24
+            abs(as.numeric(sm$estimate_per_sd[sm$model == "M1: Fisher z of observed r ~ all six" & sm$term == "log_snr"]) - 0.0852) < 5e-4,
+            abs(as.numeric(sm$r2[sm$model == "M1: Fisher z of observed r ~ all six"][1]) - 0.236) < 5e-3,
+            # geography: R2 0.24 -> 0.32, p = 0.026
+            abs(as.numeric(gm$r2_with_geography[gm$model == "M1 + geography: Fisher z of observed r"][1]) - 0.319) < 5e-3,
+            # Table S11: adjusted 8 h 04:00 interaction +0.160, 24 h -0.005
+            abs(as.numeric(pi$estimate[pi$term == "col_std:pbl_std" & grepl("competing", pi$model) & pi$sample == "8 h, start 04:00 LST"]) - 0.160) < 5e-4,
+            # Table 1 column coefficient row present
+            any(grepl("^Column coefficient", t1$row_label)),
+            !is.null(e$REGRESSIONS))
+})
 try_out("worked: Colorado window comparison", {
   w <- e$window_pairs(e$TEMPO); ch <- w[w$site_id == "08-035-0004", ]
   x <- e$window_diff(ch); b <- e$boot_window_diff(ch)
