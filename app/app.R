@@ -69,6 +69,26 @@ site_in_nets <- function(nets) {
 IS_NAT <- SITES$site_id %in% TEMPO$site_id[TEMPO$arm == "national"]
 NET_N  <- colSums(NET_MAT[IS_NAT, , drop = FALSE])
 
+# ---- links between tabs ----------------------------------------------------------------
+# tab_link("Explore") opens the Explore tab; tab_link("How agreement varies", inner = "sens")
+# opens Explore and then the "How agreement varies" panel of its card. The navbar links carry
+# data-value = the panel title; the inner navset (id "tab") uses its panel values.
+TAB_LINK_JS <- HTML("
+$(document).on('click', 'a.tab-link', function (e) {
+  e.preventDefault();
+  var nav = $(this).data('nav'), inner = $(this).data('inner');
+  var top = $('.navbar .nav-link[data-value=\"' + nav + '\"]').first();
+  if (top.length) { if (top.tab) top.tab('show'); else top[0].click(); }
+  if (inner) setTimeout(function () {
+    var a = $('#tab .nav-link[data-value=\"' + inner + '\"]').first();
+    if (a.length) { if (a.tab) a.tab('show'); else a[0].click(); }
+    var el = document.getElementById('tab'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 150); else window.scrollTo({ top: 0 });
+});")
+tab_link <- function(label, nav = label, inner = NULL, bold = TRUE)
+  tags$a(href = "#", class = "tab-link", `data-nav` = nav, `data-inner` = inner,
+         title = paste("Open the", label, "tab"), if (bold) tags$b(label) else label)
+
 # ---- what the app is for -----------------------------------------------------------------
 INTRO_TEXT <- tagList(
   "This app compares formaldehyde (HCHO) measured at ground-based monitors with the HCHO column that NASA's ",
@@ -87,9 +107,9 @@ INTRO_TEXT <- tagList(
   if (any(!IS_NAT)) sprintf("; the Colorado analysis adds %s", paste(SITES$name[!IS_NAT], collapse = ", ")) else "",
   sprintf(". At the %d Colorado sites (black outline) the CDPHE ", sum(SITES$colorado_detail)),
   "air-toxics packets add every other toxic measured there. Click a monitor to see how closely surface and satellite ",
-  "agree, over the whole period and day to day; the ", tags$b("How agreement varies"), " tab shows how that agreement ",
+  "agree, over the whole period and day to day; the ", tab_link("How agreement varies", "Explore", "sens"), " tab shows how that agreement ",
   "changes with boundary-layer height, temperature, timing, smoke, season and the satellite screening. The paper's ",
-  "national results are summarized on the ", tags$b("Main findings"), " tab, and ", tags$b("How the comparison works"),
+  "national results are summarized on the ", tab_link("Main findings"), " tab, and ", tab_link("How the comparison works"),
   " repeats the paper's calculation step by step for any monitor.")
 INTRO <- div(class = "alert alert-light border small mb-3", tags$b("What this app is for. "), INTRO_TEXT)
 
@@ -271,9 +291,9 @@ ABOUT <- card(card_body(
     "seven Colorado Air Toxics Trends (COATTS) sites, and carbonyls, speciated non-methane organic compounds and methane at the ",
     "two ozone-precursor (COOPs) sites. Values are shown as reported; samples carrying an AQS null-data qualifier and the ",
     "packets' QC samples are removed, and non-detects are drawn at their detection limit where one is reported."),
-  p("The ", tags$b("Main findings"), " tab gives the paper's national results and regression tables, read from the ",
+  p("The ", tab_link("Main findings"), " tab gives the paper's national results and regression tables, read from the ",
     "pipeline's output tables (steps 13, 15, 17, 20, 21 and 25) when the app data are built by step 24; nothing is typed ",
-    "into the app. The ", tags$b("How the comparison works"), " tab works through the calculation for one monitor: ",
+    "into the app. The ", tab_link("How the comparison works"), " tab works through the calculation for one monitor: ",
     "matching samples to scans, within-month anomalies, the two correlations, the within-site-month permutation test, ",
     "the noise ceiling and E, and the site-month bootstrap used to compare two correlations. Step 24 checks that the ",
     "app's code reproduces the paper's tables: the correlations of every site, every permutation p-value, every ",
@@ -291,7 +311,7 @@ ABOUT <- card(card_body(
     tags$li(tags$b("Boundary-layer height"), ": NOAA HRRR's planetary boundary-layer height averaged over the hours of the ",
             "sampling window, and the boundary-layer height supplied with the TEMPO retrieval, averaged over the valid scans ",
             "(daytime only). Temperature: HRRR 2 m temperature over the sampling window."),
-    tags$li(tags$b("How agreement varies"), ": both correlations recomputed with one thing changed at a time: smoke, season, ",
+    tags$li(tab_link("How agreement varies", "Explore", "sens"), ": both correlations recomputed with one thing changed at a time: smoke, season, ",
             "TEMPO window, sample duration, TEMPO pixel block and cloud-fraction limit (the screening variants of the released ",
             "data), and thirds of the samples by boundary-layer height, temperature and the number of valid TEMPO scans. ",
             "For the thirds, within-month anomalies are formed first and the samples entering the day-to-day correlation are ",
@@ -403,7 +423,7 @@ MAIN_FINDINGS <- if (is.null(FIND)) div(class = "alert alert-secondary", "Re-run
         tags$b("The paper's national results. "),
         "Unless stated otherwise, these are for the national 24 h samples of 2024\u20132025 at the primary screening ",
         "(3 \u00d7 3 grid cells, effective cloud fraction \u2264 0.2, scans inside the sampling window). The ",
-        tags$b("Explore"), " tab shows individual monitors."),
+        tab_link("Explore"), " tab shows individual monitors."),
     layout_column_wrap(width = "220px", fill = FALSE, class = "mb-3",
       value_box("Samples with a usable TEMPO observation", sprintf("%.0f%%", pct),
                 p(sprintf("%d of %d national 24 h samples", FIND$n24[["usable"]], FIND$n24[["samples"]]))),
@@ -419,7 +439,7 @@ MAIN_FINDINGS <- if (is.null(FIND)) div(class = "alert alert-secondary", "Re-run
         p("Day-to-day agreement is positive at most monitors but ranges from ", FN("site_dd_min_24"), " to ",
           FN("site_dd_max_24"), ", and most of that variation lies among monitors within the same state. ",
           "A single network-wide satellite-to-surface relationship should therefore not be applied to an individual ",
-          "monitor without local evaluation. The map on the Explore tab shows each monitor."),
+          "monitor without local evaluation. The map on the ", tab_link("Explore", bold = FALSE), " tab shows each monitor."),
         p(class = "small text-muted", "Paper: Sect. 3.2, Figs. 1\u20132.")),
       card_md("Scatter between scans sets an estimated ceiling",
         p("If the scatter between successive scans (no more than 1.6 h apart) were entirely retrieval noise, and ",
@@ -427,7 +447,7 @@ MAIN_FINDINGS <- if (is.null(FIND)) div(class = "alert alert-secondary", "Re-run
           F2(ce3$ceiling_empirical), "; the observed value is ", F2(ce3$anomaly_r_observed), ". At individual monitors ",
           "the estimated ceilings are similar (median ", FN("nat_site_ceiling_median"), "), but observed correlations ",
           "reach a median of only ", FN("nat_site_rcorr_median"), " of them, so noise explains only part of the ",
-          "disagreement. The How the comparison works tab shows the calculation for any 24 h monitor."),
+          "disagreement. The ", tab_link("How the comparison works", bold = FALSE), " tab shows the calculation for any 24 h monitor."),
         p(class = "small text-muted", "The ceiling is an estimate: real change in the column between scans inflates ",
           "the noise estimate, and errors that persist through the day are invisible to it. Paper: Sect. 3.3."))),
     layout_columns(col_widths = breakpoints(sm = 12, lg = c(6, 6)),
@@ -436,8 +456,8 @@ MAIN_FINDINGS <- if (is.null(FIND)) div(class = "alert alert-secondary", "Re-run
         p(class = "small", "On one fixed set of ", FN("ta_samples"), " samples with at least four valid scans, a single ",
           "randomly chosen scan of the 3 \u00d7 3 block gives a pooled day-to-day r of ", FN("ta_r1_33"),
           " and the mean of all scans ", FN("ta_rall_33"), ". Because the samples are the same at every point, this ",
-          "isolates the effect of averaging; the \u201cvalid scans\u201d thirds on the How agreement varies tab ",
-          "compare different days and do not."),
+          "isolates the effect of averaging; the \u201cvalid scans\u201d thirds on the ",
+          tab_link("How agreement varies", "Explore", "sens", bold = FALSE), " tab compare different days and do not."),
         p(class = "small text-muted", "Bars: 2.5\u201397.5% range over random draws. Paper: Sect. 3.3, Fig. 3.")),
       card_md("Agreement rises with modelled mixing depth for 8 h samples",
         plotlyOutput("p_find_pbl", height = "300px"),
@@ -449,8 +469,8 @@ MAIN_FINDINGS <- if (is.null(FIND)) div(class = "alert alert-secondary", "Re-run
           "days. For 24 h samples it disappeared once scan count and column level were allowed for (interaction ",
           FN("pbl_int_adj_24"), ", ", FN("pbl_int_adj_24_ptxt"), ")."),
         p(class = "small text-muted", "These are pooled analyses, with thirds formed within each start hour over all ",
-          "sites. The How agreement varies tab forms thirds site by site and shows medians across monitors, an ",
-          "exploratory view. Paper: Sect. 3.5, Fig. 4."))),
+          "sites. The ", tab_link("How agreement varies", "Explore", "sens", bold = FALSE), " tab forms thirds site by site ",
+          "and shows medians across monitors, an exploratory view. Paper: Sect. 3.5, Fig. 4."))),
     layout_columns(col_widths = breakpoints(sm = 12, lg = c(6, 6)),
       card_md("Agreement is weakest in winter",
         p(HTML(paste0("For 24 h samples the pooled correlation was ", FN("seas_r_24_djf"), " in winter (95% CI ", FN("seas_rlo_24_djf"),
@@ -480,7 +500,8 @@ MAIN_FINDINGS <- if (is.null(FIND)) div(class = "alert alert-secondary", "Re-run
         "which also depends on how many days fall in each group. Days without any TEMPO granule are excluded. ",
         "Paper: Sect. 3.6, Fig. 5.")),
     REGRESSIONS,
-    p(class = "small text-muted mt-2", "All numbers on this page are read from the paper's analysis output (see About)."))
+    p(class = "small text-muted mt-2", "All numbers on this page are read from the paper's analysis output (see ",
+      tab_link("About", bold = FALSE), ")."))
 })
 
 # ---- how the comparison works: the paper's calculation, worked on one monitor -----------
@@ -508,8 +529,9 @@ WORKED <- tagList(
       tags$b("How the comparison works. "),
       "This page repeats the paper's calculation for one monitor, step by step, on its real samples. Choose a monitor, ",
       "a month and a sample; every number is recomputed from the released data with the app's own code, which is ",
-      "checked against the paper's tables when the app is built (see About). The page uses all days and seasons at the ",
-      "paper's primary screening; the filters on the Explore tab do not apply here."),
+      "checked against the paper's tables when the app is built (see ", tab_link("About", bold = FALSE), "). The page uses ",
+      "all days and seasons at the paper's primary screening; the filters on the ", tab_link("Explore", bold = FALSE),
+      " tab do not apply here."),
   card(class = "mb-3", card_body(
     layout_columns(col_widths = breakpoints(sm = 12, md = c(4, 3, 2, 3)),
       selectInput("wk_site", "Monitoring site", choices = CHOICES, selected = WK_DEFAULT),
@@ -545,7 +567,8 @@ WORKED <- tagList(
 ui <- page_navbar(
   title = "TEMPO vs ground-based formaldehyde (HCHO)",
   theme = bs_theme(version = 5, bootswatch = "flatly"),
-  header = tags$style(HTML(".leaflet-container { background: #e8edf1; }")),
+  header = tagList(tags$style(HTML(".leaflet-container { background: #e8edf1; } a.tab-link { text-decoration: underline dotted; color: inherit; } a.tab-link:hover { color: #18bc9c; }")),
+                   tags$script(TAB_LINK_JS)),
   fillable = FALSE,
   nav_panel("Main findings", MAIN_FINDINGS),
   nav_panel("How the comparison works", WORKED),
@@ -628,10 +651,11 @@ ui <- page_navbar(
             div(class = "alert alert-warning py-2 small mb-2",
                 tags$b("Medians across monitors; bars show the spread between monitors (interquartile range), not ",
                        "confidence intervals. The smoke and season filters at left do not apply here."),
-                " The paper's pooled results, including its mixing-depth analysis, are on the Main findings tab."),
+                " The paper's pooled results, including its mixing-depth analysis, are on the ",
+                tab_link("Main findings", bold = FALSE), " tab."),
             div(class = "small text-muted mb-2",
                 "Every site of the national comparison at the paper's primary configuration, changing one thing at a ",
-                "time (computed with the app's own code; see About). Points: median across the sites with at least 10 samples ",
+                "time (computed with the app's own code; see ", tab_link("About", bold = FALSE), "). Points: median across the sites with at least 10 samples ",
                 "(whole-period) or 10 anomaly pairs (day-to-day); bars: interquartile range across those sites. Sites ",
                 "follow the network filter at left; the smoke and season filters do not apply here. Thirds are formed ",
                 "site by site, so their cut points differ between sites."),
@@ -938,9 +962,10 @@ server <- function(input, output, session) {
   })
   output$sens_site_head <- renderUI({
     div(class = "small text-muted mb-1",
-        sprintf("%s · %s · %d h samples · %s · %s. ◀ marks the configuration of the TEMPO tab.",
+        sprintf("%s · %s · %d h samples · %s · %s. ◀ marks the configuration of the ",
                 site()$name, ARM_LABEL[[cur_arm()]], cur_dur(), lag_label(cur_lag()),
-                filter_text(input$smoke %or% "all", input$seasons %or% character())))
+                filter_text(input$smoke %or% "all", input$seasons %or% character())),
+        tab_link("TEMPO vs surface HCHO", "Explore", "tempo", bold = FALSE), " panel.")
   })
   output$sens_site_ui   <- renderUI(plotlyOutput("sens_site_plot", height = sens_height(sens_site())))
   output$sens_site_plot <- renderPlotly(sens_plot(site_plot_rows(sens_site())))
@@ -1109,7 +1134,10 @@ server <- function(input, output, session) {
   })
   output$t_table <- renderDT({
     datatable(tox_table(), rownames = FALSE, selection = "single",
-              options = list(pageLength = 10, dom = "ftip", order = list()))
+              options = list(pageLength = 25, dom = "ftip", order = list(),
+                             # no Previous / Next when every pollutant fits on one page
+                             drawCallback = DT::JS("function() { var api = this.api();",
+                                                   "$(api.table().container()).find('.dataTables_paginate').toggle(api.page.info().pages > 1); }")))
   })
   observeEvent(input$t_table_rows_selected, {
     i <- input$t_table_rows_selected
