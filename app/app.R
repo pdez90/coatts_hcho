@@ -89,7 +89,8 @@ INTRO_TEXT <- tagList(
   "air-toxics packets add every other toxic measured there. Click a monitor to see how closely surface and satellite ",
   "agree, over the whole period and day to day; the ", tags$b("How agreement varies"), " tab shows how that agreement ",
   "changes with boundary-layer height, temperature, timing, smoke, season and the satellite screening. The paper's ",
-  "national results are summarized on the ", tags$b("Main findings"), " tab.")
+  "national results are summarized on the ", tags$b("Main findings"), " tab, and ", tags$b("How the comparison works"),
+  " repeats the paper's calculation step by step for any monitor.")
 INTRO <- div(class = "alert alert-light border small mb-3", tags$b("What this app is for. "), INTRO_TEXT)
 
 # ---- colouring the scatter plots ----------------------------------------------------------
@@ -271,7 +272,10 @@ ABOUT <- card(card_body(
     "two ozone-precursor (COOPs) sites. Values are shown as reported; samples carrying an AQS null-data qualifier and the ",
     "packets' QC samples are removed, and non-detects are drawn at their detection limit where one is reported."),
   p("The ", tags$b("Main findings"), " tab gives the paper's national results, read from the pipeline's output ",
-    "tables when the app data are built (step 24)."),
+    "tables when the app data are built (step 24). The ", tags$b("How the comparison works"), " tab works through the ",
+    "calculation for one monitor: matching samples to scans, within-month anomalies, the two correlations, the ",
+    "within-site-month permutation test, the noise ceiling and E, and the site-month bootstrap used to compare two ",
+    "correlations. Step 24 checks that its code reproduces the paper's tables."),
   h4("Statistics"),
   tags$ul(
     tags$li(tags$b("Whole-period r"), ": Pearson correlation between surface HCHO and the TEMPO column over samples with a usable TEMPO observation."),
@@ -338,7 +342,7 @@ MAIN_FINDINGS <- if (is.null(FIND)) div(class = "alert alert-secondary", "Re-run
           F2(ce3$ceiling_empirical), "; the observed value is ", F2(ce3$anomaly_r_observed), ". At individual monitors ",
           "the estimated ceilings are similar (median ", FN("nat_site_ceiling_median"), "), but observed correlations ",
           "reach a median of only ", FN("nat_site_rcorr_median"), " of them, so noise explains only part of the ",
-          "disagreement."),
+          "disagreement. The How the comparison works tab shows the calculation for any 24 h monitor."),
         p(class = "small text-muted", "The ceiling is an estimate: real change in the column between scans inflates ",
           "the noise estimate, and errors that persist through the day are invisible to it. Paper: Sect. 3.3."))),
     layout_columns(col_widths = breakpoints(sm = 12, lg = c(6, 6)),
@@ -376,6 +380,65 @@ MAIN_FINDINGS <- if (is.null(FIND)) div(class = "alert alert-secondary", "Re-run
       "app data are built (step 24)."))
 })
 
+# ---- how the comparison works: the paper's calculation, worked on one monitor -----------
+WK_DEFAULT <- if ("04-013-9997" %in% SITES$site_id) "04-013-9997" else DEFAULT_SITE
+WK_BOOT_SITES <- c("Chatfield State Park" = "08-035-0004", "Platteville" = "08-123-0008", "Both sites together" = "all")
+WK_BOOT_KEY   <- c("08-035-0004" = "chco", "08-123-0008" = "pvco", all = "all")
+WK_HI  <- "#d95f02"   # the example month, wherever it appears
+f2s <- function(x, d = 2) if (length(x) != 1 || is.na(x)) "–" else sub("^-", "−", formatC(x, format = "f", digits = d))
+f2p <- function(x, d = 2) if (length(x) != 1 || is.na(x)) "–" else
+  paste0(if (x >= 0) "+" else "−", formatC(abs(x), format = "f", digits = d))
+fmt_p <- function(p) if (is.na(p)) "–" else if (p < 0.001) sprintf("%.4f", p) else sprintf("%.3f", p)
+month_name <- function(ym) format(as.Date(paste0(ym, "-01")), "%B %Y")
+step_card <- function(n, title, ...) card(class = "mb-3",
+  card_header(span(class = "badge bg-primary me-2", n), tags$b(title)), card_body(...))
+wk_table <- function(df, bold = rep(FALSE, nrow(df)), hi = NULL) {
+  tags$table(class = "table table-sm small mb-2", style = "width:auto; white-space:nowrap;",
+    tags$thead(tags$tr(lapply(names(df), function(h) tags$th(class = "text-end", HTML(h))))),
+    tags$tbody(lapply(seq_len(nrow(df)), function(i) tags$tr(
+      style = if (bold[i]) paste0("font-weight:bold; background:#fdf0e6;") else NULL,
+      lapply(df[i, ], function(v) tags$td(class = "text-end", HTML(as.character(v))))))))
+}
+
+WORKED <- tagList(
+  div(class = "alert alert-light border small mb-3",
+      tags$b("How the comparison works. "),
+      "This page repeats the paper's calculation for one monitor, step by step, on its real samples. Choose a monitor, ",
+      "a month and a sample; every number is recomputed from the released data with the app's own code, and step 24 ",
+      "checks that this code reproduces the paper's tables (correlations, permutation p-values, noise ceilings and the ",
+      "Colorado window comparison). The page uses all days and seasons at the paper's primary screening; the filters on ",
+      "the Explore tab do not apply here."),
+  card(class = "mb-3", card_body(
+    layout_columns(col_widths = breakpoints(sm = 12, md = c(4, 3, 2, 3)),
+      selectInput("wk_site", "Monitoring site", choices = CHOICES, selected = WK_DEFAULT),
+      uiOutput("wk_rec_ui"), uiOutput("wk_month_ui"), uiOutput("wk_date_ui")))),
+  step_card(1, "Match each surface sample with TEMPO", uiOutput("wk_s1")),
+  step_card(2, "Remove each month's mean (within-month anomalies)", uiOutput("wk_s2")),
+  step_card(3, "Two correlations: whole period and day to day",
+    uiOutput("wk_s3"),
+    layout_columns(col_widths = breakpoints(sm = 12, lg = c(6, 6)),
+                   plotlyOutput("wk_p_raw", height = "320px"), plotlyOutput("wk_p_anom", height = "320px"))),
+  step_card(4, "Is the day-to-day correlation more than chance? (permutation test)",
+    uiOutput("wk_s4"),
+    layout_columns(col_widths = breakpoints(sm = 12, lg = c(7, 5)),
+                   plotlyOutput("wk_p_perm", height = "300px"), uiOutput("wk_s4_shuffle"))),
+  step_card(5, "How high could the correlation be? (noise ceiling and E)", uiOutput("wk_s5")),
+  step_card(6, "Is one correlation higher than another? (site-month bootstrap)",
+    div(class = "small mb-2",
+        "The paper's example: at the two Colorado 3 h sites, do TEMPO scans from the three hours ", tags$i("after"),
+        " sampling (09:00–12:00 MST) track the 06:00–09:00 surface samples better than the scans made ",
+        tags$i("during"), " sampling? Both correlations share the same surface anomalies, so they are compared on the ",
+        "same samples: those with valid scans in both windows."),
+    div(class = "d-flex flex-wrap align-items-center gap-3 mb-2",
+        radioButtons("wk_boot_site", NULL, inline = TRUE, choices = WK_BOOT_SITES),
+        actionButton("wk_draw", "Draw one resample", class = "btn-sm btn-outline-primary")),
+    uiOutput("wk_s6"),
+    layout_columns(col_widths = breakpoints(sm = 12, lg = c(7, 5)),
+                   plotlyOutput("wk_p_boot", height = "300px"), uiOutput("wk_draw_out"))),
+  p(class = "small text-muted", "Paper: Sect. 2.3 (anomalies, permutation test, bootstrap, noise ceiling), ",
+    "Sect. 3.3 (ceiling), Sect. 3.5 (Colorado windows); Supplement Sects. S3–S4.")
+)
+
 # ---- UI --------------------------------------------------------------------------------
 ui <- page_navbar(
   title = "TEMPO vs ground-based formaldehyde (HCHO)",
@@ -383,6 +446,7 @@ ui <- page_navbar(
   header = tags$style(HTML(".leaflet-container { background: #e8edf1; }")),
   fillable = FALSE,
   nav_panel("Main findings", MAIN_FINDINGS),
+  nav_panel("How the comparison works", WORKED),
   nav_panel("Explore",
     layout_sidebar(
       sidebar = sidebar(width = 330,
@@ -952,6 +1016,291 @@ server <- function(input, output, session) {
   output$dl_tox <- downloadHandler(
     filename = function() sprintf("air_toxics_%s.csv", site()$site_code %or% input$site),
     content = function(file) utils::write.csv(tox_site(), file, row.names = FALSE, na = ""))
+  # ---- how the comparison works ------------------------------------------------------
+  wk_site <- reactive({ req(input$wk_site); SITES[SITES$site_id == input$wk_site, ][1, ] })
+  wk_arm  <- reactive({
+    a <- unique(TEMPO$arm[TEMPO$site_id == input$wk_site & TEMPO$lag_h == 0L])
+    if ("national" %in% a) "national" else a[1]
+  })
+  output$wk_rec_ui <- renderUI({
+    du <- sort(unique(TEMPO$duration_h[TEMPO$site_id == input$wk_site & TEMPO$arm == wk_arm()]), decreasing = TRUE)
+    radioButtons("wk_dur", "Record", inline = TRUE, choices = setNames(as.character(du), paste(du, "h samples")))
+  })
+  wk_all <- reactive({   # every sample of the record, usable or not
+    req(input$wk_dur)
+    d <- TEMPO[TEMPO$site_id == input$wk_site & TEMPO$arm == wk_arm() & TEMPO$duration_h == as.integer(input$wk_dur) &
+                 TEMPO$lag_h == 0L, ]
+    validate(need(nrow(d) > 0, "Choose a record."))
+    d[order(d$start_utc), ]
+  })
+  wk_use <- reactive(wk_all()[wk_all()$usable & is.finite(wk_all()$column), ])
+  wk_ps  <- reactive({ d <- wk_use(); pair_stats(d$date, d$hcho, d$column) })
+  wk_an  <- reactive({   # anomalies with their samples' values and month means
+    d <- wk_use(); an <- wk_ps()$anom
+    validate(need(nrow(an) >= 3, "This record has fewer than three samples in any month, so no within-month anomalies can be formed."))
+    an$hcho <- d$hcho[an$i]; an$column <- d$column[an$i]; an$n_valid <- d$n_valid[an$i]
+    an$start_utc <- d$start_utc[an$i]
+    an$hcho_mean <- an$hcho - an$surface_anom; an$column_mean <- an$column - an$column_anom
+    an$m <- stats::ave(seq_along(an$ym), an$ym, FUN = length)
+    an
+  })
+  output$wk_month_ui <- renderUI({
+    an <- wk_an(); tb <- table(an$ym)
+    pick <- names(tb)[which.max(tb)]
+    selectInput("wk_month", "Example month", selected = pick,
+                choices = setNames(names(tb), sprintf("%s (%d)", month_name(names(tb)), as.integer(tb))))
+  })
+  wk_month <- reactive({ an <- wk_an(); req(input$wk_month %in% an$ym); an[an$ym == input$wk_month, ] })
+  output$wk_date_ui <- renderUI({
+    m <- wk_month()
+    selectInput("wk_date", "Example sample", choices = setNames(as.character(m$start_utc),
+                format(m$start_utc, "%d %b %Y %H:%M UTC", tz = "UTC")))
+  })
+  wk_row <- reactive({
+    m <- wk_month(); k <- match(input$wk_date, as.character(m$start_utc))
+    if (is.na(k)) k <- 1L
+    m[k, ]
+  })
+
+  output$wk_s1 <- renderUI({
+    r <- wk_row(); a <- wk_all(); u <- wk_use(); du <- as.integer(input$wk_dur)
+    end <- r$start_utc + du * 3600
+    full <- a[a$start_utc == r$start_utc, ][1, ]
+    tagList(
+      p(HTML(sprintf("The %d h surface sample that began at %s UTC on %s and ended at %s UTC measured <b>%s %s</b>.",
+                du, format(r$start_utc, "%H:%M", tz = "UTC"), format(r$start_utc, "%d %B %Y", tz = "UTC"),
+                format(end, "%H:%M", tz = "UTC"), f2s(r$hcho), U_CONC))),
+      p(sprintf("TEMPO scanned the monitor %d times while the sample was being collected (the midpoint of each scan ",
+                full$n_scans),
+        "inside the sampling window). For each scan we average the 3 × 3 grid cells around the monitor that pass ",
+        "the screening (main quality flag 0, effective cloud fraction ≤ 0.2, solar zenith angle ≤ 70°, no ",
+        "snow or ice); a scan counts as valid when at least five of the nine cells pass. ",
+        HTML(sprintf("Here %d of the %d scans were valid, and the TEMPO value for this sample is their mean: <b>%s × %s</b>.",
+                     r$n_valid, full$n_scans, f2s(r$column), U_COL))),
+      p(class = "small text-muted", sprintf(
+        "A sample with no valid scan has no TEMPO value and is left out: %d of this record's %d samples had at least one valid scan.",
+        nrow(u), nrow(a)),
+        if (du == 24L) " TEMPO observes only in daylight, so for a 24 h sample the scans cover the daytime part of the sample." else ""))
+  })
+
+  output$wk_s2 <- renderUI({
+    m <- wk_month(); r <- wk_row(); an <- wk_an(); ps <- wk_ps()
+    n_months_all <- length(unique(format(wk_use()$date, "%Y-%m")))
+    bold <- m$start_utc == r$start_utc
+    tab <- data.frame(
+      Date = format(m$start_utc, "%d %b", tz = "UTC"),
+      `Surface (µg m<sup>−3</sup>)` = sapply(m$hcho, f2s),
+      `Month mean` = sapply(m$hcho_mean, f2s),
+      `Surface anomaly` = sapply(m$surface_anom, f2p),
+      `TEMPO (10<sup>15</sup> molec. cm<sup>−2</sup>)` = sapply(m$column, f2s),
+      `Month mean ` = sapply(m$column_mean, f2s),
+      `Column anomaly` = sapply(m$column_anom, f2p), check.names = FALSE)
+    tagList(
+      p(sprintf("Every month of every year is treated separately. In %s this monitor has %d samples with a TEMPO value; ",
+                month_name(r$ym), nrow(m)),
+        "the mean of each series over that month is subtracted from every sample of the month. For the highlighted sample:"),
+      div(class = "ps-3 mb-2",
+        div(sprintf("Surface anomaly = %s − %s = %s %s", f2s(r$hcho), f2s(r$hcho_mean), f2p(r$surface_anom), U_CONC)),
+        div(sprintf("Column anomaly = %s − %s = %s × %s", f2s(r$column), f2s(r$column_mean), f2p(r$column_anom), U_COL))),
+      wk_table(tab, bold),
+      p(class = "small", "The anomalies of each month add up to zero, so the seasonal cycle, and any offset between ",
+        "monitor and satellite that stays the same through the month, is removed. What remains asks a narrower question: ",
+        "does TEMPO see which days were higher or lower than usual for that month?"),
+      p(class = "small text-muted", sprintf(
+        "Months with fewer than three samples are left out, because a mean of one or two samples says little: %d of the record's %d months qualify, giving %d anomaly pairs.",
+        length(unique(an$ym)), n_months_all, nrow(an))))
+  })
+
+  wk_scatter <- function(x, y, hi, xlab, ylab, title) {
+    plot_ly() |>
+      add_markers(x = x[!hi], y = y[!hi], name = "other months", marker = list(color = "#9aa7b4", size = 6, opacity = 0.7),
+                  hoverinfo = "x+y") |>
+      add_markers(x = x[hi], y = y[hi], name = "example month", marker = list(color = WK_HI, size = 9,
+                  line = list(color = "#7a3500", width = 1)), hoverinfo = "x+y") |>
+      layout(title = list(text = title, font = list(size = 13)), xaxis = list(title = xlab, zeroline = FALSE),
+             yaxis = list(title = list(text = ylab, standoff = 8), zeroline = FALSE, automargin = TRUE),
+             legend = list(orientation = "h", y = -0.25), margin = list(l = 70))
+  }
+  output$wk_s3 <- renderUI({
+    ps <- wk_ps(); an <- wk_an()
+    low <- ps$n < MIN_REPORT || ps$n_anom < MIN_REPORT
+    tagList(
+      p(tags$b("Whole-period r"), sprintf(" correlates the %d samples' surface values with their TEMPO values: r = %s. ", ps$n, f2s(ps$r)),
+        "It mixes the seasonal cycle, which surface and column share, with day-to-day changes. ",
+        tags$b("Day-to-day r"), sprintf(" correlates the %d pairs of anomalies from step 2 (in %d site-months): r = %s. ",
+                                         ps$n_anom, length(unique(an$ym)), f2s(ps$r_anom)),
+        "This is the paper's main measure of agreement. The example month is shown in orange in both panels."),
+      if (low) p(class = "small text-warning", sprintf(
+        "The paper reports a monitor only with at least %d matched samples and %d anomaly pairs; this record has fewer.",
+        MIN_REPORT, MIN_REPORT)))
+  })
+  output$wk_p_raw <- renderPlotly({
+    d <- wk_use(); hi <- format(d$date, "%Y-%m") == input$wk_month
+    wk_scatter(d$column, d$hcho, hi, paste0("TEMPO column (", U_COL, ")"), paste0("Surface HCHO (", U_CONC, ")"),
+               sprintf("Whole period: r = %s (n = %d)", f2s(wk_ps()$r), wk_ps()$n))
+  })
+  output$wk_p_anom <- renderPlotly({
+    an <- wk_an(); hi <- an$ym == input$wk_month
+    wk_scatter(an$column_anom, an$surface_anom, hi, paste0("Column anomaly (", U_COL, ")"), paste0("Surface anomaly (", U_CONC, ")"),
+               sprintf("Day to day: r = %s (%d pairs)", f2s(wk_ps()$r_anom), wk_ps()$n_anom))
+  })
+
+  wk_perm <- reactive(perm_test(wk_an()))
+  output$wk_s4 <- renderUI({
+    pt <- wk_perm(); validate(need(!is.null(pt), "Too few samples for a permutation test."))
+    tagList(
+      p("If the TEMPO column carried no information about day-to-day changes at the surface, any pairing of a ",
+        "month's surface anomalies with that month's column anomalies would be as likely as the observed one. So we ",
+        "shuffle the surface anomalies among the days of each site-month (the values stay in their own month, so each ",
+        sprintf("month's anomalies still add up to zero), recompute r, and repeat %s times. ", format(pt$nperm, big.mark = ",")),
+        "The histogram shows the shuffled correlations."),
+      div(class = "ps-3 mb-2",
+        div(sprintf("Shuffles with |r| at least as large as the observed |r| = %s: %d of %s",
+                    f2s(abs(pt$r_obs)), pt$ge, format(pt$nperm, big.mark = ","))),
+        div(tags$b(sprintf("p = (%d + 1) / (%s + 1) = %s", pt$ge, format(pt$nperm, big.mark = ","), fmt_p(pt$p))))),
+      p(class = "small text-muted", "The +1 counts the observed pairing as one of the possible arrangements, so the ",
+        sprintf("smallest possible p is 1/%s ≈ %s. ", format(pt$nperm + 1, big.mark = ","), fmt_p(1 / (pt$nperm + 1))),
+        "The test is two-sided. Shuffling within site-months, rather than across the whole record, keeps each anomaly ",
+        "with the month mean it was formed from; the ordinary test of r would treat the pairs as independent and is too ",
+        "optimistic. The shuffles use the paper's seed, so p is the paper's value."))
+  })
+  output$wk_p_perm <- renderPlotly({
+    pt <- wk_perm(); req(pt)
+    lim <- max(1, abs(pt$r_obs)) 
+    plot_ly(x = pt$r_perm, type = "histogram", nbinsx = 50, marker = list(color = "#9aa7b4"), name = "shuffled",
+            hovertemplate = "r %{x}<br>%{y} shuffles<extra></extra>") |>
+      layout(xaxis = list(title = "r after shuffling within site-months", range = c(-lim, lim)),
+             yaxis = list(title = "Shuffles"), showlegend = FALSE, bargap = 0.05,
+             shapes = list(
+               list(type = "line", x0 = pt$r_obs, x1 = pt$r_obs, y0 = 0, y1 = 1, yref = "paper", line = list(color = WK_HI, width = 3)),
+               list(type = "line", x0 = -pt$r_obs, x1 = -pt$r_obs, y0 = 0, y1 = 1, yref = "paper",
+                    line = list(color = WK_HI, width = 1.5, dash = "dot"))),
+             annotations = list(list(x = pt$r_obs, y = 1, yref = "paper", text = sprintf("observed r = %s", f2s(pt$r_obs)),
+                                     showarrow = FALSE, xanchor = if (pt$r_obs > 0) "right" else "left", yanchor = "bottom",
+                                     font = list(color = WK_HI))))
+  })
+  output$wk_s4_shuffle <- renderUI({
+    pt <- wk_perm(); req(pt); an <- wk_an(); k <- which(an$ym == input$wk_month); r <- wk_row()
+    tab <- data.frame(Date = format(an$start_utc[k], "%d %b", tz = "UTC"),
+                      `Column<br>anomaly` = sapply(an$column_anom[k], f2p),
+                      `Surface anomaly,<br>observed` = sapply(an$surface_anom[k], f2p),
+                      `Surface anomaly,<br>shuffle 1` = sapply(pt$first_shuffle[k], f2p), check.names = FALSE)
+    tagList(div(class = "small fw-bold mb-1", sprintf("The first shuffle, in %s", month_name(input$wk_month))),
+            wk_table(tab, an$start_utc[k] == r$start_utc),
+            div(class = "small text-muted", "The same surface anomalies, reassigned to other days of the same month."))
+  })
+
+  output$wk_s5 <- renderUI({
+    s <- input$wk_site; an <- wk_an(); r <- wk_row()
+    sc <- FIND$site_ceiling; row <- if (is.null(sc)) NULL else sc[sc$site == s, ]
+    nat <- FROW(FIND$ceiling, FIND$ceiling$block_label == "3x3")
+    use_site <- !is.null(row) && nrow(row) == 1 && wk_arm() == "national" && input$wk_dur == "24"
+    caveat <- p(class = "small text-muted", "The ceiling is an estimate. Real change in the column between two scans ",
+                "inflates the noise estimate (lowering the ceiling), and errors that persist through the day, such as an ",
+                "error in the assumed vertical profile, do not show up in scan-to-scan differences at all (raising it).")
+    intro <- p("Even a perfect monitor could not correlate perfectly with TEMPO, because each scan carries random retrieval ",
+               "error (noise). The ceiling is the correlation expected if that noise were the only source of disagreement; ",
+               "E, the observed r divided by the ceiling, says how much of that attainable agreement a monitor reaches.")
+    nat_line <- if (!is.null(nat)) p(class = "small", tags$b("National example (all 24 h sites pooled, Sect. 3.3): "),
+      sprintf("single-scan noise %s; median %s valid scans per sample; anomaly noise %s × %s, %s%% of the anomaly variance; ceiling √(1 − %s) = %s; observed r = %s, so E = %s.",
+              f2s(nat$scan_noise_sd_single_1e15), format(nat$median_valid_scans), f2s(nat$noise_sd_empirical_1e15), U_COL,
+              sprintf("%.0f", 100 * nat$noise_share_empirical), f2s(nat$noise_share_empirical),
+              f2s(nat$ceiling_empirical), f2s(nat$anomaly_r_observed), f2s(nat$anomaly_r_observed / nat$ceiling_empirical)))
+    if (!use_site) return(tagList(intro,
+      div(class = "alert alert-secondary py-2 small", "The paper estimates a ceiling for each national 24 h record with at ",
+          "least 10 anomaly pairs (step 17). ", if (is.null(sc)) "Re-run step 24 to add the per-site ceilings. " else
+            "This record has none; choose a 24 h record of the national comparison, or see the national example below."),
+      nat_line, caveat))
+    cs <- ceiling_steps(an, an$n_valid, row$scan_noise_sd_single_1e15)
+    k <- which(an$start_utc == r$start_utc)[1]
+    zero <- cs$ceiling <= 0
+    tagList(intro,
+      tags$ol(class = "mb-2",
+        tags$li(tags$b("Noise of one scan. "), sprintf(
+          "On days with two valid scans no more than 1.6 h apart, the difference between successive scans holds the errors of both. The root-mean-square difference divided by √2 gives the single-scan noise: σ = %s × %s (from %d scan pairs at this monitor).",
+          f2s(row$scan_noise_sd_single_1e15), U_COL, as.integer(row$n_scan_pairs))),
+        tags$li(tags$b("Noise in one sample's anomaly. "), sprintf(
+          "Averaging k valid scans divides the noise variance by k, and subtracting a month mean of m samples removes a further share 1/m. For the example sample (k = %d scans, m = %d samples in %s): %s² / %d × (1 − 1/%d) = %s, a noise SD of %s.",
+          cs$k[k], cs$m[k], month_name(r$ym), f2s(cs$scan_sd), cs$k[k], cs$m[k], f2s(cs$nv_i[k], 3), f2s(sqrt(cs$nv_i[k])))),
+        tags$li(tags$b("Average over the record. "), sprintf(
+          "Over all %d anomaly samples (median %s valid scans) the noise variance averages %s (in units of 10³⁰ molecules² cm⁻⁴), an SD of %s.",
+          nrow(an), format(cs$median_k), f2s(cs$noise_var, 3), f2s(cs$noise_sd))),
+        tags$li(tags$b("Noise share. "), sprintf(
+          "The column anomalies vary with an SD of %s, a variance of %s. Noise share f = %s / %s = %s.",
+          f2s(cs$sd_col), f2s(cs$var_col, 3), f2s(cs$noise_var, 3), f2s(cs$var_col, 3), f2s(cs$share))),
+        tags$li(tags$b("Ceiling. "), if (zero) "The estimated noise is at least as large as the variance of the column anomalies, so the ceiling is 0 and E cannot be calculated (such records are left out of the paper's site models)." else
+          HTML(sprintf("r<sub>ceiling</sub> = √(1 − f) = √(1 − %s) = <b>%s</b>.", f2s(cs$share), f2s(cs$ceiling)))),
+        if (!zero) tags$li(tags$b("E. "), HTML(sprintf(
+          "The observed day-to-day r is %s, so E = r<sub>obs</sub> / r<sub>ceiling</sub> = %s / %s = <b>%s</b>: this monitor reaches about %.0f%% of the agreement that scan noise alone would allow.",
+          f2s(cs$r_obs), f2s(cs$r_obs), f2s(cs$ceiling), f2s(cs$E), 100 * min(cs$E, 1)))) ),
+      nat_line, caveat)
+  })
+
+  wk_wp <- reactive(window_pairs(TEMPO))
+  wk_wd <- reactive({
+    w <- wk_wp(); s <- input$wk_boot_site %or% "08-035-0004"
+    if (s == "all") w else w[w$site_id == s, ]
+  })
+  wk_boot <- reactive(boot_window_diff(wk_wd()))
+  wk_drawn <- reactiveVal(NULL)
+  observeEvent(input$wk_boot_site, wk_drawn(NULL))
+  observeEvent(input$wk_draw, wk_drawn(draw_clusters(wk_wd())))
+  output$wk_s6 <- renderUI({
+    d <- wk_wd(); x <- window_diff(d); b <- wk_boot(); key <- WK_BOOT_KEY[[input$wk_boot_site %or% "08-035-0004"]]
+    cl <- table(d$cluster)
+    lab <- function(g) { p <- strsplit(g, " ")[[1]]
+      nm <- SITES$site_code[SITES$site_id == p[1]]; paste0(if (input$wk_boot_site == "all") paste0(nm, " ") else "", p[2]) }
+    tagList(
+      p(sprintf("%d samples fall in %d site-months with at least three such samples. Their anomalies (step 2) give ",
+                nrow(d), length(cl)),
+        HTML(sprintf("r<sub>sampling window</sub> = %s and r<sub>3 h later</sub> = %s, a difference of <b>%s</b>.",
+                     f2s(x[["r_window"]]), f2s(x[["r_later"]]), f2p(x[["diff"]])))),
+      p(class = "small text-muted", paste0("Site-months (samples): ",
+        paste(sprintf("%s (%d)", vapply(names(cl), lab, ""), as.integer(cl)), collapse = ", "), ".")),
+      p(HTML(sprintf(paste0("To judge the difference, we resample <b>whole site-months</b>: draw %d site-months with ",
+        "replacement from the %d, keep every sample in each, and recompute both correlations and their difference. ",
+        "Resampling site-months rather than single samples keeps together the samples whose anomalies were formed from ",
+        "the same month mean, so the dependence that creates is carried into the interval. Repeated %s times (histogram):"),
+        length(cl), length(cl), format(WK_NBOOT, big.mark = ",")))),
+      div(class = "ps-3 mb-2",
+        div(sprintf("95%% interval = 2.5th to 97.5th percentiles of the resampled differences = %s to %s",
+                    f2s(b$lo), f2s(b$hi))),
+        div(sprintf("Resampled differences ≤ 0: %d; ≥ 0: %d. Two-sided p = (2 × %d + 1) / (%s + 1) = %s",
+                    b$n_le0, b$n_ge0, min(b$n_le0, b$n_ge0), format(b$nboot, big.mark = ","), fmt_p(b$p)))),
+      p(class = "small", tags$b("Paper: "), sprintf("difference %s (95%% CI %s to %s), bootstrap %s over %s site-months.",
+        FN(paste0("win_", key, "_diff")), FN(paste0("win_", key, "_lo")), FN(paste0("win_", key, "_hi")),
+        FN(paste0("win_", key, "_bootp")), FN(paste0("win_", key, "_clusters"))),
+        span(class = "text-muted", " The app's resamples are drawn independently of the paper's, so interval ends ",
+             "and p can differ slightly in the last digit. The national 24 h comparison of 06:00–09:00 with ",
+             "09:00–12:00 LST pools many monitors and so resamples whole monitors instead.")))
+  })
+  output$wk_p_boot <- renderPlotly({
+    b <- wk_boot(); dr <- wk_drawn(); d <- wk_wd()
+    sh <- list(list(type = "line", x0 = 0, x1 = 0, y0 = 0, y1 = 1, yref = "paper", line = list(color = "#444", width = 1)),
+               list(type = "line", x0 = b$lo, x1 = b$lo, y0 = 0, y1 = 1, yref = "paper", line = list(color = "#2166ac", dash = "dash")),
+               list(type = "line", x0 = b$hi, x1 = b$hi, y0 = 0, y1 = 1, yref = "paper", line = list(color = "#2166ac", dash = "dash")))
+    if (!is.null(dr)) { v <- window_diff(d, rows_of(d, dr))[["diff"]]
+      if (is.finite(v)) sh[[4]] <- list(type = "line", x0 = v, x1 = v, y0 = 0, y1 = 1, yref = "paper", line = list(color = WK_HI, width = 3)) }
+    plot_ly(x = b$diff, type = "histogram", nbinsx = 60, marker = list(color = "#9aa7b4"),
+            hovertemplate = "difference %{x}<br>%{y} resamples<extra></extra>") |>
+      layout(xaxis = list(title = "r(3 h later) − r(sampling window), resampled"), yaxis = list(title = "Resamples"),
+             showlegend = FALSE, bargap = 0.05, shapes = sh)
+  })
+  output$wk_draw_out <- renderUI({
+    dr <- wk_drawn(); d <- wk_wd()
+    if (is.null(dr)) return(div(class = "small text-muted",
+      "Blue dashed lines: the 95% interval. Press ", tags$b("Draw one resample"), " to see a single bootstrap draw."))
+    x <- window_diff(d, rows_of(d, dr)); tb <- table(dr); ids <- unique(d$cluster)
+    lab <- function(g) { p <- strsplit(g, " ")[[1]]
+      nm <- SITES$site_code[SITES$site_id == p[1]]; paste0(if (input$wk_boot_site == "all") paste0(nm, " ") else "", p[2]) }
+    tagList(div(class = "small fw-bold mb-1", "One resample (orange line)"),
+      div(class = "small", "Drawn: ", paste(sprintf("%s%s", vapply(names(tb), lab, ""),
+                                                    ifelse(tb > 1, sprintf(" ×%d", as.integer(tb)), "")), collapse = ", ")),
+      div(class = "small text-muted", sprintf("%d of the %d site-months drawn more than once, %d not drawn; %d samples.",
+                                              sum(tb > 1), length(ids), length(setdiff(ids, dr)), length(rows_of(d, dr)))),
+      div(class = "small mt-1", HTML(sprintf("r<sub>sampling window</sub> = %s, r<sub>3 h later</sub> = %s, difference <b>%s</b>.",
+                                             f2s(x[["r_window"]]), f2s(x[["r_later"]]), f2p(x[["diff"]])))))
+  })
 }
 
 shinyApp(ui, server)

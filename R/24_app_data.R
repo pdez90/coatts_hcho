@@ -25,7 +25,10 @@
 #     R/06_threeh_samples.R;
 #   * the primary rows of matched_all_variants.csv.gz are matched_primary.csv.gz;
 #   * ntile3() in app/R/sensitivity.R equals dplyr::ntile(), and the unchanged
-#     configuration of sens_nat reproduces national_stats_by_site.csv.
+#     configuration of sens_nat reproduces national_stats_by_site.csv;
+#   * app/R/worked.R reproduces the paper's permutation p-value at every site,
+#     the noise ceiling and E of every national 24 h site (step 17), and the
+#     samples and correlations of the Colorado window comparison (step 09).
 # Packet formaldehyde is compared with the AQS values the paper uses and the
 # agreement is logged (the packets are not used for any result in the paper).
 #
@@ -39,6 +42,7 @@ source("R/00_config.R")
 source("R/helpers_basemap.R")   # Census boundaries, cached in data/raw/basemap
 source("app/R/stats.R")
 source("app/R/sensitivity.R")   # agreement across configurations, as the app computes it
+source("app/R/worked.R")        # the worked examples of the app's "How the comparison works" tab
 
 APP <- "app"
 OUT <- file.path(APP, "appdata")   # not "data/": .gitignore excludes every data/ folder
@@ -368,7 +372,13 @@ findings <- list(
   obs_fx    = opt_tbl("observability_bias_fixed_effects.csv"),
   obs_pair  = opt_tbl("observability_bias.csv"),
   pbl       = opt_tbl("diag10_pbl_tertiles.csv"),
-  pbl_int   = opt_tbl("diag10_pbl_interaction.csv"))
+  pbl_int   = opt_tbl("diag10_pbl_interaction.csv"),
+  # per-site noise ceilings (3 x 3 block, national 24 h sites), for the worked example
+  site_ceiling = { x <- opt_tbl("national_noise_ceiling.csv")
+                   if (is.null(x)) NULL else x[x$site != "all sites" & x$block_label == "3x3" & !is.na(x$ceiling_empirical),
+                     c("site", "n_anomalies", "anomaly_r_observed", "sd_column_anomaly_1e15", "median_valid_scans",
+                       "scan_noise_sd_single_1e15", "noise_sd_empirical_1e15", "noise_share_empirical",
+                       "ceiling_empirical", "r_noise_corrected", "n_scan_pairs")] })
 pooled24 <- if (is.null(findings$pooled)) NULL else
   findings$pooled[findings$pooled$duration_class == "24 h" & findings$pooled$lag_h == 0, ]
 check(!is.null(pooled24) && nrow(pooled24) == 1 && pooled24$n == findings$n24[["usable"]],
@@ -376,6 +386,44 @@ check(!is.null(pooled24) && nrow(pooled24) == 1 && pooled24$n == findings$n24[["
 log_msg("Main findings: ", length(nums), " pipeline keys; 24 h samples with a usable scan ",
         findings$n24[["usable"]], " of ", findings$n24[["samples"]], "; pooled day-to-day r ",
         round(pooled24$anom_pearson_r, 2))
+
+# ---- 3d. the worked examples reproduce the paper -------------------------------------
+# The "How the comparison works" tab recomputes, for the monitor a reader picks,
+# the permutation test, the noise ceiling and the site-month bootstrap. Check
+# that app/R/worked.R gives the paper's values.
+perm_ref <- ref[!is.na(ref$anom_pearson_p_perm), ]
+perm_bad <- map2_lgl(perm_ref$site, perm_ref$duration_class, function(s, dc) {
+  d  <- nat0[nat0$site_id == s & nat0$duration_h == as.integer(sub(" h$", "", dc)), ]
+  pt <- perm_test(pair_stats(d$date, d$hcho, d$column)$anom)
+  ref_p <- perm_ref$anom_pearson_p_perm[perm_ref$site == s & perm_ref$duration_class == dc]
+  is.null(pt) || abs(pt$p - as.numeric(ref_p)) > 1e-9
+})
+check(!any(perm_bad), sum(perm_bad), " of ", nrow(perm_ref),
+      " permutation p-values from app/R/worked.R differ from national_stats_by_site.csv")
+sc <- findings$site_ceiling
+if (!is.null(sc)) {
+  ceil_bad <- vapply(seq_len(nrow(sc)), function(i) {
+    d  <- nat0[nat0$site_id == sc$site[i] & nat0$duration_h == 24L, ]
+    an <- pair_stats(d$date, d$hcho, d$column)$anom
+    cs <- ceiling_steps(an, d$n_valid[an$i], as.numeric(sc$scan_noise_sd_single_1e15[i]))
+    !(nrow(an) == sc$n_anomalies[i] && isTRUE(all.equal(cs$ceiling, as.numeric(sc$ceiling_empirical[i]))) &&
+        identical(is.na(sc$r_noise_corrected[i]), is.na(cs$E)) &&
+        (is.na(cs$E) || isTRUE(all.equal(cs$E, as.numeric(sc$r_noise_corrected[i])))))
+  }, logical(1))
+  check(!any(ceil_bad), sum(ceil_bad), " of ", nrow(sc), " site noise ceilings from app/R/worked.R differ from step 17")
+}
+wp <- window_pairs(tempo)
+wref <- read_tbl(file.path(P$tables, "diag2_threeh_window_vs_after.csv")) |>
+  filter(comparison == "within-month anomalies")
+for (s in c("CHCO", "PVCO", "all sites")) {
+  d <- if (s == "all sites") wp else wp[wp$site_id == XWALK$site_id[XWALK$site_code == s], ]
+  x <- window_diff(d); r <- wref[wref$site == s, ]
+  check(nrow(r) == 1 && nrow(d) == r$n && length(unique(d$cluster)) == r$boot_clusters &&
+          abs(x[["r_window"]] - r$r_sampling_window) < 1e-9 && abs(x[["r_later"]] - r$r_after) < 1e-9,
+        "The Colorado window comparison in app/R/worked.R differs from step 09 at ", s)
+}
+log_msg("Worked examples: ", nrow(perm_ref), " permutation p-values, ", NROW(sc), " noise ceilings and the ",
+        "Colorado window comparison (", nrow(wp), " anomaly pairs) reproduce the paper")
 
 # ---- 4. write -----------------------------------------------------------------------
 md5 <- function(f) unname(tools::md5sum(f))

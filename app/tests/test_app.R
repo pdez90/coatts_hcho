@@ -48,6 +48,33 @@ testServer(app, {
     }
   }
   try_out("map", session$getOutput("map"))
+
+  # How the comparison works: every step for several kinds of record
+  wk_cases <- list(list(wk_site = "04-013-9997", wk_dur = "24"),   # national 24 h, with a noise ceiling
+                   list(wk_site = "06-061-0006", wk_dur = "24"),   # ceiling estimated at zero
+                   list(wk_site = "06-019-0011", wk_dur = "8"),    # 8 h record: no ceiling
+                   list(wk_site = "08-035-0004", wk_dur = "3"),    # Chatfield, national 3 h record
+                   list(wk_site = "08-059-0015", wk_dur = "24"))   # Wheat Ridge: Colorado arm only
+  for (cs in wk_cases) {
+    session$setInputs(wk_site = cs$wk_site); session$setInputs(wk_dur = cs$wk_dur)
+    an <- wk_an(); session$setInputs(wk_month = names(which.max(table(an$ym))))
+    session$setInputs(wk_date = as.character(wk_month()$start_utc[1]))
+    for (o in c("wk_rec_ui", "wk_month_ui", "wk_date_ui", "wk_s1", "wk_s2", "wk_s3", "wk_p_raw", "wk_p_anom",
+                "wk_s4", "wk_p_perm", "wk_s4_shuffle", "wk_s5"))
+      try_out(paste("worked", cs$wk_site, o), session$getOutput(o))
+  }
+  try_out("worked: example month and sample follow the selection", {
+    session$setInputs(wk_site = "04-013-9997"); session$setInputs(wk_dur = "24")
+    m <- sort(unique(wk_an()$ym))[2]; session$setInputs(wk_month = m)
+    session$setInputs(wk_date = as.character(wk_month()$start_utc[2]))
+    stopifnot(wk_row()$ym == m, wk_row()$start_utc == wk_month()$start_utc[2])
+  })
+  for (b in c("08-035-0004", "08-123-0008", "all")) {
+    session$setInputs(wk_boot_site = b)
+    for (o in c("wk_s6", "wk_p_boot", "wk_draw_out")) try_out(paste("worked boot", b, o), session$getOutput(o))
+    session$setInputs(wk_draw = 1)
+    try_out(paste("worked boot", b, "one draw"), { session$getOutput("wk_draw_out"); stopifnot(length(wk_drawn()) == length(unique(wk_wd()$cluster))) })
+  }
 })
 
 # The map statistics are globals of app.R, which testServer's expression cannot
@@ -108,6 +135,30 @@ if (exists("sensitivity_site", envir = e, inherits = FALSE)) {
   })
   try_out("all-sites plot rows", stopifnot(nrow(e$nat_plot_rows(e$SENS_NAT[e$SENS_NAT$duration_h == 24L, ])) > 20))
 }
+
+# The worked examples: the paper's values (step 24 checks every site; these are spot checks)
+message("worked examples")
+try_out("worked: permutation p and noise ceiling at Fresno (24 h)", {
+  d  <- e$TEMPO[e$TEMPO$arm == "national" & e$TEMPO$site_id == "06-019-0011" & e$TEMPO$duration_h == 24L &
+                  e$TEMPO$lag_h == 0L & e$TEMPO$usable, ]
+  an <- e$pair_stats(d$date, d$hcho, d$column)$anom
+  pt <- e$perm_test(an)
+  stopifnot(nrow(an) == 19L, pt$nperm == 2000L, abs(pt$p - 13 / 2001) < 1e-12, length(pt$r_perm) == 2000L,
+            # a shuffle keeps each month's values
+            all(tapply(pt$first_shuffle, an$ym, function(v) sum(v)) - tapply(an$surface_anom, an$ym, sum) < 1e-9))
+  sc <- e$FIND$site_ceiling
+  if (!is.null(sc)) {
+    row <- sc[sc$site == "06-019-0011", ]
+    cs  <- e$ceiling_steps(an, d$n_valid[an$i], row$scan_noise_sd_single_1e15)
+    stopifnot(abs(cs$ceiling - row$ceiling_empirical) < 1e-9, abs(cs$E - row$r_noise_corrected) < 1e-9)
+  }
+})
+try_out("worked: Colorado window comparison", {
+  w <- e$window_pairs(e$TEMPO); ch <- w[w$site_id == "08-035-0004", ]
+  x <- e$window_diff(ch); b <- e$boot_window_diff(ch)
+  stopifnot(nrow(ch) == 42L, length(unique(ch$cluster)) == 11L, nrow(w) == 80L, length(unique(w$cluster)) == 21L,
+            abs(x[["diff"]] - 0.568095) < 1e-5, b$nboot == 10000L, b$lo > 0.2, b$hi < 0.95, b$p < 0.001)
+})
 
 if (length(fails)) stop(length(fails), " check(s) failed: ", paste(fails, collapse = "; "))
 message("All app checks passed.")
