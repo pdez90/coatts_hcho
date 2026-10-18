@@ -2299,10 +2299,10 @@
   },
   "files": {
     "app.R": {
-      "checksum": "62276da82266a0622957da850bd01b8d"
+      "checksum": "b6d00296c53a0421e4c2d80e707183b3"
     },
     "appdata/app_data.rds": {
-      "checksum": "511020567d85f3787c2248dc38502849"
+      "checksum": "1a25e64db8e6efdbe0661fbf0b74553b"
     },
     "R/sensitivity.R": {
       "checksum": "4bd1d8df317616d0fcfb2e2947214d60"
@@ -2310,11 +2310,14 @@
     "R/stats.R": {
       "checksum": "4f7885a081abd4b1da37874d2afa4c51"
     },
+    "R/worked.R": {
+      "checksum": "05bdd6290d8f6393a622f3df54aa4ac0"
+    },
     "README.md": {
       "checksum": "fe7cde92cab3c8da5e56223872b2a3da"
     },
     "tests/test_app.R": {
-      "checksum": "cbb40f6c824fd2dedea1c31461b7586f"
+      "checksum": "a917767b29943fbc7a87f5efe04cdaf8"
     }
   },
   "users": null
