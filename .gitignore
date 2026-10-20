@@ -24,4 +24,3 @@ manuscript/**/*.docx
 manuscript/src/node_modules/
 
 # files the desktop app saves into the project
-Claude outputs/
